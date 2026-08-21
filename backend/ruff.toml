@@ -1,0 +1,29 @@
+# Linting rules. Deliberately pragmatic: catch real defects, not style opinions
+# that would churn a working clinical codebase.
+target-version = "py312"
+line-length = 100
+exclude = ["alembic/versions"]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes — undefined names, unused imports
+    "B",    # bugbear — likely bugs
+    "I",    # import ordering
+    "UP",   # outdated syntax
+    "ASYNC",# async correctness (blocking calls in async functions)
+    "S",    # bandit security rules
+]
+ignore = [
+    "E501",   # line length is handled by the formatter
+    "B008",   # FastAPI's Depends() in defaults is the documented pattern
+    "S101",   # asserts are how the test suite is written
+    "S104",   # binding 0.0.0.0 is correct inside a container
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S", "B"]
+"app/core/config.py" = ["S105"]   # default values are placeholders, guarded at startup
+
+[lint.isort]
+known-first-party = ["app"]

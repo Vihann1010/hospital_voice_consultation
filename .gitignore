@@ -1,0 +1,9 @@
+.env
+.env.local
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+satya_pgdata/
+.DS_Store

@@ -1,0 +1,93 @@
+"""Dependency injection wiring: sessions, services, current user, RBAC."""
+import uuid
+from typing import Annotated, Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import TOKEN_TYPE_ACCESS, decode_token
+from app.db.session import get_db
+from app.models.enums import UserRole
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.services.auth_service import AuthService
+from app.services.consultation_service import ConsultationService
+from app.services.copilot_service import CopilotService
+from app.services.investigation_service import InvestigationService
+from app.services.prescription_service import PrescriptionService
+from app.services.ipd_service import IPDService
+from app.services.reception_service import ReceptionService
+from app.services.patient_service import PatientService
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+def get_auth_service(session: DbSession) -> AuthService:
+    return AuthService(session)
+
+
+def get_consultation_service(session: DbSession) -> ConsultationService:
+    return ConsultationService(session)
+
+
+def get_patient_service(session: DbSession) -> PatientService:
+    return PatientService(session)
+
+
+def get_copilot_service(session: DbSession) -> CopilotService:
+    return CopilotService(session)
+
+
+def get_investigation_service(session: DbSession) -> InvestigationService:
+    return InvestigationService(session)
+
+
+def get_prescription_service(session: DbSession) -> PrescriptionService:
+    return PrescriptionService(session)
+
+
+def get_reception_service(session: DbSession) -> ReceptionService:
+    return ReceptionService(session)
+
+
+def get_ipd_service(session: DbSession) -> IPDService:
+    return IPDService(session)
+
+
+async def get_current_user(
+    session: DbSession,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> User:
+    if credentials is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+    claims = decode_token(credentials.credentials)
+    if claims is None or claims.get("type") != TOKEN_TYPE_ACCESS:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+    try:
+        user_id = uuid.UUID(claims["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token subject")
+    user = await UserRepository(session).get(user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
+    return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def require_roles(*roles: UserRole):
+    """RBAC guard, e.g. Depends(require_roles(UserRole.ADMIN, UserRole.DOCTOR))."""
+
+    async def checker(user: CurrentUser) -> User:
+        if user.role not in roles:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Requires one of roles: {', '.join(r.value for r in roles)}",
+            )
+        return user
+
+    return checker
