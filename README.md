@@ -1,236 +1,475 @@
-# Satya Hospital AI Platform
+Satya Hospital AI Platform
 
-Voice-first patient intake and a clinical console for **Satya Hospital, Kanpur** —
-Orthopedics (Dr. A K Agarwal) and Gynecology (Dr. Manisha Agarwal).
+A voice-first patient intake and clinical support system built for Satya Hospital, Kanpur.
 
-A patient registers, taps **Start consultation**, and has a natural spoken
-conversation in Hindi, English or a mix of both. By the time they reach the
-consulting room the doctor already has a structured history, a risk assessment,
-suggested differentials and investigations, and a copilot that points at what
-deserves attention. The doctor orders tests by voice or search, uploads the
-reports that come back, dictates a prescription, and sends it to the patient's
-WhatsApp — without typing a page of notes.
+The system is currently designed for the Orthopedics and Gynecology departments. It collects the patient's history through a voice conversation and prepares a structured record for the doctor before the consultation.
 
-**Every AI output in this system is advisory. The treating doctor is the final
-authority on every clinical decision.** That is enforced in the code, not just
-written in the interface: safety warnings must be acknowledged before a
-prescription can be issued, abnormal lab values are decided arithmetically
-rather than by a model, and each AI suggestion is stored separately from the
-clinician's ruling on it.
+Patients can speak in Hindi, English, or Hinglish. Doctors can then review the history, risk assessment, suggested differentials and investigations, uploaded reports, and other consultation details from the clinical dashboard. Prescriptions can also be created and sent to the patient through WhatsApp.
 
----
+Clinical safety: Every AI output is advisory. The treating doctor remains the final authority on every clinical decision. Safety-critical checks are enforced in code, not only in the UI.
 
-## Quick start
 
-```bash
-cp .env.example .env          # set SARVAM_API_KEY and JWT_SECRET_KEY at minimum
-docker compose up --build     # development
-```
 
-- Patient intake: http://localhost:3000
-- Clinical console: http://localhost:3000/login
-- API docs: http://localhost:8000/docs
-- Health: http://localhost:8000/api/v1/health
+Highlights
 
-For production, follow **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** and work
-through **[docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)**.
+️ Continuous voice consultation with no push-to-talk
 
-> Microphone capture requires a secure context. `localhost` works; any other
-> host needs HTTPS or voice intake will not start.
+🇮🇳 Hindi, English and Hinglish conversations
 
----
+Structured symptom extraction and clinical summarization
 
-## What it does
+Two-layer emergency detection
 
-### Patient voice intake
-Continuous conversation with no push-to-talk. Audio streams to Sarvam STT, the
-reply streams from the LLM, and completed sentences go to TTS the moment they
-close — so the assistant starts speaking before it has finished thinking.
-Interruption works on two independent layers: the browser's voice detector
-flushes playback instantly, and the server cancels the in-flight generation. The
-platform, not the model, decides when enough has been collected.
+‍️ Doctor dashboard with queues, patient history and consultation timelines
 
-### Clinical pipeline
-Eight services turn the conversation into a record: conversation AI, symptom
-extraction, medical JSON, risk detection, clinical summary, differentials,
-investigation suggestions and patient education. Emergency detection runs in two
-layers — deterministic phrase matching in English, Hinglish and Devanagari that
-fires instantly, then LLM reasoning over the structured record for combinations
-patterns cannot see.
+AI copilot for red flags, differentials, investigations and follow-up questions
 
-### Doctor dashboard
-Waiting, live and completed queues; patient search and longitudinal history;
-consultation detail with summary, history, transcript, timeline and the recorded
-audio. The copilot surfaces red flags, differentials, investigations, follow-up
-questions, referrals, and medication alerts — each labelled, each dismissible,
-each decision attributed.
+Investigation catalog with report upload and OCR
 
-### Investigations
-A 101-test catalog across 11 categories with favourites, recent, templates and
-12 common panels. Reports upload as PDF, photo or scan; text is extracted (OCR
-for scans) and **values are compared against reference ranges arithmetically**,
-never by a model. The range printed on the report wins over the built-in table,
-and when units cannot be reconciled the result is marked "not compared" rather
-than guessed. Versions supersede rather than overwrite.
+Arithmetic-based laboratory range comparison
 
-### Prescriptions
-Dictate naturally — *"Tablet Paracetamol 650 mg SOS. Tablet Pantoprazole 40 mg
-before breakfast."* — and the parser separates form, drug, strength, frequency,
-timing and duration into an editable form. Substitutions are surfaced, not
-silent. Duplicate, allergy, interaction and pregnancy checks are rule-based and
-instant. The result is an A4 sheet with letterhead, QR verification, prescription
-ID and signature, deliverable to WhatsApp with tracked, retried delivery.
+Voice-dictated prescriptions with safety checks
 
----
+A4 prescription PDFs with QR verification and prescription IDs
 
-## Architecture
+WhatsApp prescription delivery with retry tracking
 
-```
-                    ┌──────────────┐
-   patient ────────▶│   Next.js    │◀──────── doctor
-   (voice)          │  App Router  │        (dashboard)
-                    └──────┬───────┘
-                           │ HTTPS / WSS
-                    ┌──────▼───────┐
-                    │    Nginx     │  TLS, rate limits, WebSocket upgrade
-                    └──────┬───────┘
-                    ┌──────▼───────┐
-                    │   FastAPI    │  RBAC, audit, rate limiting, metrics
-                    ├──────────────┤
-                    │  services    │  consultation, investigation,
-                    │  repositories│  prescription, copilot, delivery
-                    ├──────────────┤
-                    │  ai/         │  provider-agnostic gateway + pipeline
-                    │  investigations/  catalog, ranges, OCR, parsing
-                    │  prescriptions/   formulary, dictation, safety, PDF
-                    │  messaging/  │  WhatsApp Cloud | Twilio | console
-                    └──┬────────┬──┘
-                       │        │
-              ┌────────▼──┐  ┌──▼──────┐   ┌──────────────┐
-              │ PostgreSQL│  │  Redis  │   │  Sarvam AI   │
-              │  + media  │  │ cache,  │   │ STT/TTS/LLM  │
-              │  volume   │  │ limits  │   └──────────────┘
-              └───────────┘  └─────────┘
-```
+RBAC, audit logging and rate limiting
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 14 App Router, TypeScript (strict), Tailwind, shadcn/ui, Framer Motion |
-| Backend | FastAPI, SQLAlchemy 2 async, asyncpg, repository pattern, dependency injection |
-| Database | PostgreSQL 16, Alembic migrations |
-| Cache | Redis, with an in-process fallback for single-node deployments |
-| Voice | Sarvam streaming STT and TTS over WebSockets, AudioWorklet capture |
-| AI | Provider-agnostic gateway: Sarvam, OpenAI, Anthropic, Groq, vLLM |
-| Documents | ReportLab (A4 prescriptions), pypdf + Tesseract (report extraction) |
-| Ops | Docker, Nginx, Prometheus metrics, JSON logging, GitHub Actions |
+Prometheus metrics and structured JSON logging
 
-### Design principles
+Provider-agnostic AI architecture
 
-**Deterministic where it matters.** Anything a model could get subtly and
-dangerously wrong is computed instead. Abnormal lab values come from arithmetic.
-Duplicate medicines and allergy conflicts come from an ingredient map. Emergency
-red flags come from phrase matching. Language models write narrative and ask
-questions — they do not decide whether a number is out of range.
 
-**Provider independence.** The LLM, the messaging channel and the cache are each
-behind an interface with more than one implementation. Switching vendors is a
-configuration change.
 
-**Additive schema.** Every phase added tables rather than altering them, so the
-platform could grow through five phases without a destructive migration.
+Quick Start
 
----
+Prerequisites
 
-## Repository layout
+Docker and Docker Compose
 
-```
-backend/
-  app/
-    core/           config, logging, security, cache, rate limiting,
-                    permissions, audit, uploads, middleware, metrics
-    db/             async engine, session, declarative base
-    models/         User, Patient, Consultation, Investigation,
-                    Prescription, MessageDelivery, AuditLog
-    repositories/   data access, one per aggregate
-    services/       consultation, patient, copilot, investigation,
-                    prescription, delivery
-    ai/             provider gateway, 8-stage pipeline, session memory,
-                    emergency screening, recording
-    investigations/ catalog, reference ranges, OCR, report parsing
-    prescriptions/  formulary, dictation parser, safety rules, PDF
-    messaging/      WhatsApp Cloud, Twilio, console
-    api/            DI, RBAC, versioned routes
-    ws/             patient intake and doctor dictation sockets
-  alembic/          migrations
-  tests/            unit (no I/O) and integration (real PostgreSQL)
-  scripts/          demo data seeding
-frontend/
-  app/(patient)/    intake and live consultation
-  app/(dashboard)/  queues, patients, consultation detail
-  components/       ui primitives, dashboard, investigations, prescriptions
-  lib/              API clients, audio capture and playback, types
-deploy/
-  nginx/            reverse proxy with TLS and WebSocket support
-  scripts/          backup, restore, migration entrypoint
-docs/               API reference, deployment guide, production checklist
-```
+A Sarvam API key
 
----
+A JWT secret
 
-## Development
+Run with Docker
 
-```bash
-# Backend
+cp .env.example .env
+
+Set at least:
+
+SARVAM_API_KEY=your_key_here
+JWT_SECRET_KEY=your_secret_here
+
+Then start the application:
+
+docker compose up --build
+
+Local development
+
+Backend
+
 cd backend
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload
 
-# Frontend
+Frontend
+
 cd frontend
 npm install
 npm run dev
 
-# Tests
+
+
+Local URLs
+
+Service
+
+URL
+
+Patient intake
+
+http://localhost:3000
+
+Clinical console
+
+http://localhost:3000/login
+
+API documentation
+
+http://localhost:8000/docs
+
+Health check
+
+http://localhost:8000/api/v1/health
+
+Microphone requirement: voice capture requires a secure context. localhost works directly; other hosts require HTTPS.
+
+
+
+How It Works
+
+1. Patient voice intake
+
+The patient starts a consultation and speaks naturally with the assistant.
+
+Audio is streamed to Sarvam STT, responses are generated through the AI layer, and completed sentences are sent to TTS as soon as they are ready.
+
+The system supports interruption through two layers:
+
+Browser-side voice detection stops playback immediately.
+
+The server cancels the in-flight generation.
+
+This keeps the conversation responsive without relying on the model to decide when the patient has finished speaking.
+
+2. Clinical processing
+
+The consultation passes through an eight-stage clinical pipeline:
+
+Conversation AI
+
+Symptom extraction
+
+Medical JSON generation
+
+Risk detection
+
+Clinical summary
+
+Differential suggestions
+
+Investigation suggestions
+
+Patient education
+
+Emergency detection operates in two layers:
+
+Deterministic phrase matching across English, Hinglish and Devanagari
+
+LLM reasoning over the structured clinical record
+
+3. Doctor dashboard
+
+Doctors can access:
+
+Waiting, live and completed consultation queues
+
+Patient search
+
+Longitudinal patient history
+
+Consultation summary
+
+Clinical history
+
+Transcript
+
+Timeline
+
+Recorded consultation audio
+
+AI copilot recommendations
+
+Investigation ordering
+
+Prescription creation
+
+AI copilot suggestions are individually labelled and dismissible, with clinician decisions stored separately.
+
+4. Investigations
+
+The platform includes a 101-test catalog across 11 categories, along with:
+
+Favourite tests
+
+Recently used tests
+
+Investigation templates
+
+12 common panels
+
+PDF report uploads
+
+Photo/scan uploads
+
+OCR extraction
+
+Laboratory values are compared against reference ranges arithmetically, not by an AI model.
+
+The reference range printed on the patient's report takes precedence over the built-in table. If units cannot be reconciled, the result is marked "not compared" instead of being guessed.
+
+5. Prescriptions
+
+Doctors can dictate prescriptions naturally, for example:
+
+Tablet Paracetamol 650 mg SOS.
+Tablet Pantoprazole 40 mg before breakfast.
+
+The parser extracts:
+
+Form
+
+Drug
+
+Strength
+
+Frequency
+
+Timing
+
+Duration
+
+The doctor can edit the resulting prescription before issuing it.
+
+Rule-based checks detect:
+
+Drug substitutions
+
+Duplicate medicines
+
+Allergies
+
+Drug interactions
+
+Pregnancy-related medication concerns
+
+The final prescription is generated as an A4 PDF with:
+
+Hospital letterhead
+
+Prescription ID
+
+QR verification
+
+Doctor signature
+
+The PDF can then be delivered to the patient through WhatsApp with tracked and retried delivery.
+
+
+
+️ Architecture
+
+                         ┌──────────────────┐
+       Patient ─────────▶│     Next.js      │◀──────── Doctor
+       Voice             │    App Router    │        Dashboard
+                         └────────┬─────────┘
+                                  │ HTTPS / WSS
+                         ┌────────▼─────────┐
+                         │      Nginx       │
+                         │ TLS / Rate Limit │
+                         │ WebSocket Upgrade│
+                         └────────┬─────────┘
+                                  │
+                         ┌────────▼─────────┐
+                         │     FastAPI      │
+                         │ RBAC / Audit     │
+                         │ Rate Limiting    │
+                         │ Metrics          │
+                         └────────┬─────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+       ┌──────▼──────┐     ┌──────▼──────┐     ┌─────▼──────┐
+       │   Services  │     │ AI Gateway  │     │ Clinical   │
+       │ Consultation│     │  Pipeline   │     │ Modules    │
+       │ Investigation│    │ Session     │     │ Labs / Rx  │
+       │ Prescription│     │ Memory      │     │ OCR / PDF  │
+       │ Delivery    │     │ Screening   │     │ Safety     │
+       └──────┬──────┘     └──────┬──────┘     └─────┬──────┘
+              │                   │                   │
+              └─────────────┬─────┴───────────────────┘
+                            │
+              ┌─────────────┼──────────────┐
+              │             │              │
+       ┌──────▼──────┐ ┌────▼─────┐ ┌─────▼────────┐
+       │ PostgreSQL  │ │  Redis   │ │  Sarvam AI   │
+       │     16      │ │ Cache /  │ │ STT / TTS /  │
+       │ + Media     │ │ Limits   │ │     LLM      │
+       └─────────────┘ └──────────┘ └──────────────┘
+
+
+
+Tech Stack
+
+Layer
+
+Technology
+
+Frontend
+
+Next.js 14 App Router, TypeScript, Tailwind CSS, shadcn/ui, Framer Motion
+
+Backend
+
+FastAPI, SQLAlchemy 2 Async, asyncpg
+
+Database
+
+PostgreSQL 16
+
+Migrations
+
+Alembic
+
+Cache
+
+Redis with in-process fallback
+
+Voice
+
+Sarvam streaming STT/TTS over WebSockets, AudioWorklet
+
+AI
+
+Provider-agnostic gateway supporting Sarvam, OpenAI, Anthropic, Groq and vLLM
+
+Documents
+
+ReportLab, pypdf, Tesseract
+
+Infrastructure
+
+Docker, Nginx
+
+Monitoring
+
+Prometheus metrics, JSON logging
+
+CI/CD
+
+GitHub Actions
+
+
+
+Clinical Safety
+
+The platform is designed around a simple principle:
+
+AI prepares and suggests. The treating doctor decides.
+
+Safety mechanisms include:
+
+AI-generated content is explicitly labelled
+
+Deterministic rule checks are separated from model inference
+
+Abnormal laboratory values are calculated arithmetically
+
+Duplicate and allergy conflicts use rule-based checks
+
+Emergency red flags use deterministic phrase matching
+
+Serious safety warnings must be acknowledged before prescription issuance
+
+The AI cannot mark its own suggestions as reviewed
+
+Clinical sign-off requires a doctor
+
+Front-desk staff have no clinical authority
+
+Patient-record access and clinical actions are audited
+
+Before production use, doctors must review the emergency phrase list, drug interaction table and laboratory reference ranges against local clinical practice.
+
+
+
+Repository Structure
+
+backend/
+├── app/
+│   ├── core/             # Config, security, cache, audit, metrics
+│   ├── db/               # Async database engine and sessions
+│   ├── models/           # SQLAlchemy models
+│   ├── repositories/     # Data access layer
+│   ├── services/         # Core business services
+│   ├── ai/               # AI gateway and clinical pipeline
+│   ├── investigations/   # Catalog, ranges, OCR and report parsing
+│   ├── prescriptions/    # Formulary, dictation, safety and PDF
+│   ├── messaging/        # WhatsApp, Twilio and console delivery
+│   ├── api/              # Versioned API routes and RBAC
+│   └── ws/               # Patient and doctor WebSockets
+├── alembic/              # Database migrations
+├── tests/                # Unit and integration tests
+└── scripts/              # Demo data and utility scripts
+
+frontend/
+├── app/
+│   ├── (patient)/        # Patient intake and live consultation
+│   └── (dashboard)/      # Doctor dashboard
+├── components/           # UI and clinical components
+└── lib/                  # API clients, audio and types
+
+deploy/
+├── nginx/                # Reverse proxy and TLS
+└── scripts/              # Backup, restore and migration scripts
+
+docs/
+├── API.md
+├── DEPLOYMENT.md
+├── EMR.md
+└── PRODUCTION_CHECKLIST.md
+
+
+
+Testing
+
+Unit tests
+
 cd backend
-pytest -m unit                              # fast, no services needed
-docker compose up -d db && pytest -m integration
+pytest -m unit
+
+Integration tests
+
+docker compose up -d db
+pytest -m integration
+
+Linting
+
 ruff check app tests
-```
 
-See **[backend/tests/README.md](backend/tests/README.md)** for the testing
-strategy and why external AI calls are deliberately not mocked.
+The testing strategy and rationale for external AI calls are documented in:
 
----
+backend/tests/README.md
 
-## Documentation
 
-| Document | Contents |
-|---|---|
-| [docs/EMR.md](docs/EMR.md) | Reception and billing, and migrating patient data off the current software |
-| [docs/API.md](docs/API.md) | Every endpoint, roles, rate limits, worked examples |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Server setup, TLS, migrations, backups, scaling |
-| [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) | Pre-go-live checklist and known limitations |
-| [backend/tests/README.md](backend/tests/README.md) | Testing strategy |
 
----
+Documentation
 
-## Clinical safety
+Document
 
-This platform prepares and suggests. It does not diagnose, prescribe or decide.
+Description
 
-- Every AI-generated element in the interface carries an explicit label
-- Deterministic rule checks are labelled differently from model inference, so a
-  doctor can always tell arithmetic from judgement
-- Serious safety warnings must be acknowledged before a prescription is issued —
-  enforced by the API, not only the UI
-- The AI never marks its own work as reviewed; sign-off requires a clinician
-- Front-desk staff can read records and upload reports but hold no clinical
-  authority of any kind
-- Every access to a patient record and every clinical action is audited
+docs/EMR.md
 
-Before go-live, a doctor must review the emergency phrase list, the drug
-interaction table and the laboratory reference ranges against local practice.
-These are in the production checklist as blocking items.
-#   h o s p i t a l _ v o i c e _ c o n s u l t a t i o n  
- 
+Reception, billing and patient-data migration
+
+docs/API.md
+
+API endpoints, roles, rate limits and examples
+
+docs/DEPLOYMENT.md
+
+Server setup, TLS, migrations, backups and scaling
+
+docs/PRODUCTION_CHECKLIST.md
+
+Go-live checklist and known limitations
+
+backend/tests/README.md
+
+Testing strategy
+Production
+For production deployment, review:
+docs/DEPLOYMENT.md
+docs/PRODUCTION_CHECKLIST.md
+The production checklist includes the blocking clinical-safety items that must be reviewed before go-live.
+
+️Disclaimer
+This software is intended for patient intake and clinical decision support.
+It does not independently diagnose, prescribe, or make clinical decisions. All clinical decisions must be made and verified by a qualified treating doctor.
+
+Project Status
+The project currently covers patient voice intake, clinical processing, doctor workflows, investigations, prescriptions, messaging, auditing and deployment support.
+Before using the system with real patients, complete the clinical validation and go-live checklist.
