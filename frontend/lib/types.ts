@@ -26,6 +26,8 @@ export interface Patient {
 
 export interface PatientListItem extends Patient {
   visit_count: number;
+  visit_reason?: string | null;
+  payment_status?: string | null;
 }
 
 export interface ConversationTurn {

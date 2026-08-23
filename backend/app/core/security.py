@@ -12,6 +12,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_CONSULTATION = "consultation"
+TOKEN_TYPE_FINANCE_UNLOCK = "finance_unlock"
 
 
 # bcrypt hashes only the first 72 bytes of a password and silently ignores the
@@ -68,6 +69,13 @@ def create_consultation_token(*, consultation_id: UUID, patient_id: UUID) -> str
             "type": TOKEN_TYPE_CONSULTATION,
         },
         settings.CONSULTATION_TOKEN_EXPIRE_MINUTES,
+    )
+
+
+def create_finance_unlock_token(*, user_id: UUID, role: str) -> str:
+    return _encode(
+        {"sub": str(user_id), "role": role, "type": TOKEN_TYPE_FINANCE_UNLOCK},
+        30,
     )
 
 

@@ -6,7 +6,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.consultation import Consultation, ConversationTurn
-from app.models.enums import ConsultationStatus, Department, TurnRole
+from app.models.enums import ConsultationStatus, Department, TurnRole, VisitType
+from app.models.emr import Visit
 from app.models.patient import Patient
 from app.repositories.base import BaseRepository
 
@@ -30,6 +31,7 @@ class ConsultationRepository(BaseRepository[Consultation]):
         query: Optional[str] = None,
         patient_id: Optional[uuid.UUID] = None,
         reviewed: Optional[bool] = None,
+        visit_type: Optional[VisitType] = None,
         offset: int = 0,
         limit: int = 50,
     ) -> Tuple[Sequence[Consultation], int]:
@@ -48,6 +50,10 @@ class ConsultationRepository(BaseRepository[Consultation]):
             # or a missing key both mean "not yet seen".
             marker = Consultation.medical_json.op("->>")("reviewed_at")
             conditions.append(marker.isnot(None) if reviewed else marker.is_(None))
+        if visit_type is not None:
+            statement = statement.join(Visit, Visit.consultation_id == Consultation.id)
+            count_statement = count_statement.join(Visit, Visit.consultation_id == Consultation.id)
+            conditions.append(Visit.visit_type == visit_type)
         if query and query.strip():
             term = f"%{query.strip()}%"
             statement = statement.join(Patient, Consultation.patient_id == Patient.id)

@@ -88,8 +88,9 @@ export default function ConsultationPage() {
 
 function LiveSession({ consultationId, token }: { consultationId: string; token: string }) {
   const router = useRouter();
-  const { phase, entries, error, summary, endConsultation } = useConsultation(consultationId, token);
+  const { phase, entries, error, summary, endConsultation, restartConsultation } = useConsultation(consultationId, token);
   const [ending, setEnding] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Whether the view was following the conversation when the last line
   // arrived. If the patient has scrolled up to re-read something, new lines
@@ -147,10 +148,10 @@ function LiveSession({ consultationId, token }: { consultationId: string; token:
               </p>
             </div>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/intake")}
               className="mt-4 w-full rounded-xl bg-marigold px-5 py-3 font-display text-sm font-semibold text-pine-deep hover:bg-marigold-deep"
             >
-              Done
+              Back to intake
             </button>
           </div>
         )}
@@ -160,6 +161,24 @@ function LiveSession({ consultationId, token }: { consultationId: string; token:
             className="mt-8 rounded-xl bg-pine px-5 py-2.5 font-display text-sm font-semibold text-mint"
           >
             Reload and reconnect
+          </button>
+        )}
+        {phase !== "ended" && (
+          <button
+            onClick={async () => {
+              setRestarting(true);
+              const replacement = await restartConsultation();
+              if (!replacement) {
+                setRestarting(false);
+                return;
+              }
+              sessionStorage.setItem(`consult:${replacement.consultation_id}`, replacement.session_token);
+              router.replace(`/consultation/${replacement.consultation_id}`);
+            }}
+            disabled={restarting}
+            className="mt-3 rounded-xl border border-pine/30 px-5 py-2.5 text-sm font-semibold text-pine transition hover:bg-mint disabled:opacity-60"
+          >
+            {restarting ? "Restarting..." : "Restart consultation"}
           </button>
         )}
       </section>

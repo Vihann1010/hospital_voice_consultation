@@ -3,13 +3,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import create_consultation_token
 from app.models.consultation import Consultation, ConversationTurn
-from app.models.enums import ConsultationStatus, Department, TurnRole
+from app.models.enums import ConsultationStatus, Department, TurnRole, VisitType
 from app.models.patient import Patient
 from app.repositories.consultation_repository import ConsultationRepository
 from app.repositories.patient_repository import PatientRepository
@@ -42,17 +43,19 @@ class ConsultationService:
         the front desk sees who has gone in.
         """
         from app.models.emr import Visit
-        from app.models.enums import VisitStatus
+        from app.models.enums import VisitStatus, VisitType
 
         visit = await self.session.get(Visit, visit_id)
         if visit is None:
             raise ConsultationError("That registration could not be found.")
+        if visit.visit_type is not VisitType.NEW:
+            raise ConsultationError("Only new OPD visits can start voice intake.")
         if visit.consultation_id is not None:
             raise ConsultationError(
                 "Voice intake has already been started for this patient."
             )
-        if visit.status is VisitStatus.CANCELLED:
-            raise ConsultationError("This registration was cancelled.")
+        if visit.status is not VisitStatus.REGISTERED:
+            raise ConsultationError("This visit is not waiting for voice intake.")
 
         patient = await self.session.get(Patient, visit.patient_id)
         if patient is None:
@@ -89,6 +92,49 @@ class ConsultationService:
             department=visit.department,
             session_token=token,
             ws_path=f"{settings.API_V1_PREFIX}/ws/consultations/{consultation.id}",
+        )
+
+    async def restart_from_consultation(
+        self, consultation_id: uuid.UUID
+    ) -> ConsultationStartResponse:
+        """Replace a voice session while keeping the registered visit intact."""
+        from app.models.emr import Visit
+        from app.models.enums import VisitStatus
+
+        consultation = await self.consultations.get(consultation_id)
+        if consultation is None:
+            raise ConsultationError("That consultation could not be found.")
+        visit_result = await self.session.execute(
+            select(Visit).where(Visit.consultation_id == consultation_id)
+        )
+        visit = visit_result.scalar_one_or_none()
+        patient = await self.session.get(Patient, consultation.patient_id)
+        if patient is None:
+            raise ConsultationError("The patient record for this visit is missing.")
+
+        consultation.status = ConsultationStatus.ABANDONED
+        consultation.ended_at = datetime.now(timezone.utc)
+        replacement = await self.consultations.add(
+            Consultation(
+                patient_id=patient.id,
+                department=consultation.department,
+                status=ConsultationStatus.IN_PROGRESS,
+                started_at=datetime.now(timezone.utc),
+            )
+        )
+        if visit is not None:
+            visit.consultation_id = replacement.id
+            visit.status = VisitStatus.IN_CONSULTATION
+        await self.session.flush()
+        token = create_consultation_token(
+            consultation_id=replacement.id, patient_id=patient.id
+        )
+        return ConsultationStartResponse(
+            consultation_id=replacement.id,
+            patient_id=patient.id,
+            department=replacement.department,
+            session_token=token,
+            ws_path=f"{settings.API_V1_PREFIX}/ws/consultations/{replacement.id}",
         )
 
     async def start(self, payload: ConsultationStartRequest) -> ConsultationStartResponse:
@@ -143,6 +189,7 @@ class ConsultationService:
         query: Optional[str] = None,
         patient_id: Optional[uuid.UUID] = None,
         reviewed: Optional[bool] = None,
+        visit_type: Optional[VisitType] = None,
         offset: int = 0,
         limit: int = 50,
     ):
@@ -152,6 +199,7 @@ class ConsultationService:
             query=query,
             patient_id=patient_id,
             reviewed=reviewed,
+            visit_type=visit_type,
             offset=offset,
             limit=limit,
         )

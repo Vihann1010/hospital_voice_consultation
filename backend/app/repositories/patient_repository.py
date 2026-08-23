@@ -2,8 +2,10 @@ import uuid
 from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.models.consultation import Consultation
+from app.models.emr import Visit
 from app.models.patient import Patient
 from app.repositories.base import BaseRepository
 
@@ -31,20 +33,20 @@ class PatientRepository(BaseRepository[Patient]):
     ) -> Tuple[Sequence[Patient], int]:
         """Free-text search across name and phone number.
 
-        With `department`, only patients who have attended that department are
-        returned, so a consultant's directory matches their consultation list.
+        With `department`, only patients who have registered a visit for that
+        department are returned, including patients awaiting voice intake.
         """
         statement = select(Patient)
         count_statement = select(func.count()).select_from(Patient)
         if department is not None:
-            attended = (
-                select(Consultation.patient_id)
-                .where(Consultation.department == department)
+            registered = (
+                select(Visit.patient_id)
+                .where(Visit.department == department)
                 .distinct()
                 .scalar_subquery()
             )
-            statement = statement.where(Patient.id.in_(attended))
-            count_statement = count_statement.where(Patient.id.in_(attended))
+            statement = statement.where(Patient.id.in_(registered))
+            count_statement = count_statement.where(Patient.id.in_(registered))
         if query and query.strip():
             term = f"%{query.strip()}%"
             condition = or_(Patient.name.ilike(term), Patient.phone_number.ilike(term))
@@ -56,15 +58,32 @@ class PatientRepository(BaseRepository[Patient]):
         return rows.scalars().all(), int(total.scalar_one())
 
     async def visit_counts(self, patient_ids: Sequence[uuid.UUID]) -> dict:
-        """Visit count per patient, for list views (avoids an N+1 query)."""
+        """Reception visit summaries for list views (avoids N+1 queries)."""
         if not patient_ids:
             return {}
         result = await self.session.execute(
-            select(Consultation.patient_id, func.count(Consultation.id))
-            .where(Consultation.patient_id.in_(list(patient_ids)))
-            .group_by(Consultation.patient_id)
+            select(Visit.patient_id, func.count(Visit.id))
+            .where(Visit.patient_id.in_(list(patient_ids)))
+            .group_by(Visit.patient_id)
         )
-        return {row[0]: int(row[1]) for row in result.all()}
+        counts = {row[0]: int(row[1]) for row in result.all()}
+        latest_result = await self.session.execute(
+            select(Visit)
+            .options(selectinload(Visit.invoices))
+            .where(Visit.patient_id.in_(list(patient_ids)))
+            .order_by(Visit.created_at.desc())
+        )
+        summaries = {}
+        for visit in latest_result.scalars().all():
+            if visit.patient_id in summaries:
+                continue
+            invoice = max(visit.invoices, key=lambda item: item.created_at) if visit.invoices else None
+            summaries[visit.patient_id] = {
+                "visit_count": counts.get(visit.patient_id, 0),
+                "visit_reason": visit.notes or visit.visit_type.value.replace("_", " ").title(),
+                "payment_status": invoice.status.value if invoice else "not_billed",
+            }
+        return summaries
 
     async def consultations_for(
         self, patient_id: uuid.UUID, *, department=None

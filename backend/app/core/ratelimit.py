@@ -6,7 +6,7 @@ and creates rows), and normal authenticated traffic is generous.
 
 Identity is the authenticated user when a bearer token is present, otherwise
 the client IP taken from the proxy chain. Limits are enforced through the
-shared cache, so they are cluster-wide when Redis is configured.
+shared in-process cache and apply per API process.
 """
 import hashlib
 from dataclasses import dataclass

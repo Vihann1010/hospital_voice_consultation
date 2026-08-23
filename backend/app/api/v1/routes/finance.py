@@ -4,14 +4,22 @@ The reports here answer the questions a hospital actually asks at closing
 time — what did we bill, what did we collect, in what form, and does the
 drawer match — rather than presenting a general-purpose ledger.
 """
+import secrets
 import uuid
 from datetime import date, datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession, get_reception_service, require_roles
+from app.core.config import settings
+from app.core.security import (
+    TOKEN_TYPE_FINANCE_UNLOCK,
+    create_finance_unlock_token,
+    decode_token,
+)
 from app.models.emr import (
     CashSession,
     InsuranceClaim,
@@ -25,6 +33,7 @@ from app.models.enums import (
     CashSessionStatus,
     ClaimStatus,
     InvoiceStatus,
+    PaymentMode,
     UserRole,
 )
 from app.schemas.emr_schemas import (
@@ -50,9 +59,36 @@ DESK = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
 MANAGEMENT = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
 
 
+class FinancePinRequest(BaseModel):
+    pin: str
+
+
+async def finance_unlock(
+    user: CurrentUser,
+    unlock_token: str | None = Header(default=None, alias="X-Finance-Unlock"),
+) -> None:
+    claims = decode_token(unlock_token or "")
+    if (
+        not claims
+        or claims.get("type") != TOKEN_TYPE_FINANCE_UNLOCK
+        or claims.get("sub") != str(user.id)
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Finance PIN required")
+
+
+FINANCE_MANAGEMENT = [Depends(MANAGEMENT), Depends(finance_unlock)]
+
+
+@router.post("/verify-pin")
+async def verify_finance_pin(payload: FinancePinRequest, user: CurrentUser) -> dict[str, str]:
+    if not secrets.compare_digest(payload.pin, settings.FINANCE_PIN):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid finance PIN")
+    return {"token": create_finance_unlock_token(user_id=user.id, role=user.role.value)}
+
+
 # -------------------------------------------------------------- collections
 @router.get("/collections", response_model=CollectionSummaryOut,
-            dependencies=[Depends(MANAGEMENT)])
+            dependencies=FINANCE_MANAGEMENT)
 async def collections(
     session: DbSession,
     on: Optional[date] = Query(default=None, description="Defaults to today"),
@@ -131,7 +167,7 @@ async def collections(
     )
 
 
-@router.get("/outstanding", dependencies=[Depends(MANAGEMENT)])
+@router.get("/outstanding", dependencies=FINANCE_MANAGEMENT)
 async def outstanding_invoices(
     session: DbSession, limit: int = Query(default=100, ge=1, le=500)
 ) -> Dict[str, Any]:
@@ -193,12 +229,26 @@ async def current_cash_session(session: DbSession, user: CurrentUser) -> Dict[st
     row = result.scalar_one_or_none()
     if row is None:
         return {"open": False, "session": None}
-    return {"open": True, "session": CashSessionOut.model_validate(row).model_dump()}
+    cash_result = await session.execute(
+        select(func.coalesce(func.sum(Payment.amount_paise), 0)).where(
+            Payment.cash_session_id == row.id,
+            Payment.mode == PaymentMode.CASH,
+            Payment.is_refund.is_(False),
+        )
+    )
+    cash_taken_paise = int(cash_result.scalar_one() or 0)
+    return {
+        "open": True,
+        "session": CashSessionOut.model_validate(row).model_dump(),
+        "cash_taken_paise": cash_taken_paise,
+        "expected_cash_paise": row.opening_float_paise + cash_taken_paise,
+    }
 
 
 @router.post("/cash-sessions/{cash_session_id}/close", dependencies=[Depends(DESK)])
 async def close_cash_session(
-    cash_session_id: uuid.UUID, payload: CashSessionCloseRequest, service: Service
+    cash_session_id: uuid.UUID, payload: CashSessionCloseRequest,
+    service: Service, user: CurrentUser,
 ) -> Dict[str, Any]:
     """Close a shift and reconcile the drawer against what was taken."""
     try:
@@ -206,6 +256,7 @@ async def close_cash_session(
             cash_session_id,
             counted_cash_paise=payload.counted_cash_paise,
             variance_note=payload.variance_note,
+            cashier_id=user.id,
         )
         await service.session.commit()
     except ReceptionError as exc:
@@ -230,7 +281,7 @@ async def list_services(
 
 
 @router.put("/services/{code}", response_model=ServiceItemOut,
-            dependencies=[Depends(MANAGEMENT)])
+            dependencies=FINANCE_MANAGEMENT)
 async def upsert_service(
     code: str, payload: ServiceItemUpsert, session: DbSession
 ) -> ServiceItemOut:

@@ -16,7 +16,7 @@ be done; the rest are strongly recommended.
 - [ ] **blocking** `DEBUG=false` and `APP_ENV=production`
 - [ ] TLS certificate installed and HTTPS verified end to end
 - [ ] HTTP redirects to HTTPS (`curl -I http://your-domain` returns 301)
-- [ ] Postgres and Redis are not published to the host — only `expose`, never `ports`
+- [ ] Postgres is not published to the host — only `expose`, never `ports`
 - [ ] `/api/v1/metrics` reachable only from internal networks
 - [ ] Server SSH hardened: key-only authentication, no root login
 - [ ] Host firewall permits only 80, 443 and SSH
@@ -90,7 +90,8 @@ curl -s -o /dev/null -w '%{http_code}' https://your-domain/api/v1/patients   # e
 
 - [ ] Health checks wired into monitoring (`/api/v1/health/ready`)
 - [ ] Log aggregation configured; logs are JSON, one object per line
-- [ ] `REDIS_URL` set if running more than one API replica
+- [ ] Rate-limit behavior reviewed if running more than one API replica; each
+      replica has its own in-process cache
 - [ ] Someone is on call and knows how to read `docker compose logs`
 - [ ] Runbook shared with the IT desk: restart, restore, check delivery failures
 

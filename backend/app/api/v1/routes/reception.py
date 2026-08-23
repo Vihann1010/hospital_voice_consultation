@@ -3,11 +3,14 @@ import uuid
 from datetime import date
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, get_reception_service, require_roles
+from app.billing.pdf import render_invoice_pdf
 from app.core.audit import client_ip, record as audit_record
-from app.models.enums import AuditAction, Department, UserRole
+from app.models.emr import CashSession, Visit
+from app.models.enums import AuditAction, CashSessionStatus, Department, PaymentMode, UserRole
 from app.models.patient import Patient
 from app.schemas.emr_schemas import (
     CancelInvoiceRequest,
@@ -110,6 +113,15 @@ async def register_and_bill(
 
         payment = None
         if payload.payment is not None:
+            cash_session_id = None
+            if payload.payment.mode is PaymentMode.CASH:
+                cash_session = await service.session.scalar(
+                    select(CashSession).where(
+                        CashSession.cashier_id == user.id,
+                        CashSession.status == CashSessionStatus.OPEN,
+                    )
+                )
+                cash_session_id = cash_session.id if cash_session else None
             payment = await service.record_payment(
                 invoice_id=invoice.id,
                 amount_paise=payload.payment.amount_paise,
@@ -117,7 +129,7 @@ async def register_and_bill(
                 reference=payload.payment.reference,
                 received_by_id=user.id,
                 received_by_name=user.full_name,
-                cash_session_id=payload.payment.cash_session_id,
+                cash_session_id=cash_session_id,
             )
 
         await service.session.commit()
@@ -226,6 +238,28 @@ async def get_invoice(invoice_id: uuid.UUID, service: Service) -> InvoiceOut:
     if invoice is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
     return InvoiceOut.model_validate(invoice)
+
+
+@router.get("/invoices/{invoice_id}/pdf", dependencies=[Depends(DESK)])
+async def invoice_pdf(invoice_id: uuid.UUID, service: Service) -> Response:
+    invoice = await service.get_invoice(invoice_id)
+    if invoice is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
+    patient = await service.session.get(Patient, invoice.patient_id)
+    if patient is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Patient not found")
+    visit_number = None
+    if invoice.visit_id:
+        visit = await service.session.get(Visit, invoice.visit_id)
+        visit_number = visit.visit_number if visit else None
+    pdf = render_invoice_pdf(invoice, patient, visit_number)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{invoice.invoice_number}.pdf"',
+        },
+    )
 
 
 @router.post("/invoices/{invoice_id}/payments", response_model=PaymentOut,

@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+const CASH_REFRESH_MS = 10000;
+
 export function CashCounter({ compact = false }: { compact?: boolean }) {
   const toast = useToast();
   const [session, setSession] = useState<CashSession | null>(null);
@@ -36,16 +38,7 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
     try {
       const current = await staffApi.currentCashSession();
       setSession(current.session);
-      // The day's cash figure comes from the collections summary; a cashier
-      // needs it to know what the drawer *should* hold.
-      try {
-        const summary = await staffApi.collections();
-        setCashTaken(summary.by_mode?.cash ?? 0);
-      } catch {
-        // Collections is management-only. A clerk without that permission
-        // still gets a working open/close, just without the expected figure.
-        setCashTaken(0);
-      }
+      setCashTaken(current.cash_taken_paise ?? 0);
     } catch {
       setSession(null);
     } finally {
@@ -55,6 +48,13 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     void load();
+    const timer = setInterval(() => void load(), CASH_REFRESH_MS);
+    const refreshAfterPayment = () => void load();
+    window.addEventListener("reception-payment-recorded", refreshAfterPayment);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("reception-payment-recorded", refreshAfterPayment);
+    };
   }, [load]);
 
   async function openSession() {
@@ -67,6 +67,7 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
       setOpeningFloat("");
       toast.success("Counter opened", `Float ${formatINR(created.opening_float_paise)}`);
     } catch (err) {
+      await load();
       toast.error(
         "Could not open the counter",
         err instanceof Error ? err.message : undefined

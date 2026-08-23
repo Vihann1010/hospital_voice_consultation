@@ -5,12 +5,12 @@ import { ToastProvider } from "@/components/ui/toast";
 
 /**
  * The voice intake terminal — its own screen, usually a tablet on a stand
- * near the waiting area. All staff roles may operate it: starting an intake
- * is not clinical authority, it is handing someone a tablet.
+ * near the waiting area. Reception staff use the reception terminal instead;
+ * this panel is reserved for clinical users.
  */
 export default function IntakeLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider allow={["admin", "doctor", "staff"]} fallbackPath="/dashboard">
+    <AuthProvider allow={["admin", "doctor"]} fallbackPath="/reception">
       <ToastProvider>
         <TooltipProvider delayDuration={200}>
           <IntakeShell>{children}</IntakeShell>

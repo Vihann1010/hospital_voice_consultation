@@ -8,14 +8,11 @@
  * reading. No navigation, one job.
  */
 import { LogOut, Mic } from "lucide-react";
-import Link from "next/link";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
-import { Button } from "@/components/ui/button";
 
 export function IntakeShell({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
-  const isClinical = user?.role === "admin" || user?.role === "doctor";
+  const { logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-mint">
@@ -32,14 +29,6 @@ export function IntakeShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/reception">
-              <Button variant="ghost" size="sm">Reception</Button>
-            </Link>
-            {isClinical && (
-              <Link href="/dashboard">
-                <Button variant="outline" size="sm">Dashboard</Button>
-              </Link>
-            )}
             <button
               onClick={logout}
               className="rounded-lg p-2 text-ink-faint transition hover:bg-mint hover:text-clay"

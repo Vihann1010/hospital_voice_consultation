@@ -18,7 +18,8 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { Department } from "@/lib/types";
+import type { ConsultationListItem, Department } from "@/lib/types";
+import { formatDate } from "@/lib/format";
 import type { QueuedPatient } from "@/lib/emrTypes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export function IntakeQueue() {
   const toast = useToast();
 
   const [queue, setQueue] = useState<QueuedPatient[] | null>(null);
+  const [completed, setCompleted] = useState<ConsultationListItem[] | null>(null);
   const [department, setDepartment] = useState<Department | "all">("all");
   const [confirming, setConfirming] = useState<QueuedPatient | null>(null);
   const [starting, setStarting] = useState(false);
@@ -55,6 +57,13 @@ export function IntakeQueue() {
         department === "all" ? {} : { department }
       );
       setQueue(result.patients);
+      const completedResult = await staffApi.consultations({
+        status: "completed",
+        visit_type: "new",
+        department: department === "all" ? undefined : department,
+        limit: 50,
+      });
+      setCompleted(completedResult.items);
       setError(null);
     } catch (err) {
       // Said out loud rather than swallowed: an empty queue and a failed
@@ -187,6 +196,43 @@ export function IntakeQueue() {
         </ul>
       )}
 
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-pine">Completed consultations</h2>
+          <p className="text-sm text-ink-muted">Patients who have completed voice intake.</p>
+        </div>
+        {completed === null ? (
+          <Skeleton className="h-20 rounded-xl" />
+        ) : completed.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-ink-muted">
+              No completed consultations yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <ul className="space-y-2.5">
+            {completed.map((entry) => (
+              <li key={entry.id} className="flex items-center gap-4 rounded-xl border border-pine/10 bg-white p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mint text-sm font-semibold text-pine">
+                  {entry.patient?.name.slice(0, 1).toUpperCase() ?? "?"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-base font-semibold text-pine">
+                    {entry.patient?.name ?? "Registered patient"}
+                  </p>
+                  <p className="truncate text-sm text-ink-muted">
+                    {entry.patient?.phone_number ?? ""} · {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                  </p>
+                </div>
+                <p className="hidden text-right text-xs text-ink-faint sm:block">
+                  Completed {formatDate(entry.ended_at ?? entry.started_at)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* Confirmation: the next thing that happens is handing over the tablet. */}
       {confirming && (
         <div
@@ -233,6 +279,7 @@ export function IntakeQueue() {
           </motion.div>
         </div>
       )}
+
     </div>
   );
 }

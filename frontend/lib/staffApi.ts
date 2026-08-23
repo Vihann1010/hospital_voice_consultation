@@ -59,11 +59,16 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
+  const financeUnlock =
+    typeof window !== "undefined" ? sessionStorage.getItem("finance_unlock") : null;
   const response = await fetch(`${API_URL}/api/v1${path}`, {
     ...init,
     headers: {
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(financeUnlock && path.startsWith("/finance/")
+        ? { "X-Finance-Unlock": financeUnlock }
+        : {}),
       ...(init.headers ?? {}),
     },
     cache: "no-store",
@@ -105,6 +110,7 @@ export interface ConsultationFilters {
   q?: string;
   patient_id?: string;
   reviewed?: boolean;
+  visit_type?: "new" | "follow_up" | "review" | "procedure";
   offset?: number;
   limit?: number;
 }
@@ -243,6 +249,7 @@ export const staffApi = {
   prescription: (id: string) => request<Prescription>(`/prescriptions/${id}`),
 
   prescriptionPdfUrl: (id: string) => `${API_URL}/api/v1/prescriptions/${id}/pdf`,
+  invoicePdfUrl: (id: string) => `${API_URL}/api/v1/reception/invoices/${id}/pdf`,
 
   prescriptionPrefill: (consultationId: string) =>
     request<Record<string, unknown>>(
@@ -297,6 +304,12 @@ export const staffApi = {
     }),
 
   // ------------------------------------------------------------- finance
+  verifyFinancePin: (pin: string) =>
+    request<{ token: string }>("/finance/verify-pin", {
+      method: "POST",
+      body: JSON.stringify({ pin }),
+    }),
+
   serviceItems: () => request<ServiceItem[]>("/finance/services"),
 
   collections: (on?: string) =>
@@ -308,7 +321,12 @@ export const staffApi = {
     ),
 
   currentCashSession: () =>
-    request<{ open: boolean; session: CashSession | null }>("/finance/cash-sessions/current"),
+    request<{
+      open: boolean;
+      session: CashSession | null;
+      cash_taken_paise?: number;
+      expected_cash_paise?: number;
+    }>("/finance/cash-sessions/current"),
 
   openCashSession: (payload: Record<string, unknown>) =>
     request<CashSession>("/finance/cash-sessions", {

@@ -551,6 +551,7 @@ class ReceptionService:
             .where(
                 Visit.visit_date == day,
                 Visit.status == VisitStatus.REGISTERED,
+                Visit.visit_type == VisitType.NEW,
                 Visit.consultation_id.is_(None),
             )
             .order_by(Visit.token_number)
@@ -623,6 +624,7 @@ class ReceptionService:
     async def close_cash_session(
         self, cash_session_id: uuid.UUID, *, counted_cash_paise: int,
         variance_note: Optional[str] = None,
+        cashier_id: Optional[uuid.UUID] = None,
     ) -> Tuple[CashSession, Dict[str, int]]:
         """Close a shift and reconcile the drawer.
 
@@ -634,6 +636,8 @@ class ReceptionService:
             raise ReceptionError("Cash session not found.")
         if session_row.status is not CashSessionStatus.OPEN:
             raise ReceptionError("This session is already closed.")
+        if cashier_id is not None and session_row.cashier_id != cashier_id:
+            raise ReceptionError("You can only close your own cash session.")
 
         result = await self.session.execute(
             select(Payment.mode, func.sum(Payment.amount_paise))

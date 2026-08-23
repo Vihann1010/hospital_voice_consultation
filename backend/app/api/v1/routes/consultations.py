@@ -3,12 +3,14 @@ import uuid
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
 from app.core.audit import client_ip, record as audit_record
 from app.api.deps import CurrentUser, get_consultation_service, get_copilot_service, require_roles
 from app.api.scoping import assert_may_access, effective_department
-from app.models.enums import AuditAction, ConsultationStatus, Department, UserRole
+from app.core.security import TOKEN_TYPE_CONSULTATION, decode_token
+from app.models.enums import AuditAction, ConsultationStatus, Department, UserRole, VisitType
 from app.schemas.schemas import (
     ConsultationDetailOut,
     ConsultationListItemOut,
@@ -30,6 +32,32 @@ Copilot = Annotated[CopilotService, Depends(get_copilot_service)]
 
 STAFF = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
 CLINICIAN = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+
+
+class ConsultationRestartRequest(BaseModel):
+    session_token: str
+
+
+@router.post("/{consultation_id}/restart", response_model=ConsultationStartResponse)
+async def restart_consultation(
+    consultation_id: uuid.UUID,
+    payload: ConsultationRestartRequest,
+    service: Service,
+) -> ConsultationStartResponse:
+    claims = decode_token(payload.session_token)
+    if (
+        claims is None
+        or claims.get("type") != TOKEN_TYPE_CONSULTATION
+        or claims.get("consultation_id") != str(consultation_id)
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid consultation session")
+    try:
+        response = await service.restart_from_consultation(consultation_id)
+        await service.session.commit()
+    except ConsultationError as exc:
+        await service.session.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return response
 
 
 @router.post("/start-from-visit", response_model=ConsultationStartResponse,
@@ -77,6 +105,7 @@ async def list_consultations(
     q: Optional[str] = Query(default=None, max_length=120),
     patient_id: Optional[uuid.UUID] = Query(default=None),
     reviewed: Optional[bool] = Query(default=None, description="Doctor sign-off state"),
+    visit_type: Optional[VisitType] = Query(default=None),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> ConsultationListOut:
@@ -86,6 +115,7 @@ async def list_consultations(
         query=q,
         patient_id=patient_id,
         reviewed=reviewed,
+        visit_type=visit_type,
         offset=offset,
         limit=limit,
     )

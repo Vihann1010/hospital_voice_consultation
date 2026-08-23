@@ -76,13 +76,6 @@ async def lifespan(app: FastAPI):
     cache = get_cache()
     if not await cache.ping():
         logger.warning("cache_unavailable_at_startup", extra={"backend": cache.name})
-    if settings.APP_ENV.lower().startswith("prod") and not cache.distributed:
-        logger.warning(
-            "single_node_cache_in_production",
-            extra={"detail": "Set REDIS_URL so rate limits and caches are shared "
-                             "across replicas."},
-        )
-
     get_provider()      # surface messaging misconfiguration at boot, not first send
     retry_worker.start()
 
@@ -135,7 +128,9 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", settings.REQUEST_ID_HEADER],
+    allow_headers=[
+        "Authorization", "Content-Type", "X-Finance-Unlock", settings.REQUEST_ID_HEADER,
+    ],
     expose_headers=[settings.REQUEST_ID_HEADER, "X-RateLimit-Remaining", "Retry-After"],
     max_age=600,
 )

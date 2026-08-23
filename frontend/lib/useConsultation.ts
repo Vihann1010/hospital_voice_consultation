@@ -5,7 +5,7 @@
  * WebSocket, mic capture, playback queue, transcript state, and barge-in.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { consultationWsUrl } from "@/lib/api";
+import { API_URL, consultationWsUrl } from "@/lib/api";
 import { MicRecorder } from "@/lib/audio/recorder";
 import { PcmPlayer } from "@/lib/audio/player";
 
@@ -22,6 +22,11 @@ export interface TranscriptEntry {
   role: "patient" | "assistant";
   text: string;
   interrupted?: boolean;
+}
+
+interface RestartResponse {
+  consultation_id: string;
+  session_token: string;
 }
 
 interface SessionEndedPayload {
@@ -216,5 +221,23 @@ export function useConsultation(consultationId: string, token: string) {
     }
   }, []);
 
-  return { phase, entries, error, summary, endConsultation };
+  const restartConsultation = useCallback(async (): Promise<RestartResponse | null> => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/consultations/${consultationId}/restart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: token }),
+      });
+      if (!response.ok) throw new Error("Could not restart the consultation.");
+      endedRef.current = true;
+      wsRef.current?.close();
+      await teardown();
+      return (await response.json()) as RestartResponse;
+    } catch {
+      setError("Could not restart the consultation. Please reload and try again.");
+      return null;
+    }
+  }, [consultationId, token, teardown]);
+
+  return { phase, entries, error, summary, endConsultation, restartConsultation };
 }

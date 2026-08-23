@@ -10,12 +10,12 @@
  * exactly the mess that gets reconciled by hand at closing time.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Banknote, Check, Loader2, Plus, Printer, Search, Stethoscope, Trash2, UserPlus, X,
+  Banknote, Check, Loader2, Plus, Printer, Search, Trash2, UserPlus, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
+import { getToken } from "@/lib/auth";
 import type {
   PatientCard, PaymentMode, RegisterAndBillResult, ServiceItem, VisitType,
 } from "@/lib/emrTypes";
@@ -37,7 +37,6 @@ interface BillLine {
 let lineKey = 0;
 
 export function ReceptionCounter() {
-  const router = useRouter();
   const toast = useToast();
 
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -68,6 +67,7 @@ export function ReceptionCounter() {
   const [reference, setReference] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<RegisterAndBillResult | null>(null);
 
@@ -175,6 +175,7 @@ export function ReceptionCounter() {
 
       const result = await staffApi.registerAndBill(payload);
       setDone(result);
+      window.dispatchEvent(new Event("reception-payment-recorded"));
       toast.success(
         `${result.patient.uhid} · Token ${result.visit.token_number}`,
         `${result.invoice.invoice_number} — ${formatINR(result.invoice.total_paise)}`
@@ -185,6 +186,36 @@ export function ReceptionCounter() {
       toast.error("Registration failed", message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function printInvoice(invoiceId: string) {
+    setPrinting(true);
+    try {
+      const response = await fetch(staffApi.invoicePdfUrl(invoiceId), {
+        headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+      });
+      if (!response.ok) throw new Error("The bill PDF is not available yet.");
+      const url = URL.createObjectURL(await response.blob());
+      const frame = document.createElement("iframe");
+      frame.style.position = "fixed";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.style.border = "0";
+      frame.src = url;
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        setTimeout(() => {
+          frame.remove();
+          URL.revokeObjectURL(url);
+        }, 60000);
+      };
+      document.body.appendChild(frame);
+    } catch (err) {
+      toast.error("Could not print bill", err instanceof Error ? err.message : undefined);
+    } finally {
+      setPrinting(false);
     }
   }
 
@@ -229,15 +260,8 @@ export function ReceptionCounter() {
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button onClick={() => window.print()} variant="outline">
-                <Printer /> Print bill
-              </Button>
-              <Button
-                onClick={() =>
-                  router.push(`/?visit=${done.visit.id}&patient=${done.patient.id}`)
-                }
-              >
-                <Stethoscope /> Start voice consultation
+              <Button onClick={() => void printInvoice(done.invoice.id)} variant="outline" disabled={printing}>
+                <Printer /> {printing ? "Preparing bill..." : "Print bill"}
               </Button>
               <Button variant="ghost" onClick={reset}>
                 Next patient

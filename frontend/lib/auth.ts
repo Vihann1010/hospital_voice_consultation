@@ -65,5 +65,6 @@ export async function fetchCurrentUser(): Promise<User | null> {
 
 export function logout(): void {
   clearToken();
+  if (typeof window !== "undefined") sessionStorage.removeItem("finance_unlock");
   if (typeof window !== "undefined") window.location.href = "/login";
 }

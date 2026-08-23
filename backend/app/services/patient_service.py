@@ -22,8 +22,8 @@ class PatientService:
         patients, total = await self.patients.search(
             query=query, offset=offset, limit=limit, department=department
         )
-        counts = await self.patients.visit_counts([p.id for p in patients])
-        return patients, total, counts
+        summaries = await self.patients.visit_counts([p.id for p in patients])
+        return patients, total, summaries
 
     async def get(self, patient_id: uuid.UUID) -> Optional[Patient]:
         return await self.patients.get(patient_id)

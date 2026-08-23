@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, LogOut, Mic, RefreshCw, Users, Wallet } from "lucide-react";
+import { CalendarDays, LogOut, RefreshCw, Users } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { staffApi } from "@/lib/staffApi";
@@ -127,11 +127,6 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Doctors and admins can cover the desk, and need a way back to their own
-  // screens. Front-desk staff have nowhere else to go, so they are not shown
-  // a door that leads to a permission error.
-  const isClinical = user?.role === "admin" || user?.role === "doctor";
-
   return (
     <div className="min-h-screen bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white">
@@ -152,26 +147,11 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
               </span>
             )}
 
-            <Link href="/intake">
+            <Link href="/reception/patients">
               <Button variant="ghost" size="sm">
-                <Mic /> Voice intake
+                <Users /> Registered patients
               </Button>
             </Link>
-
-            {isClinical && (
-              <>
-                <Link href="/finance">
-                  <Button variant="ghost" size="sm">
-                    <Wallet /> Finance
-                  </Button>
-                </Link>
-                <Link href="/dashboard">
-                  <Button variant="outline" size="sm">
-                    Clinical dashboard
-                  </Button>
-                </Link>
-              </>
-            )}
 
             <div className="hidden text-right sm:block">
               <p className="text-xs font-medium text-ink">{user?.full_name}</p>

@@ -1,9 +1,8 @@
 """Shared cache / coordination layer.
 
-Redis when configured, an in-process fallback otherwise. Every multi-node
-concern in the platform — rate limiting, response caching, idempotency, the
-delivery-retry lock — goes through this interface, so scaling from one
-container to several is a configuration change rather than a rewrite.
+An in-process cache backs rate limiting, response caching, idempotency, and the
+delivery-retry lock. Every cache concern in the platform goes through this
+interface.
 
 The in-memory backend is deliberately honest about its limits: it reports
 `distributed = False`, and the readiness endpoint surfaces that so an operator
@@ -14,18 +13,9 @@ import time
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
-from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-try:
-    import redis.asyncio as aioredis  # type: ignore
-    _HAS_REDIS = True
-except ImportError:  # pragma: no cover - depends on deployment image
-    aioredis = None  # type: ignore
-    _HAS_REDIS = False
-
 
 class CacheBackend(ABC):
     distributed: bool = False
@@ -105,61 +95,14 @@ class InMemoryCache(CacheBackend):
             return count, max(remaining, 0)
 
 
-class RedisCache(CacheBackend):
-    distributed = True
-    name = "redis"
-
-    def __init__(self, url: str) -> None:
-        self._client = aioredis.from_url(
-            url, encoding="utf-8", decode_responses=True,
-            socket_connect_timeout=3, socket_timeout=3, health_check_interval=30,
-        )
-
-    async def get(self, key: str) -> Optional[str]:
-        return await self._client.get(key)
-
-    async def set(self, key: str, value: str, ttl_s: Optional[int] = None) -> None:
-        await self._client.set(key, value, ex=ttl_s)
-
-    async def delete(self, key: str) -> None:
-        await self._client.delete(key)
-
-    async def incr_with_ttl(self, key: str, ttl_s: int) -> Tuple[int, int]:
-        # Pipelined so the increment and the TTL read cost one round trip.
-        async with self._client.pipeline(transaction=True) as pipe:
-            pipe.incr(key)
-            pipe.ttl(key)
-            count, remaining = await pipe.execute()
-        if remaining is None or remaining < 0:
-            await self._client.expire(key, ttl_s)
-            remaining = ttl_s
-        return int(count), int(remaining)
-
-    async def ping(self) -> bool:
-        try:
-            return bool(await self._client.ping())
-        except Exception:  # noqa: BLE001
-            return False
-
-    async def aclose(self) -> None:
-        await self._client.aclose()
-
-
 _backend: Optional[CacheBackend] = None
 
 
 def get_cache() -> CacheBackend:
     global _backend
     if _backend is None:
-        url = (settings.REDIS_URL or "").strip()
-        if url and _HAS_REDIS:
-            _backend = RedisCache(url)
-            logger.info("cache_backend_ready", extra={"backend": "redis"})
-        else:
-            if url and not _HAS_REDIS:
-                logger.warning("redis_url_set_but_client_missing")
-            _backend = InMemoryCache()
-            logger.info("cache_backend_ready", extra={"backend": "in-memory"})
+        _backend = InMemoryCache()
+        logger.info("cache_backend_ready", extra={"backend": "in-memory"})
     return _backend
 
 

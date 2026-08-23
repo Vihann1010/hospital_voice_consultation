@@ -37,7 +37,10 @@ async def search_patients(
     items = []
     for patient in patients:
         item = PatientListItemOut.model_validate(patient)
-        item.visit_count = counts.get(patient.id, 0)
+        summary = counts.get(patient.id, {})
+        item.visit_count = summary.get("visit_count", 0)
+        item.visit_reason = summary.get("visit_reason")
+        item.payment_status = summary.get("payment_status")
         items.append(item)
     return PatientListOut(items=items, total=total)
 

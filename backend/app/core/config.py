@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8          # staff sessions
     CONSULTATION_TOKEN_EXPIRE_MINUTES: int = 120        # patient voice sessions
+    FINANCE_PIN: str = "4827"
 
     # --- Seed users (created on first boot) --------------------------------
     ADMIN_EMAIL: str = "admin@satyahospital.in"
@@ -174,9 +175,6 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_WHATSAPP_FROM: str = ""
 
-    # --- Cache / Redis ---------------------------------------------------------
-    REDIS_URL: str = ""                     # empty = in-process fallback
-
     # --- Rate limiting ---------------------------------------------------------
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_DEFAULT_PER_MIN: int = 240
@@ -200,6 +198,13 @@ class Settings(BaseSettings):
     @classmethod
     def _upper(cls, v: str) -> str:
         return v.upper()
+
+    @field_validator("FINANCE_PIN")
+    @classmethod
+    def _finance_pin_must_be_four_digits(cls, v: str) -> str:
+        if len(v) != 4 or not v.isdigit():
+            raise ValueError("FINANCE_PIN must contain exactly four digits")
+        return v
 
     @property
     def database_url(self) -> str:

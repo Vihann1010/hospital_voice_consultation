@@ -1,6 +1,5 @@
 # Production topology: Nginx terminates TLS in front of the app and API,
-# Redis backs rate limiting and caching across replicas, and Postgres and the
-# media volume hold the durable state.
+# Postgres and the media volume hold the durable state; the API cache is in-process.
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
@@ -38,23 +37,6 @@ services:
       resources:
         limits: { memory: 2G }
 
-  redis:
-    image: redis:7-alpine
-    container_name: satya-redis
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-    volumes:
-      - satya_redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
   # One-shot migration runner. The API will not start against an unmigrated
   # database, so this must succeed first.
   migrate:
@@ -74,7 +56,6 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
-      REDIS_URL: redis://redis:6379/0
       MEDIA_ROOT: /data/media
       APP_ENV: production
     volumes:
@@ -83,8 +64,6 @@ services:
       - "8000"
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 30s
@@ -133,6 +112,5 @@ services:
 
 volumes:
   satya_pgdata:
-  satya_redis:
   satya_media:
   satya_certbot:

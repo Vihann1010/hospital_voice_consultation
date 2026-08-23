@@ -143,6 +143,8 @@ class ConsultationStatsOut(BaseModel):
 # --------------------------------------------------------------------------
 class PatientListItemOut(PatientOut):
     visit_count: int = 0
+    visit_reason: Optional[str] = None
+    payment_status: Optional[str] = None
 
 
 class PatientListOut(BaseModel):

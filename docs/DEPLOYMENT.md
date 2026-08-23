@@ -117,8 +117,8 @@ curl -fsS https://satyahospital.example/api/v1/health | jq
 docker compose -f docker-compose.prod.yml ps
 ```
 
-`status` should be `ok`, and `dependencies.cache.distributed` should be `true`
-(Redis is wired up).
+`status` should be `ok`, and `dependencies.cache.backend` should be
+`in-memory`.
 
 ---
 
@@ -202,15 +202,11 @@ Health probes:
 
 ## 9. Scaling beyond one node
 
-The design is ready for it, with two things to know:
-
-1. **Set `REDIS_URL`.** Rate limits, caches and coordination move to Redis and
-   become cluster-wide. Without it each replica limits independently.
-2. **Run the delivery retry worker once.** It currently starts in every API
-   process. For multiple replicas, either run one replica with
-   `MESSAGING_SWEEP_INTERVAL_S` set and the others with it disabled, or move the
-   sweep to a dedicated container. The delivery table already holds all state
-   such a worker needs.
+The cache is in-process, so rate limits and cached responses are maintained
+independently by each API replica. Run the delivery retry worker once when
+scaling out: either enable `MESSAGING_SWEEP_INTERVAL_S` on one replica and
+disable it on the others, or move the sweep to a dedicated container. The
+delivery table already holds all state such a worker needs.
 
 Voice sessions are held in memory per node, so WebSocket connections need
 sticky routing (`ip_hash` in the Nginx upstream) if you run more than one API
