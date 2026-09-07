@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --radius: 0.75rem;
+
+    /* Semantic tokens mapped onto the Satya palette (HSL triplets) */
+    --background: 213 46% 96%;         /* mint  #EEF3F9 */
+    --foreground: 213 47% 12%;         /* ink   #101C2B */
+    --card: 0 0% 100%;
+    --card-foreground: 213 47% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 47% 12%;
+    --primary: 210 87% 34%;            /* pine  #0B55A1 (logo blue) */
+    --primary-foreground: 213 46% 97%;
+    --secondary: 213 40% 92%;
+    --secondary-foreground: 210 87% 34%;
+    --muted: 213 35% 94%;
+    --muted-foreground: 213 21% 36%;   /* ink-muted */
+    --accent: 72 89% 46%;              /* marigold #B7DC0D (logo lime) */
+    --accent-foreground: 210 87% 20%;
+    --destructive: 12 55% 50%;         /* clay */
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 28% 88%;
+    --input: 213 28% 86%;
+    --ring: 210 87% 34%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-mint text-ink antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Numeric columns in clinical tables must align */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.field-label {
+  @apply block text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted mb-1.5;
+}
+
+.field-input {
+  @apply w-full rounded-lg border border-ink-faint/40 bg-white px-3.5 py-2.5 text-[15px]
+    text-ink placeholder:text-ink-faint focus:border-pine focus:outline-none
+    focus:ring-2 focus:ring-pine/20 transition;
+}
+
+/* Scrollbars inside dense clinical panels */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-ink-faint/30;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-ink-faint/50;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
