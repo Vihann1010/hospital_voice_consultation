@@ -351,6 +351,7 @@ export const staffApi = {
       `/ipd/alerts/deteriorating${query({ threshold })}`
     ),
 
+<<<<<<< HEAD
   searchPatientsForAdmission: (q: string) =>
     request<{ id: string; uhid: string | null; name: string; age: number;
               gender: string; phone_number: string; blood_group?: string | null }[]>(
@@ -381,6 +382,8 @@ export const staffApi = {
       { method: "POST" }
     ),
 
+=======
+>>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
   admissionChart: (id: string) =>
     request<Record<string, unknown>>(`/ipd/admissions/${id}`),
 
