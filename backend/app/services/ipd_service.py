@@ -28,8 +28,11 @@ from app.ipd.early_warning import Vitals, score_news2
 from app.models.emr import ServiceItem
 from app.models.enums import (
     AdmissionStatus,
+<<<<<<< HEAD
     InvoiceStatus,
     PayerType,
+=======
+>>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
     AdmissionType,
     BedStatus,
     ChargeCategory,
@@ -752,6 +755,7 @@ class IPDService:
             )
         return out
 
+<<<<<<< HEAD
     # ------------------------------------------------------- final billing
     async def finalise_billing(
         self,
@@ -886,6 +890,8 @@ class IPDService:
             "balance_paise": fresh.total_paise - fresh.paid_paise,
         }
 
+=======
+>>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
     # ------------------------------------------------------------ discharge
     async def initiate_discharge(
         self, admission_id: uuid.UUID, *, final_diagnosis: Optional[str] = None

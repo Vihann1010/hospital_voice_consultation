@@ -22,7 +22,10 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+<<<<<<< HEAD
     "/ward/:path*",
+=======
+>>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
     "/dashboard/:path*",
     "/waiting/:path*",
     "/active/:path*",
