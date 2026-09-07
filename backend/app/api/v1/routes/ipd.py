@@ -397,6 +397,7 @@ async def accrue(admission_id: uuid.UUID, service: Service) -> Dict[str, Any]:
             "bill": await service.running_bill(admission_id)}
 
 
+<<<<<<< HEAD
 # ----------------------------------------------------------- final billing
 @router.post("/admissions/{admission_id}/invoice", dependencies=[Depends(WARD)])
 async def raise_final_invoice(
@@ -491,6 +492,8 @@ async def register_patient_for_admission(
             "phone_number": patient.phone_number}
 
 
+=======
+>>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
 # ---------------------------------------------------------------- discharge
 @router.post("/admissions/{admission_id}/discharge/initiate",
              dependencies=[Depends(CLINICAL)])
