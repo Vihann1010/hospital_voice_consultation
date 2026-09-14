@@ -13,7 +13,7 @@ create one: the token grants exactly one capability, attaching a file to one
 consultation, and expires with the visit.
 """
 import uuid
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 
 import jwt
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -22,7 +22,8 @@ from pydantic import BaseModel
 from app.api.deps import get_investigation_service
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.security import TOKEN_TYPE_CONSULTATION
+from app.core.security import TOKEN_TYPE_CONSULTATION, TOKEN_TYPE_UPLOAD
+from app.models.enums import DocumentKind
 from app.services.investigation_service import InvestigationError, InvestigationService
 
 logger = get_logger(__name__)
@@ -39,6 +40,7 @@ class UploadedReportOut(BaseModel):
     original_filename: str
     size_bytes: int
     status: str
+    document_kind: Optional[DocumentKind] = None
 
 
 def _consultation_from_token(session_token: str) -> uuid.UUID:
@@ -50,7 +52,11 @@ def _consultation_from_token(session_token: str) -> uuid.UUID:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "This upload link has expired."
         ) from exc
-    if payload.get("type") != TOKEN_TYPE_CONSULTATION:
+    # Two tokens reach here. The consultation token belongs to the patient's
+    # own voice session and lasts as long as it does; the upload token is the
+    # short-lived one behind the QR code the nurse shows. Both grant exactly
+    # this one capability and nothing else.
+    if payload.get("type") not in (TOKEN_TYPE_CONSULTATION, TOKEN_TYPE_UPLOAD):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid upload link.")
     consultation_id = payload.get("consultation_id")
     if not consultation_id:
@@ -65,6 +71,7 @@ async def upload_previous_report(
     session_token: str = Form(...),
     file: UploadFile = File(...),
     title: str = Form(default=""),
+    document_kind: Optional[DocumentKind] = Form(default=None),
 ) -> UploadedReportOut:
     """Attach one previous report to this consultation.
 
@@ -117,6 +124,7 @@ async def upload_previous_report(
             uploaded_by_id=None,
             uploaded_by_name="Patient",
             department=consultation.department,
+            document_kind=document_kind,
         )
     except InvestigationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -132,4 +140,5 @@ async def upload_previous_report(
         original_filename=report.original_filename,
         size_bytes=report.size_bytes,
         status=report.status.value,
+        document_kind=report.document_kind,
     )

@@ -11,6 +11,18 @@ export type ReportStatus = "uploaded" | "extracting" | "analyzed" | "failed" | "
 export type AbnormalFlag =
   | "normal" | "low" | "high" | "critical_low" | "critical_high" | "abnormal" | "unknown";
 
+/** What the patient handed over. Decides which analyser reads it. */
+export type DocumentKind = "prescription" | "lab_report" | "imaging" | "other";
+
+/**
+ * Whether the contents may be shown as fact.
+ *
+ * `unclear` is not an error state — the file uploaded and stored perfectly
+ * well. It means nothing on it could be read with enough confidence to put in
+ * front of a doctor, so the screen says so instead of showing a guess.
+ */
+export type ReportClarity = "clear" | "unclear" | "not_analysed";
+
 export interface Investigation {
   code: string;
   name: string;
@@ -109,13 +121,57 @@ export interface ReportResult {
   section?: string | null;
 }
 
+/** One medicine read off a prescription. */
+export interface MedicineRead {
+  raw_line: string;
+  /** The formulary name. Never the raw OCR token. */
+  name: string;
+  /** How it was printed, when that differed from the formulary name. */
+  read_as?: string | null;
+  ingredients: string[];
+  strength?: string | null;
+  dose_notation?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  timing?: string | null;
+  /** False for a near match, which must never be shown as a confirmed drug. */
+  exact: boolean;
+}
+
+export interface PrescriptionReading {
+  medicines: MedicineRead[];
+  possible_medicines: MedicineRead[];
+  unidentified_lines: string[];
+  problems: string[];
+  needs_manual_check: boolean;
+}
+
+export interface ImagingReading {
+  modality?: string | null;
+  impression: string[];
+  findings: string[];
+}
+
 export interface ReportAnalysis {
   extraction?: {
     method?: string;
     page_count?: number | null;
     warning?: string | null;
     characters?: number;
+    legible?: boolean;
   };
+  document_kind?: DocumentKind | null;
+  declared_kind?: DocumentKind | null;
+  detected_kind?: DocumentKind | null;
+  detection_confident?: boolean;
+  detection_reasons?: string[];
+  clarity?: ReportClarity;
+  unclear_reason?: string | null;
+  needs_manual_check?: boolean;
+  prescription?: PrescriptionReading;
+  imaging?: ImagingReading;
+  /** Lines carrying numbers that could not be read as a measurement. */
+  uninterpreted_lines?: string[];
   results?: ReportResult[];
   abnormal?: ReportResult[];
   critical?: ReportResult[];
@@ -154,6 +210,7 @@ export interface InvestigationReport {
   original_filename: string;
   content_type: string;
   size_bytes: number;
+  document_kind?: DocumentKind | null;
   status: ReportStatus;
   extraction_method?: string | null;
   page_count?: number | null;
@@ -170,9 +227,12 @@ export interface ReportListItem {
   title: string;
   original_filename: string;
   content_type: string;
+  document_kind?: DocumentKind | null;
   status: ReportStatus;
   abnormal_count: number;
   critical_count: number;
+  clarity?: ReportClarity | null;
+  needs_manual_check?: boolean;
   headline?: string | null;
   uploaded_by_name: string;
   created_at: string;
@@ -188,6 +248,16 @@ export const CATEGORY_ORDER: InvestigationCategory[] = [
   "blood", "urine", "xray", "mri", "ct", "ultrasound",
   "dexa", "orthopedic", "gynecology", "hormonal", "tumor_markers",
 ];
+
+export const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {
+  prescription: "Prescription",
+  lab_report: "Lab report",
+  imaging: "Scan or X-ray",
+  other: "Other document",
+};
+
+/** The one sentence shown wherever a document could not be read. */
+export const UNCLEAR_HEADLINE = "Report unclear — please go through it manually.";
 
 export const FLAG_LABEL: Record<AbnormalFlag, string> = {
   normal: "Normal",

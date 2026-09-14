@@ -74,10 +74,12 @@ function DeliveryRow({ delivery, onRetry }: { delivery: Delivery; onRetry: () =>
 export function PrescriptionsTab({
   patientId,
   consultationId,
+  department,
   prefill,
 }: {
   patientId: string;
   consultationId: string;
+  department?: string;
   prefill?: { diagnosis?: string | null; chiefComplaint?: string | null; investigations?: string[] };
 }) {
   const toast = useToast();
@@ -318,6 +320,7 @@ export function PrescriptionsTab({
         onOpenChange={setComposerOpen}
         patientId={patientId}
         consultationId={consultationId}
+          department={department}
         prefill={prefill}
         onCreated={() => void load()}
       />

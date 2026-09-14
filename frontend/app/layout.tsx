@@ -1,14 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter } from "next/font/google";
+// The fonts ship inside the app rather than being fetched from Google Fonts
+// while building: the Docker build runs where fonts.gstatic.com is not
+// reachable, and a build that fails for want of a typeface is not worth it.
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/inter";
 import "./globals.css";
-
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "500", "600", "700"],
-});
-
-const body = Inter({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "Satya Trauma & Maternity Center",
@@ -25,7 +21,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en">
       <body className="min-h-screen font-sans">{children}</body>
     </html>
   );

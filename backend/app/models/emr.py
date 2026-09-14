@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum as SAEnum,
@@ -46,6 +47,7 @@ from app.models.enums import (
     ServiceCategory,
     VisitStatus,
     VisitType,
+    WalletEntryKind,
 )
 
 _VALUES = lambda e: [m.value for m in e]  # noqa: E731
@@ -144,6 +146,9 @@ class Visit(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     registered_by_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text)
+
     invoices: Mapped[List["Invoice"]] = relationship(
         back_populates="visit", cascade="all, delete-orphan"
     )
@@ -191,9 +196,48 @@ class Invoice(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     discount_reason: Mapped[Optional[str]] = mapped_column(String(255))
     discount_approved_by: Mapped[Optional[str]] = mapped_column(String(255))
 
+    # Whose work this bill is for. Copied onto the invoice rather than
+    # reached through the visit, because a bill can be raised at the counter
+    # with no visit at all — and when it is, the consultant's free-follow-up
+    # and first-consultation rules would otherwise never fire, silently.
+    # Part 5's consultant payout and consultant-wise billing reports need the
+    # same attribution.
+    consultant_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consultants.id", ondelete="SET NULL"), index=True
+    )
+    doctor_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    # The agreement this bill was priced under, when it was not the counter's
+    # own tariff.
+    organisation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="SET NULL"),
+        index=True,
+    )
+    # Why: "Free follow-up - seen 4 Sept", "Acme Ltd agreed rate". Stored on
+    # the bill rather than recomputed, because the consultant's window and
+    # the rate card both change, and a bill has to keep explaining itself
+    # after they do.
+    pricing_notes: Mapped[Optional[List[str]]] = mapped_column(JSONB)
+
     issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     cancellation_reason: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Corrections to a bill nobody has paid yet. Counted and dated so that a
+    # bill amended three times before the patient paid is visible as such;
+    # the alternative is a document that quietly differs from the one the
+    # patient was shown ten minutes ago.
+    amended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    amendment_reason: Mapped[Optional[str]] = mapped_column(Text)
+    amendment_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Set by the consultant payout run once this invoice has been counted
+    # into somebody's settled share. After that nothing about it may move —
+    # cancelling it would silently change a payment already made to a doctor.
+    # Nothing sets this yet; the payout run arrives in Part 5. The guard
+    # exists now so that every correction path is already written to respect
+    # it, rather than each one having to be found and patched later.
+    payout_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_by_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
 
     visit: Mapped[Optional[Visit]] = relationship(back_populates="invoices")
@@ -267,6 +311,12 @@ class Payment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         SAEnum(PaymentMode, name="payment_mode", values_callable=_VALUES), nullable=False
     )
     reference: Mapped[Optional[str]] = mapped_column(String(120))  # UPI ref, card last 4
+    # What the mode itself requires: a cheque number and bank, a card's last
+    # four digits, a UPI transaction id. One JSON column rather than a dozen
+    # mostly-null ones, because the set differs per mode and grows whenever
+    # the hospital accepts a new instrument. The shape is enforced in
+    # app/billing/payment_modes.py, not here.
+    mode_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     received_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
@@ -275,7 +325,101 @@ class Payment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_refund: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     refund_reason: Mapped[Optional[str]] = mapped_column(Text)
 
+    # A cancelled receipt is not a refund, and conflating the two is a real
+    # accounting error. A refund means money went back to the patient. A
+    # cancellation means the receipt should never have existed — the wrong
+    # amount, the wrong mode, the wrong patient — and no money moved at all.
+    # The row is kept and marked rather than deleted, because a receipt
+    # number handed to a patient has to remain explicable.
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text)
+    cancelled_by_name: Mapped[Optional[str]] = mapped_column(String(255))
+
     invoice: Mapped[Invoice] = relationship(back_populates="payments")
+
+
+class PatientWallet(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A patient's running credit with the hospital.
+
+    Two things make this a table rather than a sum over the entries.
+
+    **It is locked.** Spending from a wallet is read-balance-then-write, and
+    two counters doing that at once would both see the same rupees and both
+    spend them. The balance row is taken FOR UPDATE for the duration, which
+    is what makes the negative-balance guard a guarantee rather than a
+    hopeful check.
+
+    **It is reconcilable.** The entries are the ledger and this is the
+    balance; if they ever disagree, that disagreement is itself the alarm.
+    Deriving the balance on every read would hide the bug instead.
+    """
+
+    __tablename__ = "patient_wallets"
+    __table_args__ = (
+        # A balance that can go negative is a loan, and this hospital does
+        # not make loans through the wallet.
+        CheckConstraint("balance_paise >= 0", name="ck_wallet_not_negative"),
+    )
+
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True,
+    )
+    balance_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    entries: Mapped[List["WalletEntry"]] = relationship(
+        back_populates="wallet", cascade="all, delete-orphan",
+        order_by="WalletEntry.created_at",
+    )
+
+
+class WalletEntry(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """One movement in or out of a patient's credit.
+
+    Append-only. A correction is another entry, never an edit — the patient
+    is told a balance at the counter, and the only way to explain how it got
+    there is a line for every movement.
+
+    `balance_after_paise` is stored rather than recomputed so a statement
+    printed today still reads correctly after an older entry is discovered
+    and appended out of order.
+    """
+
+    __tablename__ = "wallet_entries"
+    __table_args__ = (
+        Index("ix_wallet_entries_patient_time", "patient_id", "created_at"),
+    )
+
+    wallet_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patient_wallets.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+
+    kind: Mapped[WalletEntryKind] = mapped_column(
+        SAEnum(WalletEntryKind, name="wallet_entry_kind", values_callable=_VALUES),
+        nullable=False, index=True,
+    )
+    # Signed: positive puts money on account, negative takes it off.
+    amount_paise: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after_paise: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # What the movement was for, when it involved a bill or a receipt.
+    invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"), index=True
+    )
+    payment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL")
+    )
+    receipt_number: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    created_by_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+
+    wallet: Mapped[PatientWallet] = relationship(back_populates="entries")
 
 
 class CashSession(Base, UUIDPrimaryKeyMixin, TimestampMixin):

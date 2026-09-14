@@ -44,12 +44,15 @@ except ImportError:  # pragma: no cover
 # The built-in Helvetica has no Devanagari glyphs, so any Hindi on the sheet —
 # most often the general instructions, which are written in the patient's own
 # language — came out as black boxes. Registering a font that covers
-# Devanagari fixes it; ReportLab positions the matras and conjuncts correctly
-# once the glyphs exist.
+# Devanagari gives the glyphs, but not their order: without shaping, vowel
+# signs print after their consonant and conjuncts fall apart. Every string is
+# drawn with shaping on — see app/printing/fonts.py.
 #
 # Candidates are searched in preference order. Noto is the better typeface for
 # Devanagari; FreeSans is the fallback because it ships in a smaller Debian
 # package and is present on most images already.
+from app.printing.fonts import SHAPE  # noqa: E402
+
 _FONT_CANDIDATES = [
     (
         "SatyaSans",
@@ -209,13 +212,13 @@ class _Renderer:
               size: float = 9, color: str = INK) -> None:
         self.canvas.setFillColor(HexColor(color))
         self.canvas.setFont(font or FONT_REGULAR, size)
-        self.canvas.drawString(x, y, value)
+        self.canvas.drawString(x, y, value, **SHAPE)
 
     def _right_text(self, x: float, y: float, value: str, *, font: Optional[str] = None,
                     size: float = 9, color: str = INK) -> None:
         self.canvas.setFillColor(HexColor(color))
         self.canvas.setFont(font or FONT_REGULAR, size)
-        self.canvas.drawRightString(x, y, value)
+        self.canvas.drawRightString(x, y, value, **SHAPE)
 
     def _wrapped(self, x: float, y: float, value: str, width_chars: int, *,
                  font: Optional[str] = None, size: float = 9, leading: float = 11.5,

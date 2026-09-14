@@ -10,9 +10,16 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "doctor" | "staff";
+  role: "admin" | "manager" | "doctor" | "supervisor" | "reception" | "nurse" | "lab";
   department: Department | null;
   is_active: boolean;
+}
+
+export interface StaffRole {
+  role: User["role"];
+  summary: string;
+  permissions: string[];
+  user_count: number;
 }
 
 export interface Patient {

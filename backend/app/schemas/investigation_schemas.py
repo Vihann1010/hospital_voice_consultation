@@ -11,6 +11,7 @@ from app.models.enums import (
     InvestigationCategory,
     InvestigationPriority,
     OrderStatus,
+    DocumentKind,
     ReportStatus,
 )
 
@@ -165,6 +166,7 @@ class ReportOut(BaseModel):
     original_filename: str
     content_type: str
     size_bytes: int
+    document_kind: Optional[DocumentKind] = None
     status: ReportStatus
     extraction_method: Optional[str] = None
     page_count: Optional[int] = None
@@ -185,10 +187,17 @@ class ReportListItemOut(BaseModel):
     title: str
     original_filename: str
     content_type: str
+    document_kind: Optional[DocumentKind] = None
     status: ReportStatus
     abnormal_count: int = 0
     critical_count: int = 0
+    #: "clear", "unclear" or "not_analysed". The list needs this because a
+    #: report nobody could read has no counts to show and must still be
+    #: distinguishable from one that was read and found normal.
+    clarity: Optional[str] = None
     headline: Optional[str] = None
+    #: Set when part of the document was read and part was not.
+    needs_manual_check: bool = False
     uploaded_by_name: str
     created_at: datetime
 

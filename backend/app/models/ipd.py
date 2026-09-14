@@ -173,6 +173,12 @@ class Admission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     # A deposit taken at admission and set against the final bill.
     advance_paid_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Set when the patient was discharged from an earlier admission within the
+    # re-admission window: a quality measure, and context for the doctor.
+    readmission_of_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admissions.id", ondelete="SET NULL")
+    )
+    days_since_last_discharge: Mapped[Optional[int]] = mapped_column(Integer)
     final_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL")
     )

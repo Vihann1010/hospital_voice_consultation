@@ -186,7 +186,28 @@ def check_duplicates(medicines: Iterable[str]) -> List[MedicationAlert]:
             name_a, ing_a = entries[i]
             name_b, ing_b = entries[j]
             pair = frozenset({normalize_name(name_a), normalize_name(name_b)})
-            if len(pair) < 2 or pair in seen_pairs:
+            if pair in seen_pairs:
+                continue
+            if len(pair) < 2:
+                # The same medicine written twice. The ingredient comparison
+                # below was never reached for it, so the most obvious duplicate
+                # there is went unreported.
+                seen_pairs.add(pair)
+                alerts.append(
+                    MedicationAlert(
+                        kind="duplicate",
+                        severity="serious",
+                        medicines_involved=[_label(name_a), _label(name_b)],
+                        description=(
+                            f"{_label(name_a)} appears twice — the patient may receive a "
+                            "double dose of the same drug."
+                        ),
+                        suggested_action=(
+                            "Keep one order, or make the second a clearly different dose or timing."
+                        ),
+                        detected_by="rule",
+                    )
+                )
                 continue
             shared = ing_a & ing_b
             if shared:

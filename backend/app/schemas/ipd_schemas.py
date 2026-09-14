@@ -78,6 +78,8 @@ class AdmissionOut(BaseModel):
     attendant_phone: Optional[str] = None
     advance_paid_paise: int = 0
     discharge_type: Optional[DischargeType] = None
+    readmission_of_id: Optional[uuid.UUID] = None
+    days_since_last_discharge: Optional[int] = None
     created_at: datetime
 
 

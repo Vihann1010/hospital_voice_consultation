@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useDictation } from "@/lib/useDictation";
-import type { MedicineRow, Prescription, SafetyAlert } from "@/lib/prescriptionTypes";
+import type { MedicineRow, Prescription, PrescriptionAssist, SafetyAlert } from "@/lib/prescriptionTypes";
 import { FOLLOW_UP_OPTIONS, durationForFollowUp } from "@/lib/prescriptionTypes";
 import { MedicineRowEditor } from "@/components/prescriptions/medicine-row";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ export function PrescriptionComposer({
   onOpenChange,
   patientId,
   consultationId,
+  department,
   prefill,
   onCreated,
 }: {
@@ -55,6 +56,7 @@ export function PrescriptionComposer({
   onOpenChange: (value: boolean) => void;
   patientId: string;
   consultationId?: string | null;
+  department?: string;
   prefill?: {
     diagnosis?: string | null;
     chiefComplaint?: string | null;
@@ -109,6 +111,8 @@ export function PrescriptionComposer({
   const [prefilling, setPrefilling] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
   const [orderedCount, setOrderedCount] = useState(0);
+  const [assisting, setAssisting] = useState(false);
+  const [templateNames, setTemplateNames] = useState<string[]>([]);
 
   // Everything except the medicines is composed by the AI from the intake
   // dossier. It is loaded into ordinary editable fields, so the doctor amends
@@ -214,6 +218,37 @@ export function PrescriptionComposer({
       setParsing(false);
     }
   }, [dictation, patientId]);
+
+  async function suggestFromDiagnosis() {
+    if (!diagnosis.trim()) {
+      setError("Enter the clinical diagnosis before suggesting medicines.");
+      return;
+    }
+    setAssisting(true);
+    setError(null);
+    try {
+      const result: PrescriptionAssist = await staffApi.prescriptionAssist({
+        consultation_id: consultationId,
+        diagnosis: diagnosis.trim(),
+        department,
+      });
+      if (result.medicines.length === 0) {
+        setError("No matching medicine template found. Add medicines manually or search the formulary.");
+        return;
+      }
+      const suggested: MedicineRow[] = result.medicines.map((medicine) => ({
+        ...medicine,
+        key: newKey(),
+        source: "template",
+      }));
+      setRows((current) => [...current.filter((row) => row.name.trim()), ...suggested, emptyRow()]);
+      setTemplateNames(result.templates);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not suggest medicines from this diagnosis.");
+    } finally {
+      setAssisting(false);
+    }
+  }
 
   async function submit() {
     if (filledRows.length === 0) {
@@ -416,13 +451,25 @@ export function PrescriptionComposer({
               </div>
               <div>
                 <label className="field-label" htmlFor="diagnosis">
-                  Diagnosis <span className="text-clay">*</span>
+                  Clinical diagnosis <span className="text-clay">*</span>
                 </label>
                 <Input
                   id="diagnosis" value={diagnosis}
                   onChange={(event) => setDiagnosis(event.target.value)}
-                  placeholder="Confirm the diagnosis for this visit"
+                  placeholder="e.g. comminuted fracture olecranon right elbow with tendon injury"
                 />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" variant="accent" onClick={() => void suggestFromDiagnosis()} disabled={assisting}>
+                    {assisting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                    Suggest medicines from diagnosis
+                  </Button>
+                  {templateNames.map((name) => (
+                    <Badge key={name} variant="ai" size="sm">Template: {name}</Badge>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-ink-faint">
+                  Uses the diagnosis plus intake findings, allergies, current medicines and investigations. Review every row before issuing.
+                </p>
               </div>
               <div>
                 <label className="field-label" htmlFor="cause">Cause</label>

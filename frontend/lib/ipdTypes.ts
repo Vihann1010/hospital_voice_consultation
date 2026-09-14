@@ -1,5 +1,6 @@
 /** IPD contracts. Amounts are integer paise, matching the backend. */
 import type { Department } from "@/lib/types";
+import type { SafetyAlert } from "@/lib/prescriptionTypes";
 
 export type WardType =
   | "general" | "semi_private" | "private" | "deluxe" | "icu" | "hdu"
@@ -24,6 +25,8 @@ export interface BedOccupant {
   admitted_at: string;
   doctor: string;
   diagnosis: string | null;
+  on_leave?: boolean;
+  expected_return_on?: string | null;
 }
 
 export interface BedCell {
@@ -108,6 +111,176 @@ export interface RunningBill {
   advance_paid_paise: number;
   balance_paise: number;
   days_so_far: number;
+}
+
+export type MedicationStatus = "active" | "completed" | "stopped" | "held";
+
+export interface AdmissionSummary {
+  id: string;
+  ip_number: string;
+  patient_id: string;
+  department: Department;
+  admitting_doctor_name: string;
+  admission_type: string;
+  status: AdmissionStatus;
+  admitted_at: string;
+  discharged_at?: string | null;
+  provisional_diagnosis?: string | null;
+  final_diagnosis?: string | null;
+  reason_for_admission?: string | null;
+  allergies?: string[] | null;
+  attendant_name?: string | null;
+  attendant_phone?: string | null;
+  advance_paid_paise: number;
+  discharge_type?: DischargeType | null;
+  readmission_of_id?: string | null;
+  days_since_last_discharge?: number | null;
+  created_at: string;
+}
+
+export interface MedicationOrder {
+  id: string;
+  drug_name: string;
+  generic_name?: string | null;
+  strength?: string | null;
+  dose: string;
+  route: string;
+  frequency_code: string;
+  schedule_times?: string[] | null;
+  status: MedicationStatus;
+  started_at: string;
+  stopped_at?: string | null;
+  is_stat: boolean;
+  is_sos: boolean;
+  instructions?: string | null;
+}
+
+export interface WardNote {
+  id?: string;
+  note_type: string;
+  author_name: string;
+  content: string;
+  created_at: string;
+  ai_generated?: boolean;
+}
+
+/** The whole bedside chart, as `GET /ipd/admissions/{id}` returns it. */
+export interface AdmissionChart {
+  admission: AdmissionSummary;
+  patient: {
+    id: string;
+    uhid: string | null;
+    name: string;
+    age: number;
+    gender: string;
+    phone_number: string;
+    blood_group?: string | null;
+  } | null;
+  current_bed: { ward: string; bed: string; since: string } | null;
+  occupancies: { ward: string; bed: string; from: string; to: string | null; reason?: string | null }[];
+  vitals: VitalsRecord[];
+  medications: MedicationOrder[];
+  notes: WardNote[];
+  bill: RunningBill;
+  leaves?: AdmissionLeave[];
+  readmission_of?: {
+    id: string;
+    ip_number: string;
+    discharged_at: string | null;
+    final_diagnosis: string | null;
+    days_since: number | null;
+  } | null;
+}
+
+export interface AdmissionLeave {
+  id: string;
+  started_at: string;
+  expected_return_on: string | null;
+  reason: string;
+  bed_retained: boolean;
+  released_bed: string | null;
+  started_by_name: string;
+  returned_at: string | null;
+  returned_by_name: string | null;
+  return_note: string | null;
+}
+
+export interface RoomChargeRun {
+  id: string;
+  run_on: string;
+  status: "running" | "done" | "partial" | "skipped" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  summary: { admissions?: number; charges_posted?: number; failed?: { ip_number: string; error: string }[] };
+  error: string | null;
+  triggered_by: string;
+}
+
+export interface RoomChargeRuns {
+  run_at: string;
+  enabled: boolean;
+  runs: RoomChargeRun[];
+}
+
+export const DISCHARGE_TYPE_LABEL: Record<DischargeType, string> = {
+  routine: "Routine — going home",
+  transferred_out: "Transferred to another hospital",
+  against_medical_advice: "Left against medical advice",
+  absconded: "Absconded",
+  death: "Death",
+};
+
+export type DoseState = "given" | "omitted" | "overdue" | "due" | "upcoming" | "on_leave";
+
+export interface ChartDose {
+  id: string;
+  due_at: string;
+  state: DoseState;
+  given_at?: string | null;
+  given_by_name: string;
+  omission_reason?: string | null;
+  notes?: string | null;
+  can_sign: boolean;
+}
+
+export interface ChartOrder {
+  id: string;
+  drug_name: string;
+  generic_name?: string | null;
+  strength?: string | null;
+  dose: string;
+  route: string;
+  frequency_code: string;
+  schedule_times: string[];
+  status: MedicationStatus;
+  started_at: string;
+  stopped_at?: string | null;
+  stop_reason?: string | null;
+  is_stat: boolean;
+  is_sos: boolean;
+  instructions?: string | null;
+  ordered_by_name: string;
+  last_given_at?: string | null;
+  doses: ChartDose[];
+}
+
+/** One day of the drug chart, as `GET /ipd/admissions/{id}/drug-chart` returns it. */
+export interface DrugChart {
+  /** The patient is away on leave now. */
+  on_leave?: boolean;
+  on: string;
+  now: string;
+  allergies: string[];
+  frequencies: Record<string, string[]>;
+  routes: string[];
+  orders: ChartOrder[];
+  summary: { due: number; overdue: number; given: number; omitted: number };
+}
+
+export interface DrugCheck {
+  alerts: SafetyAlert[];
+  blocking: number;
+  allergies: string[];
 }
 
 /** Colour and label for a NEWS2 band.

@@ -1,16 +1,17 @@
 import asyncio
 import uuid
-from typing import Annotated, Optional
+from typing import Annotated, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
 from app.core.audit import client_ip, record as audit_record
-from app.api.deps import CurrentUser, get_consultation_service, get_copilot_service, require_roles
+from app.api.deps import CurrentUser, get_consultation_service, get_copilot_service, require_permission
+from app.core.permissions import Permission
 from app.api.scoping import assert_may_access, effective_department
 from app.core.security import TOKEN_TYPE_CONSULTATION, decode_token
-from app.models.enums import AuditAction, ConsultationStatus, Department, UserRole, VisitType
+from app.models.enums import AuditAction, ConsultationStatus, Department, VisitType
 from app.schemas.schemas import (
     ConsultationDetailOut,
     ConsultationListItemOut,
@@ -30,12 +31,26 @@ router = APIRouter(prefix="/consultations", tags=["consultations"])
 Service = Annotated[ConsultationService, Depends(get_consultation_service)]
 Copilot = Annotated[CopilotService, Depends(get_copilot_service)]
 
-STAFF = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
-CLINICIAN = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+READ_CONSULTATION = require_permission(Permission.CONSULTATION_READ)
+CLINICIAN = require_permission(Permission.CONSULTATION_REVIEW)
+USE_COPILOT = require_permission(Permission.COPILOT_USE)
 
 
 class ConsultationRestartRequest(BaseModel):
     session_token: str
+
+
+class ConsultationVitalsRequest(BaseModel):
+    bpSys: Optional[str] = None
+    bpDia: Optional[str] = None
+    pulse: Optional[str] = None
+    spo2: Optional[str] = None
+    temperature: Optional[str] = None
+    respiration: Optional[str] = None
+    height: Optional[str] = None
+    weight: Optional[str] = None
+    sugar: Optional[str] = None
+    notes: Optional[str] = None
 
 
 @router.post("/{consultation_id}/restart", response_model=ConsultationStartResponse)
@@ -61,7 +76,7 @@ async def restart_consultation(
 
 
 @router.post("/start-from-visit", response_model=ConsultationStartResponse,
-             status_code=status.HTTP_201_CREATED, dependencies=[Depends(STAFF)])
+             status_code=status.HTTP_201_CREATED, dependencies=[Depends(READ_CONSULTATION)])
 async def start_from_visit(
     payload: ConsultationStartFromVisitRequest, service: Service
 ) -> ConsultationStartResponse:
@@ -87,7 +102,7 @@ async def start_consultation(
     return await service.start(payload)
 
 
-@router.get("/stats", response_model=ConsultationStatsOut, dependencies=[Depends(STAFF)])
+@router.get("/stats", response_model=ConsultationStatsOut, dependencies=[Depends(READ_CONSULTATION)])
 async def consultation_stats(
     service: Service, user: CurrentUser,
     department: Optional[Department] = Query(default=None),
@@ -96,7 +111,7 @@ async def consultation_stats(
     return ConsultationStatsOut(**counts)
 
 
-@router.get("", response_model=ConsultationListOut, dependencies=[Depends(STAFF)])
+@router.get("", response_model=ConsultationListOut, dependencies=[Depends(READ_CONSULTATION)])
 async def list_consultations(
     service: Service,
     user: CurrentUser,
@@ -128,7 +143,7 @@ async def list_consultations(
 
 
 @router.get(
-    "/{consultation_id}", response_model=ConsultationDetailOut, dependencies=[Depends(STAFF)]
+    "/{consultation_id}", response_model=ConsultationDetailOut, dependencies=[Depends(READ_CONSULTATION)]
 )
 async def get_consultation(
     consultation_id: uuid.UUID, service: Service, request: Request, user: CurrentUser
@@ -149,7 +164,26 @@ async def get_consultation(
     return ConsultationDetailOut.model_validate(consultation)
 
 
-@router.get("/{consultation_id}/copilot", dependencies=[Depends(CLINICIAN)])
+@router.post(
+    "/{consultation_id}/vitals",
+    response_model=ConsultationDetailOut,
+    dependencies=[Depends(READ_CONSULTATION)],
+)
+async def update_consultation_vitals(
+    consultation_id: uuid.UUID,
+    payload: ConsultationVitalsRequest,
+    service: Service,
+    user: CurrentUser,
+) -> ConsultationDetailOut:
+    consultation = await service.update_vitals(consultation_id, payload.model_dump())
+    if consultation is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Consultation not found")
+    assert_may_access(user, consultation.department)
+    await service.session.commit()
+    return ConsultationDetailOut.model_validate(consultation)
+
+
+@router.get("/{consultation_id}/copilot", dependencies=[Depends(USE_COPILOT)])
 async def get_copilot_briefing(
     consultation_id: uuid.UUID,
     copilot: Copilot,

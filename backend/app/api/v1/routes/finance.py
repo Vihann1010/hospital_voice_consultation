@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession, get_reception_service, require_roles
+from app.api.deps import CurrentUser, DbSession, get_reception_service, require_permission
+from app.core.permissions import Permission
 from app.core.config import settings
 from app.core.security import (
     TOKEN_TYPE_FINANCE_UNLOCK,
@@ -28,6 +29,7 @@ from app.models.emr import (
     Payment,
     ServiceItem,
     Visit,
+    WalletEntry,
 )
 from app.models.enums import (
     CashSessionStatus,
@@ -35,6 +37,7 @@ from app.models.enums import (
     InvoiceStatus,
     PaymentMode,
     UserRole,
+    WalletEntryKind,
 )
 from app.schemas.emr_schemas import (
     CashSessionCloseRequest,
@@ -50,13 +53,14 @@ from app.schemas.emr_schemas import (
     ServiceItemUpsert,
 )
 from app.services.reception_service import ReceptionError, ReceptionService
+from app.core.clock import day_bounds, local_today
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
 Service = Annotated[ReceptionService, Depends(get_reception_service)]
-DESK = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
+DESK = require_permission(Permission.PAYMENT_COLLECT)
 # Revenue across the whole hospital, and the price list, are management data.
-MANAGEMENT = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+MANAGEMENT = require_permission(Permission.FINANCE_READ)
 
 
 class FinancePinRequest(BaseModel):
@@ -77,6 +81,9 @@ async def finance_unlock(
 
 
 FINANCE_MANAGEMENT = [Depends(MANAGEMENT), Depends(finance_unlock)]
+# Changing what a service costs is a separate power from seeing what the
+# hospital earned, and is held by a separate permission.
+REPRICE = [Depends(require_permission(Permission.TARIFF_MANAGE)), Depends(finance_unlock)]
 
 
 @router.post("/verify-pin")
@@ -99,9 +106,11 @@ async def collections(
     whenever a patient part-pays, a bill goes to insurance, or a refund is
     issued — and conflating them is how a day looks balanced when it is not.
     """
-    day = on or date.today()
-    start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
-    end = datetime.combine(day, datetime.max.time(), tzinfo=timezone.utc)
+    day = on or local_today()
+    # The hospital's day, not the server's. Slicing a UTC column at UTC
+    # midnight would put everything collected before 05:30 IST into
+    # yesterday's takings.
+    start, end = day_bounds(day)
 
     billed = await session.execute(
         select(
@@ -119,26 +128,77 @@ async def collections(
 
     # Receipts and refunds are separated so a heavy refund day is visible
     # rather than netted quietly into a lower collection figure.
+    # Till modes only. Wallet-mode rows are settlements against credit, not
+    # instruments, and are reported on their own line below.
     modes = await session.execute(
         select(Payment.mode, func.coalesce(func.sum(Payment.amount_paise), 0))
-        .where(Payment.received_at.between(start, end))
+        .where(
+            Payment.received_at >= start,
+            Payment.received_at < end,
+            Payment.mode != PaymentMode.WALLET,
+        )
         .group_by(Payment.mode)
     )
     by_mode = {mode.value: int(amount or 0) for mode, amount in modes.all()}
 
+    from_wallet = await session.execute(
+        select(func.coalesce(func.sum(Payment.amount_paise), 0)).where(
+            Payment.received_at >= start,
+            Payment.received_at < end,
+            Payment.mode == PaymentMode.WALLET,
+            Payment.is_refund.is_(False),
+        )
+    )
+    settled_from_wallet_paise = int(from_wallet.scalar_one() or 0)
+
+    # Wallet-mode payments are excluded from both figures on purpose. That
+    # money was collected — and counted — on the day it was deposited;
+    # counting it again when it is spent would bank the same rupee twice and
+    # make the day irreconcilable against the drawer. The deposit itself is
+    # counted separately below, because it is real money arriving today.
+    till = [
+        Payment.received_at >= start,
+        Payment.received_at < end,
+        Payment.mode != PaymentMode.WALLET,
+    ]
+
     refunded = await session.execute(
         select(func.coalesce(func.sum(Payment.amount_paise), 0)).where(
-            Payment.received_at.between(start, end), Payment.is_refund.is_(True)
+            *till, Payment.is_refund.is_(True)
         )
     )
     refunded_paise = abs(int(refunded.scalar_one() or 0))
 
     collected = await session.execute(
         select(func.coalesce(func.sum(Payment.amount_paise), 0)).where(
-            Payment.received_at.between(start, end), Payment.is_refund.is_(False)
+            *till, Payment.is_refund.is_(False)
         )
     )
     collected_paise = int(collected.scalar_one() or 0)
+
+    # Advances taken today and balances handed back today. Neither passes
+    # through an invoice, so neither appears above — but both moved through
+    # the drawer and have to be in the day's total.
+    wallet_moves = await session.execute(
+        select(WalletEntry.kind, func.coalesce(func.sum(WalletEntry.amount_paise), 0))
+        .where(
+            WalletEntry.created_at >= start,
+            WalletEntry.created_at < end,
+            WalletEntry.kind.in_(
+                (WalletEntryKind.DEPOSIT, WalletEntryKind.WITHDRAWAL)
+            ),
+        )
+        .group_by(WalletEntry.kind)
+    )
+    wallet_by_kind = {kind: int(amount or 0) for kind, amount in wallet_moves.all()}
+    deposits_paise = wallet_by_kind.get(WalletEntryKind.DEPOSIT, 0)
+    withdrawals_paise = abs(wallet_by_kind.get(WalletEntryKind.WITHDRAWAL, 0))
+    collected_paise += deposits_paise
+    refunded_paise += withdrawals_paise
+    if deposits_paise:
+        by_mode["wallet_deposit"] = deposits_paise
+    if withdrawals_paise:
+        by_mode["wallet_withdrawal"] = -withdrawals_paise
 
     departments = await session.execute(
         select(Visit.department, func.coalesce(func.sum(Invoice.total_paise), 0))
@@ -162,6 +222,7 @@ async def collections(
         collected_paise=collected_paise,
         refunded_paise=refunded_paise,
         outstanding_paise=int(outstanding or 0),
+        settled_from_wallet_paise=settled_from_wallet_paise,
         by_mode=by_mode,
         by_department=by_department,
     )
@@ -281,7 +342,7 @@ async def list_services(
 
 
 @router.put("/services/{code}", response_model=ServiceItemOut,
-            dependencies=FINANCE_MANAGEMENT)
+            dependencies=REPRICE)
 async def upsert_service(
     code: str, payload: ServiceItemUpsert, session: DbSession
 ) -> ServiceItemOut:
@@ -343,7 +404,7 @@ async def create_claim(
 
     count = await session.execute(select(func.count()).select_from(InsuranceClaim))
     claim = InsuranceClaim(
-        claim_number=f"CLM-{date.today():%y%m}-{int(count.scalar_one()) + 1:05d}",
+        claim_number=f"CLM-{local_today():%y%m}-{int(count.scalar_one()) + 1:05d}",
         policy_id=policy.id,
         patient_id=policy.patient_id,
         visit_id=payload.visit_id,

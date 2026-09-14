@@ -114,9 +114,16 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
-        <Wallet className="h-4 w-4 text-pine" />
-        <CardTitle>{session ? "Your counter" : "Cash counter"}</CardTitle>
+      <CardHeader
+        className={cn(
+          "flex-row items-center gap-2 space-y-0",
+          compact ? "p-3 pb-2" : "pb-3"
+        )}
+      >
+        <Wallet className="h-3.5 w-3.5 text-pine" />
+        <CardTitle className={cn(compact && "text-xs")}>
+          {session ? "Your counter" : "Cash counter"}
+        </CardTitle>
         {session && (
           <span className="ml-auto rounded bg-mint px-2 py-0.5 text-[11px] font-medium text-pine">
             Open
@@ -124,31 +131,31 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
         )}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className={cn(compact && "p-3 pt-0")}>
         {session ? (
-          <div className="space-y-3">
-            <div className={cn("grid gap-3", compact ? "grid-cols-3" : "sm:grid-cols-3")}>
+          <div className={cn(compact ? "space-y-2" : "space-y-3")}>
+            <div className={cn("grid gap-2", compact ? "grid-cols-3" : "gap-3 sm:grid-cols-3")}>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-ink-faint">Float</p>
-                <p className="tabular text-sm font-semibold text-ink">
+                <p className="text-[10px] uppercase tracking-wide text-ink-faint">Float</p>
+                <p className="tabular text-xs font-semibold text-ink">
                   {formatINR(session.opening_float_paise)}
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-ink-faint">Cash in</p>
-                <p className="tabular text-sm font-semibold text-ink">
+                <p className="text-[10px] uppercase tracking-wide text-ink-faint">Cash in</p>
+                <p className="tabular text-xs font-semibold text-ink">
                   {formatINR(cashTaken)}
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-ink-faint">Expected</p>
-                <p className="tabular text-sm font-semibold text-pine">
+                <p className="text-[10px] uppercase tracking-wide text-ink-faint">Expected</p>
+                <p className="tabular text-xs font-semibold text-pine">
                   {formatINR(expected)}
                 </p>
               </div>
             </div>
 
-            <div className="rounded-lg bg-mint p-3">
+            <div className={cn("rounded-lg bg-mint", compact ? "p-2" : "p-3")}>
               <label className="field-label" htmlFor="counted-cash">
                 Count the drawer (₹)
               </label>
@@ -157,6 +164,7 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
                 value={countedCash}
                 inputMode="decimal"
                 placeholder="0"
+                className={cn(compact && "h-8 text-sm")}
                 onChange={(event) => setCountedCash(event.target.value)}
               />
               {variance !== null && (
@@ -172,7 +180,7 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
                 </p>
               )}
               <Button
-                className="mt-3 w-full"
+                className="mt-2 w-full"
                 size="sm"
                 onClick={closeSession}
                 disabled={busy || !countedCash}
@@ -183,11 +191,13 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-xs leading-relaxed text-ink-muted">
-              Open your counter at the start of the shift so the cash you take can
-              be checked against the drawer at the end of it.
-            </p>
+          <div className={cn(compact ? "space-y-2" : "space-y-3")}>
+            {!compact && (
+              <p className="text-xs leading-relaxed text-ink-muted">
+                Open your counter at the start of the shift so the cash you take can
+                be checked against the drawer at the end of it.
+              </p>
+            )}
             <div>
               <label className="field-label" htmlFor="opening-float">
                 Opening float (₹)
@@ -197,6 +207,7 @@ export function CashCounter({ compact = false }: { compact?: boolean }) {
                 value={openingFloat}
                 inputMode="decimal"
                 placeholder="0"
+                className={cn(compact && "h-8 text-sm")}
                 onChange={(event) => setOpeningFloat(event.target.value)}
               />
             </div>

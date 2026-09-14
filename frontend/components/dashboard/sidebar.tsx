@@ -3,14 +3,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Activity,
   BedDouble,
   CheckCircle2,
+  ClipboardList,
+  FileImage,
+  FlaskConical,
+  LayoutTemplate,
+  Receipt,
   LayoutDashboard,
   LogOut,
   Menu,
+  Scissors,
   Stethoscope,
+  UserCog,
   Users,
   Wallet,
   X,
@@ -25,21 +34,47 @@ import { Button } from "@/components/ui/button";
 /** Grouped so the front desk's work and the clinician's work are visually
  *  separate — the same sidebar serves both, and mixing them makes each
  *  harder to scan. */
-const NAV = [
+const NAV: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  group?: string;
+  adminOnly?: boolean;
+  /** Shown only to these roles. */
+  roles?: string[];
+}[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/waiting", label: "Waiting patients", icon: Users },
   { href: "/active", label: "Current consultations", icon: Activity },
   { href: "/completed", label: "Completed", icon: CheckCircle2 },
   { href: "/patients", label: "Patient search", icon: Stethoscope },
   { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward" },
+  { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward" },
+  { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
+  // The laboratory runs in its own terminal; doctors verify results there.
+  { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward", roles: ["admin", "doctor"] },
   { href: "/finance", label: "Finance", icon: Wallet, group: "desk" },
+  { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
+  // Staff accounts are administration, not daily work: only an admin sees it.
+  // The operation list sets theatre prices: kept by management.
+  { href: "/settings/theatre", label: "Operation list", icon: ClipboardList, roles: ["admin", "manager"] },
+  { href: "/settings/room-charges", label: "Room charges", icon: Receipt, roles: ["admin", "manager"] },
+  // Doctors keep their own layouts; department and hospital layouts are the admin's.
+  { href: "/settings/pad-layouts", label: "Pad layouts", icon: LayoutTemplate, roles: ["admin", "doctor"] },
+  { href: "/settings/users", label: "Staff accounts", icon: UserCog, adminOnly: true },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const items = NAV.filter(
+    (item) =>
+      (!item.adminOnly || user?.role === "admin") &&
+      (!item.roles || (user !== null && user !== undefined && item.roles.includes(user.role)))
+  );
   return (
-    <nav className="flex flex-col gap-1 px-3">
-      {NAV.map((item) => {
+    <nav className="thin-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
+      {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
@@ -76,16 +111,16 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           that the letterform disappears against it, and putting a stroke on
           the mark would mean altering the hospital's logo. A white panel
           keeps the brand colours exact and the contrast unambiguous. */}
-      <div className="bg-white px-5 py-4">
+      <div className="shrink-0 bg-white px-5 py-4">
         <Logo width={150} priority />
       </div>
-      <p className="px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
+      <p className="shrink-0 px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
         Clinical console
       </p>
 
       <NavLinks onNavigate={onNavigate} />
 
-      <div className="mt-auto border-t border-white/10 p-4">
+      <div className="shrink-0 border-t border-white/10 p-4">
         <div className="flex items-center gap-3 px-1 pb-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-mint">
             {initials(user?.full_name)}

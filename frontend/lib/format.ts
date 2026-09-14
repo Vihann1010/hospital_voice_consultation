@@ -120,3 +120,47 @@ export const DEPARTMENT_DOCTOR: Record<string, string> = {
   orthopedics: "Dr. A K Agarwal",
   gynecology: "Dr. Manisha Agarwal",
 };
+
+/** The hospital's own clock.
+ *
+ * The plain formatters above follow the reader's machine. That is right for
+ * "3h ago" and wrong for an appointment: a nine o'clock slot is nine o'clock
+ * in Kanpur whether the person looking at it is in the building or on a phone
+ * in another timezone, and rendering it as 05:30 would be a booking error
+ * waiting to happen.
+ */
+const HOSPITAL_ZONE = "Asia/Kolkata";
+
+const HOSPITAL_TIME = new Intl.DateTimeFormat("en-IN", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: HOSPITAL_ZONE,
+});
+
+const HOSPITAL_DATE = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+  timeZone: HOSPITAL_ZONE,
+});
+
+export function formatHospitalTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "—" : HOSPITAL_TIME.format(date);
+}
+
+export function formatHospitalDate(iso?: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "—" : HOSPITAL_DATE.format(date);
+}
+
+/** Today in the hospital's timezone, as the YYYY-MM-DD the API expects. */
+export function hospitalToday(offsetDays = 0): string {
+  const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
+  // en-CA renders ISO order, which is what the query parameter wants.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: HOSPITAL_ZONE }).format(now);
+}

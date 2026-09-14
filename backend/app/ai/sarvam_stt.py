@@ -10,6 +10,8 @@ Protocol (per docs.sarvam.ai speech-to-text/ws):
 import asyncio
 import base64
 import json
+import string
+import unicodedata
 import urllib.parse
 from typing import AsyncIterator, Optional
 
@@ -20,6 +22,25 @@ from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def is_hindi_english_text(text: str) -> bool:
+    """Return whether text uses only Hindi or English characters."""
+    has_letter = False
+    for character in text:
+        codepoint = ord(character)
+        if "A" <= character <= "Z" or "a" <= character <= "z":
+            has_letter = True
+            continue
+        if 0x0900 <= codepoint <= 0x097F:
+            has_letter = True
+            continue
+        if character in string.digits or character in string.punctuation or character.isspace():
+            continue
+        if character in "\u200c\u200d" or unicodedata.category(character).startswith("M"):
+            continue
+        return False
+    return has_letter
 
 
 class SarvamSTTStream:
@@ -33,6 +54,7 @@ class SarvamSTTStream:
         params = {
             "language-code": settings.SARVAM_STT_LANGUAGE,
             "model": settings.SARVAM_STT_MODEL,
+            "mode": settings.SARVAM_STT_MODE,
             "input_audio_codec": "pcm_s16le",
             "sample_rate": str(self.sample_rate),
         }
@@ -79,8 +101,10 @@ class SarvamSTTStream:
                 if event_type == "data":
                     transcript = (event.get("data") or {}).get("transcript", "")
                     transcript = transcript.strip()
-                    if transcript:
+                    if transcript and is_hindi_english_text(transcript):
                         yield transcript
+                    elif transcript:
+                        logger.info("stt_transcript_discarded_non_hindi_english", extra={"text": transcript[:80]})
                 elif event_type == "error":
                     logger.error("sarvam_stt_error", extra={"event": event})
         except websockets.ConnectionClosed as exc:

@@ -55,17 +55,36 @@ async def consultation_socket(
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
+    send_failures: dict = {}
+
+    def note_send_failure(kind: str, payload_type: str, exc: Exception) -> None:
+        # Logged once per kind per session: a closed socket fails every send
+        # after it, and one line saying so is enough.
+        count = send_failures.get(kind, 0) + 1
+        send_failures[kind] = count
+        if count == 1:
+            logger.warning(
+                "voice_send_failed",
+                extra={
+                    "consultation_id": str(consultation_id),
+                    "kind": kind,
+                    "payload_type": payload_type,
+                    "client_state": str(getattr(websocket, "client_state", "")),
+                    "error": repr(exc),
+                },
+            )
+
     async def send_json(payload: dict) -> None:
         try:
             await websocket.send_text(json.dumps(payload, ensure_ascii=False))
-        except Exception:  # noqa: BLE001 - socket may already be gone
-            pass
+        except Exception as exc:  # noqa: BLE001 - socket may already be gone
+            note_send_failure("json", str(payload.get("type")), exc)
 
     async def send_audio(chunk: bytes) -> None:
         try:
             await websocket.send_bytes(chunk)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            note_send_failure("audio", "pcm", exc)
 
     async def record_turn(*, role: TurnRole, content: str, interrupted: bool = False):
         async with AsyncSessionLocal() as turn_session:
@@ -120,6 +139,11 @@ async def consultation_socket(
             "voice_session_crashed", extra={"consultation_id": str(consultation_id)}
         )
     finally:
+        if send_failures:
+            logger.warning(
+                "voice_send_failures_total",
+                extra={"consultation_id": str(consultation_id), "failures": send_failures},
+            )
         await voice.stop()
         final_json = None
         try:

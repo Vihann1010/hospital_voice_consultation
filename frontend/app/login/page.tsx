@@ -1,5 +1,6 @@
 "use client";
 
+import { homeFor } from "@/components/dashboard/auth-provider";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -33,7 +34,7 @@ function LoginForm() {
       let destination = nextPath;
       if (!destination) {
         const user = await fetchCurrentUser();
-        destination = user?.role === "staff" ? "/reception" : "/dashboard";
+        destination = user ? homeFor(user.role) : "/dashboard";
       }
       router.replace(destination);
       router.refresh();

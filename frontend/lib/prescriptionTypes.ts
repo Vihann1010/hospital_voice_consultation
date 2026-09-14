@@ -19,6 +19,27 @@ export interface FormularyMedicine {
   note?: string | null;
 }
 
+export interface MedicineTemplate {
+  disease_name: string;
+  department: Department;
+  note: string;
+  medicines: FormularyMedicine[];
+}
+
+export interface PrescriptionAssist {
+  diagnosis: string;
+  medicines: MedicineRow[];
+  templates: string[];
+  intake_context: {
+    chief_complaint?: string;
+    clinical_findings?: string;
+    investigations: string[];
+    allergies: string[];
+    current_medicines: { name: string; dose_or_frequency?: string }[];
+  };
+  note: string;
+}
+
 /** One editable row in the composer. */
 export interface MedicineRow {
   key: string;
@@ -34,7 +55,7 @@ export interface MedicineRow {
   timing?: string | null;
   route?: string | null;
   instructions?: string | null;
-  source: "dictated" | "manual" | "catalog";
+  source: "dictated" | "manual" | "catalog" | "template";
   /** Set when the duration came from the follow-up interval rather than the
    *  doctor typing it, so a later change to the interval may safely update it. */
   durationFromFollowUp?: boolean;

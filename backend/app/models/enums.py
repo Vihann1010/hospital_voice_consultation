@@ -2,9 +2,26 @@ import enum
 
 
 class UserRole(str, enum.Enum):
+    """Staff roles, named as the hospital names them.
+
+    Separating manager from supervisor from reception is what stops the three
+    distinct kinds of elevated authority — seeing hospital revenue, giving
+    money back, and holding clinical responsibility — from collapsing into one
+    another, which is what happens when every privileged action is simply
+    "not reception".
+    """
+
     ADMIN = "admin"
+    MANAGER = "manager"
     DOCTOR = "doctor"
-    STAFF = "staff"
+    SUPERVISOR = "supervisor"
+    RECEPTION = "reception"
+    # Charts observations and doses, and writes and signs the nursing
+    # documents. No prescribing, no admitting or discharging, no till.
+    NURSE = "nurse"
+    # The laboratory bench: registers samples and enters results. Verifying
+    # a result is the pathologist's, who is a doctor.
+    LAB = "lab"
 
 
 class Department(str, enum.Enum):
@@ -65,6 +82,21 @@ class ReportStatus(str, enum.Enum):
     SUPERSEDED = "superseded"
 
 
+class DocumentKind(str, enum.Enum):
+    """What a patient handed over, as declared at upload and re-checked in code.
+
+    The kind decides which analyser runs, and the analysers are not
+    interchangeable. Reading a prescription with the laboratory parser is what
+    turned the dose notation "PAN 40 MG 1-0-0" into an analyte called PAN
+    measuring 40 against a reference range of 1.0 to 0.0, flagged HIGH.
+    """
+
+    PRESCRIPTION = "prescription"
+    LAB_REPORT = "lab_report"
+    IMAGING = "imaging"
+    OTHER = "other"
+
+
 class AbnormalFlag(str, enum.Enum):
     NORMAL = "normal"
     LOW = "low"
@@ -111,6 +143,47 @@ class AuditAction(str, enum.Enum):
     COPILOT_DECISION = "copilot_decision"
     EXPORT_DOCUMENT = "export_document"
     PERMISSION_DENIED = "permission_denied"
+    # Who was given access to the system, and who changed what someone may do,
+    # is itself sensitive: it is the trail that explains every other entry.
+    USER_CREATE = "user_create"
+    USER_UPDATE = "user_update"
+    WALLET_DEPOSIT = "wallet_deposit"
+    WALLET_WITHDRAWAL = "wallet_withdrawal"
+    # Undoing counter work is the trail an auditor follows first, so each
+    # step of the cascade is recorded under its own name rather than all of
+    # them sharing a generic "correction".
+    RECEIPT_CANCEL = "receipt_cancel"
+    INVOICE_UNCANCEL = "invoice_uncancel"
+    INVOICE_AMEND = "invoice_amend"
+    VISIT_CANCEL = "visit_cancel"
+    VISIT_UNCANCEL = "visit_uncancel"
+    APPOINTMENT_BOOK = "appointment_book"
+    APPOINTMENT_CANCEL = "appointment_cancel"
+    # The clinical record. A signature, and every correction made to a signed
+    # document, is the trail a medico-legal inquiry reads first.
+    PAD_SIGN = "pad_sign"
+    PAD_AMEND = "pad_amend"
+    PAD_LAYOUT_CHANGE = "pad_layout_change"
+    # The operation theatre: a booking, a cancellation, each theatre time.
+    SURGERY_BOOK = "surgery_book"
+    SURGERY_CANCEL = "surgery_cancel"
+    SURGERY_TIME = "surgery_time"
+    # The patient's signed paper copy of a consent form was received.
+    CONSENT_PAPER_SIGNED = "consent_paper_signed"
+    # A file attached to, or withdrawn from, a patient's record.
+    FILE_UPLOAD = "file_upload"
+    FILE_WITHDRAW = "file_withdraw"
+    # A patient going on leave from the ward, and coming back.
+    LEAVE_START = "leave_start"
+    LEAVE_RETURN = "leave_return"
+    # Room charges posted by hand, outside the morning run.
+    ROOM_CHARGES_RUN = "room_charges_run"
+    # The laboratory: tests registered, a result verified, a verified result
+    # reopened for correction, and tests cancelled.
+    LAB_REGISTER = "lab_register"
+    LAB_VERIFY = "lab_verify"
+    LAB_REOPEN = "lab_reopen"
+    LAB_CANCEL = "lab_cancel"
 
 
 class VisitType(str, enum.Enum):
@@ -124,6 +197,23 @@ class VisitStatus(str, enum.Enum):
     REGISTERED = "registered"       # billed at reception, waiting
     IN_CONSULTATION = "in_consultation"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class AppointmentStatus(str, enum.Enum):
+    """The queue board's colours, carried over from the old system.
+
+    Five states rather than six: the old board showed both "engaged" and
+    "with the doctor", which named the same fact — the patient is in the
+    room — from the clerk's side and the doctor's. One state, labelled
+    "With the doctor" on screen, avoids two ways to record the same thing
+    and the disagreements that follow.
+    """
+
+    PENDING = "pending"        # booked, not yet arrived
+    WAITING = "waiting"        # arrived and registered, sitting outside
+    ENGAGED = "engaged"        # in the room
+    DONE = "done"
     CANCELLED = "cancelled"
 
 
@@ -149,8 +239,30 @@ class PaymentMode(str, enum.Enum):
     CARD = "card"
     UPI = "upi"
     NET_BANKING = "net_banking"
+    CHEQUE = "cheque"
     INSURANCE = "insurance"
     WAIVER = "waiver"
+    # Money the patient already handed over, sitting in their wallet. It is a
+    # payment against the bill but NOT a collection: counting it in the day's
+    # takings would bank the same rupee twice, once on deposit and once on
+    # use. Every collection figure filters this mode out for that reason.
+    WALLET = "wallet"
+
+
+class WalletEntryKind(str, enum.Enum):
+    """Why a patient's balance moved.
+
+    Kept as a named reason rather than inferred from the sign, because
+    "money in" covers both an advance the patient chose to leave and a refund
+    they were owed, and the two answer different questions at closing time.
+    """
+
+    DEPOSIT = "deposit"              # advance handed over at the counter
+    REFUND_CREDIT = "refund_credit"  # a bill refund left on account
+    APPLIED = "applied"              # spent against an invoice
+    WITHDRAWAL = "withdrawal"        # paid back out to the patient
+    # Opening balances brought across from the old system, and corrections.
+    ADJUSTMENT = "adjustment"
 
 
 class PayerType(str, enum.Enum):
@@ -255,6 +367,40 @@ class MedicationStatus(str, enum.Enum):
     COMPLETED = "completed"
     STOPPED = "stopped"
     HELD = "held"
+
+
+class PadStatus(str, enum.Enum):
+    """Where a clinical document stands.
+
+    There is no "edited" state. A signed document is corrected by signing a
+    new version, which marks this one superseded and keeps it readable.
+    """
+
+    DRAFT = "draft"
+    SIGNED = "signed"
+    SUPERSEDED = "superseded"
+
+
+class PatientFileCategory(str, enum.Enum):
+    """What a file on a patient's record is."""
+
+    IDENTITY_PROOF = "identity_proof"
+    REFERRAL_LETTER = "referral_letter"
+    PREVIOUS_RECORDS = "previous_records"
+    OUTSIDE_INVESTIGATION = "outside_investigation"
+    SIGNED_CONSENT = "signed_consent"
+    CLINICAL_PHOTOGRAPH = "clinical_photograph"
+    INSURANCE = "insurance"
+    OTHER = "other"
+
+
+class SurgeryStatus(str, enum.Enum):
+    """Where a surgical case stands. It only moves forward."""
+
+    SCHEDULED = "scheduled"
+    IN_THEATRE = "in_theatre"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class NoteType(str, enum.Enum):

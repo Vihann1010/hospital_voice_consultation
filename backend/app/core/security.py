@@ -13,6 +13,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_CONSULTATION = "consultation"
 TOKEN_TYPE_FINANCE_UNLOCK = "finance_unlock"
+TOKEN_TYPE_UPLOAD = "upload"
 
 
 # bcrypt hashes only the first 72 bytes of a password and silently ignores the
@@ -69,6 +70,27 @@ def create_consultation_token(*, consultation_id: UUID, patient_id: UUID) -> str
             "type": TOKEN_TYPE_CONSULTATION,
         },
         settings.CONSULTATION_TOKEN_EXPIRE_MINUTES,
+    )
+
+
+def create_upload_token(*, consultation_id: UUID, patient_id: UUID) -> str:
+    """Authorises a phone to attach files to one consultation, briefly.
+
+    Deliberately separate from the consultation token, and much shorter
+    lived. The consultation token lasts hours because a voice session does;
+    this one is displayed as a QR code on a screen in a shared room, where
+    the next patient in the queue can photograph it. Fifteen minutes is long
+    enough to find the reports in a bag and short enough that a stolen
+    picture of the screen is worthless by the time it matters.
+    """
+    return _encode(
+        {
+            "sub": str(patient_id),
+            "consultation_id": str(consultation_id),
+            "role": "patient",
+            "type": TOKEN_TYPE_UPLOAD,
+        },
+        settings.UPLOAD_TOKEN_EXPIRE_MINUTES,
     )
 
 

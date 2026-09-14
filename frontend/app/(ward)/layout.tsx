@@ -12,7 +12,7 @@ import { ToastProvider } from "@/components/ui/toast";
  */
 export default function WardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider allow={["admin", "doctor", "staff"]} fallbackPath="/dashboard">
+    <AuthProvider allow={["admin", "doctor", "supervisor", "reception", "nurse"]} fallbackPath="/dashboard">
       <ToastProvider>
         <TooltipProvider delayDuration={200}>
           <WardShell>{children}</WardShell>

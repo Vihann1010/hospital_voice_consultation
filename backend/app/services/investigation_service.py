@@ -1,10 +1,18 @@
 """Investigation ordering and report processing.
 
 Report pipeline for one upload:
-    store bytes -> extract text -> deterministic parse & flag -> AI narrative
+    store bytes -> extract text -> classify the document -> read it the way
+    that kind of document is read -> AI narrative, for laboratory reports only
+
 Each stage is guarded: a failure downgrades the result rather than losing the
 file. A report whose text cannot be read is still stored, still versioned, and
 still visible to the doctor — it simply carries no analysis.
+
+Which analyser runs is decided in `app/investigations/reading.py`, and it can
+decline. A document that cannot be read confidently is marked unclear and the
+doctor is told to open the original, because the alternative — a prescription
+put through the laboratory parser — produces flagged abnormal results out of
+dose instructions.
 """
 import asyncio
 import hashlib
@@ -22,9 +30,10 @@ from app.core.logging import get_logger
 from app.core.uploads import sanitize_filename, validate_upload
 from app.investigations import catalog
 from app.investigations.extraction import extract
-from app.investigations.parsing import analyze_text
+from app.investigations.reading import read_document
 from app.models.enums import (
     Department,
+    DocumentKind,
     InvestigationPriority,
     OrderStatus,
     ReportStatus,
@@ -54,6 +63,31 @@ ALLOWED_CONTENT_TYPES = {
 ALLOWED_SUFFIXES = {
     ".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp", ".txt", ".csv",
 }
+
+
+async def mark_order_item_reported(session: AsyncSession, order_item_id: uuid.UUID) -> None:
+    """A reported test completes its order item, and perhaps its whole order.
+
+    Shared by signed radiology reports and verified lab results, so both
+    decide an order's status in the same way.
+    """
+    from sqlalchemy import select as _select
+
+    item = await session.get(InvestigationOrderItem, order_item_id)
+    if item is None:
+        return
+    item.reported = True
+    await session.flush()
+    order = await session.get(InvestigationOrder, item.order_id)
+    if order is None or order.status == OrderStatus.CANCELLED:
+        return
+    siblings = list((await session.execute(
+        _select(InvestigationOrderItem).where(InvestigationOrderItem.order_id == order.id)
+    )).scalars())
+    order.status = (
+        OrderStatus.COMPLETED if all(entry.reported for entry in siblings)
+        else OrderStatus.PARTIALLY_REPORTED
+    )
 
 
 class InvestigationError(Exception):
@@ -249,6 +283,7 @@ class InvestigationService:
         uploaded_by_id: Optional[uuid.UUID],
         uploaded_by_name: str,
         department: Department,
+        document_kind: Optional[DocumentKind] = None,
     ) -> InvestigationReport:
         safe_filename = sanitize_filename(filename, fallback='report')
         detected_type = self._validate_upload(safe_filename, content_type, data)
@@ -308,6 +343,7 @@ class InvestigationService:
             content_type=detected_type,
             size_bytes=len(data),
             checksum_sha256=checksum,
+            document_kind=document_kind,
             status=ReportStatus.UPLOADED,
             uploaded_by_id=uploaded_by_id,
             uploaded_by_name=uploaded_by_name,
@@ -356,9 +392,21 @@ class InvestigationService:
         if not extraction.ok:
             report.status = ReportStatus.FAILED
             report.error_detail = extraction.warning or "No readable text was found in this file."
+            # Shaped like every other unclear result, so the doctor sees the
+            # same card here as anywhere else nothing could be read.
             report.analysis = {
                 "extraction": {"method": extraction.method, "warning": extraction.warning},
+                "document_kind": report.document_kind.value if report.document_kind else None,
+                "declared_kind": report.document_kind.value if report.document_kind else None,
+                "detected_kind": None,
+                "clarity": "unclear",
+                "unclear_reason": (
+                    extraction.warning
+                    or "No text at all could be read from this file."
+                ),
                 "results": [],
+                "abnormal": [],
+                "critical": [],
                 "abnormal_count": 0,
                 "critical_count": 0,
             }
@@ -369,29 +417,43 @@ class InvestigationService:
             )
             return report
 
-        # --- deterministic pass ---
-        parsed = analyze_text(
+        # --- classify, then read it the way that kind is read ---------------
+        # A handwritten prescription does not come back from OCR as an error;
+        # it comes back as confident-looking rubbish. Everything that decides
+        # whether this document may be believed happens in `read_document`,
+        # which is allowed to answer "unclear".
+        reading = read_document(
             extraction.text,
-            sex=patient.gender if patient else None,
-            age=patient.age if patient else None,
-        )
-        analysis: Dict[str, Any] = {
-            "extraction": {
+            declared=report.document_kind,
+            extraction={
                 "method": extraction.method,
                 "page_count": extraction.page_count,
                 "warning": extraction.warning,
                 "characters": len(extraction.text),
+                "legible": extraction.legible,
             },
-            "results": [result.to_dict() for result in parsed.results],
-            "abnormal": [result.to_dict() for result in parsed.abnormal],
-            "critical": [result.to_dict() for result in parsed.critical],
-            "abnormal_count": len(parsed.abnormal),
-            "critical_count": len(parsed.critical),
-            "recognised_rate": parsed.parse_rate,
-            "narrative_lines": parsed.narrative_lines,
-        }
+            legible=extraction.legible,
+            sex=patient.gender if patient else None,
+            age=patient.age if patient else None,
+        )
+        analysis: Dict[str, Any] = reading.analysis
 
-        # --- narrative pass (advisory only) ---
+        if not reading.should_summarise:
+            report.analysis = analysis
+            report.status = ReportStatus.ANALYZED
+            report.error_detail = None
+            await self.session.commit()
+            logger.info(
+                "report_read_without_summary",
+                extra={
+                    "report_id": str(report_id),
+                    "kind": analysis.get("document_kind"),
+                    "clarity": analysis.get("clarity"),
+                },
+            )
+            return report
+
+        # --- narrative pass, laboratory reports only (advisory) -------------
         previous_summary = None
         if report.version > 1:
             history = await self.reports.version_history(report.group_id)
@@ -399,6 +461,7 @@ class InvestigationService:
                 if older.id != report.id and older.analysis:
                     previous_summary = (older.analysis or {}).get("summary")
                     break
+
         try:
             summary = await self.summarizer.summarize(
                 patient={
@@ -410,7 +473,7 @@ class InvestigationService:
                     "results": analysis["results"],
                     "abnormal_count": analysis["abnormal_count"],
                     "critical_count": analysis["critical_count"],
-                    "narrative_lines": parsed.narrative_lines,
+                    "narrative_lines": analysis.get("narrative_lines", []),
                 },
                 raw_text_excerpt=extraction.text,
                 previous_summary=previous_summary,
@@ -447,9 +510,10 @@ class InvestigationService:
             extra={
                 "report_id": str(report_id),
                 "method": extraction.method,
-                "results": len(parsed.results),
-                "abnormal": len(parsed.abnormal),
-                "critical": len(parsed.critical),
+                "kind": analysis.get("document_kind"),
+                "results": len(analysis["results"]),
+                "abnormal": analysis["abnormal_count"],
+                "critical": analysis["critical_count"],
             },
         )
         return report

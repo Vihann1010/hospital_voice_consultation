@@ -181,6 +181,18 @@ class ConsultationService:
     async def get_detail(self, consultation_id: uuid.UUID) -> Optional[Consultation]:
         return await self.consultations.get_with_details(consultation_id)
 
+    async def update_vitals(
+        self, consultation_id: uuid.UUID, vitals: Dict[str, Optional[str]]
+    ) -> Optional[Consultation]:
+        consultation = await self.consultations.get_with_details(consultation_id)
+        if consultation is None:
+            return None
+        dossier = dict(consultation.medical_json or {})
+        dossier["vitals"] = vitals
+        consultation.medical_json = dossier
+        await self.session.flush()
+        return consultation
+
     async def list(
         self,
         *,
@@ -248,6 +260,9 @@ class ConsultationService:
     ) -> None:
         consultation = await self.consultations.get(consultation_id)
         if consultation is not None:
+            existing = consultation.medical_json or {}
+            if existing.get("vitals") and "vitals" not in medical_json:
+                medical_json = {**medical_json, "vitals": existing["vitals"]}
             consultation.medical_json = medical_json
             await self.session.commit()
 
@@ -265,6 +280,9 @@ class ConsultationService:
         turns = await self.consultations.get_turns(consultation_id)
         consultation.transcript = self.build_transcript(turns)
         if medical_json is not None:
+            existing = consultation.medical_json or {}
+            if existing.get("vitals") and "vitals" not in medical_json:
+                medical_json = {**medical_json, "vitals": existing["vitals"]}
             consultation.medical_json = medical_json
         consultation.status = status
         consultation.ended_at = datetime.now(timezone.utc)

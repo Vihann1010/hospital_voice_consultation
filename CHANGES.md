@@ -273,8 +273,6 @@ After deploying, run the migration and seed the wards:
 docker compose -f docker-compose.prod.yml run --rm migrate
 docker compose -f docker-compose.prod.yml exec backend python -m scripts.seed_wards
 ```
-<<<<<<< HEAD
-
 ---
 
 # IPD ward panel added
@@ -368,5 +366,3 @@ consultant payouts, lab as a walk-in billing counter.
 Recommended insurance split: **pre-auth in the ward panel** (part of the
 admission decision), **claims tracking on a separate desk** (different person,
 weeks later, needs a view across patients rather than a bedside view).
-=======
->>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5

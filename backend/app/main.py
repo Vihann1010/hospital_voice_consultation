@@ -37,6 +37,7 @@ from app.db.session import AsyncSessionLocal, engine
 from app.messaging.factory import close_provider, get_provider
 from app.services.auth_service import seed_default_users
 from app.services.delivery_service import retry_worker
+from app.ipd.room_charges import room_charge_worker
 
 configure_logging()
 logger = get_logger(__name__)
@@ -78,6 +79,7 @@ async def lifespan(app: FastAPI):
         logger.warning("cache_unavailable_at_startup", extra={"backend": cache.name})
     get_provider()      # surface messaging misconfiguration at boot, not first send
     retry_worker.start()
+    room_charge_worker.start()
 
     mark_ready(True)
     logger.info("startup_complete",
@@ -92,6 +94,7 @@ async def lifespan(app: FastAPI):
     await asyncio.sleep(min(settings.SHUTDOWN_GRACE_S * 0.1, 2.0))
 
     await retry_worker.stop()
+    await room_charge_worker.stop()
     await session_manager.shutdown()
     await close_provider()
     await close_gateway()

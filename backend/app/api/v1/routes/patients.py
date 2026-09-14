@@ -3,9 +3,9 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.deps import CurrentUser, get_patient_service, require_roles
+from app.api.deps import CurrentUser, get_patient_service, require_permission
+from app.core.permissions import Permission
 from app.api.scoping import effective_department
-from app.models.enums import UserRole
 from app.schemas.schemas import (
     PatientHistoryOut,
     PatientListItemOut,
@@ -18,10 +18,10 @@ from app.services.patient_service import PatientService
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 Service = Annotated[PatientService, Depends(get_patient_service)]
-STAFF = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
+READ_PATIENTS = require_permission(Permission.PATIENT_READ)
 
 
-@router.get("", response_model=PatientListOut, dependencies=[Depends(STAFF)])
+@router.get("", response_model=PatientListOut, dependencies=[Depends(READ_PATIENTS)])
 async def search_patients(
     service: Service,
     user: CurrentUser,
@@ -45,7 +45,7 @@ async def search_patients(
     return PatientListOut(items=items, total=total)
 
 
-@router.get("/{patient_id}", response_model=PatientHistoryOut, dependencies=[Depends(STAFF)])
+@router.get("/{patient_id}", response_model=PatientHistoryOut, dependencies=[Depends(READ_PATIENTS)])
 async def get_patient_history(
     patient_id: uuid.UUID, service: Service, user: CurrentUser
 ) -> PatientHistoryOut:

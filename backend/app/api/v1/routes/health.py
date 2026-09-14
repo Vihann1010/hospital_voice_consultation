@@ -19,7 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.providers.cache import response_cache
 from app.ai.providers.cost import cost_tracker
 from app.ai.session.manager import session_manager
-from app.api.deps import DbSession, require_roles
+from app.api.deps import DbSession, require_permission
+from app.core.permissions import Permission
 from app.core.cache import get_cache
 from app.core.config import settings
 from app.core.metrics import metrics
@@ -130,7 +131,7 @@ async def prometheus_metrics() -> Response:
 
 @router.get(
     "/health/permissions",
-    dependencies=[Depends(require_roles(UserRole.ADMIN))],
+    dependencies=[Depends(require_permission(Permission.SYSTEM_ADMIN))],
     include_in_schema=False,
 )
 async def permission_matrix() -> Dict[str, Any]:

@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import (
     Department,
+    DocumentKind,
     InvestigationCategory,
     InvestigationPriority,
     OrderStatus,
@@ -137,6 +138,15 @@ class InvestigationReport(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
+    # --- what kind of document this is -------------------------------------
+    # Declared by whoever uploaded it. NULL means nobody said, which is not
+    # the same as "other": an undeclared document is classified from its text
+    # and treated cautiously, where a declared one is checked against that
+    # classification and refused analysis when the two disagree.
+    document_kind: Mapped[Optional[DocumentKind]] = mapped_column(
+        SAEnum(DocumentKind, name="document_kind", values_callable=_VALUES), index=True
+    )
 
     # --- derived ---
     status: Mapped[ReportStatus] = mapped_column(

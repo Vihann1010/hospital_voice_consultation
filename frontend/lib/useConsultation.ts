@@ -36,9 +36,13 @@ interface SessionEndedPayload {
 
 let entryId = 0;
 
-export function useConsultation(consultationId: string, token: string) {
+export function useConsultation(
+  consultationId: string,
+  token: string | null,
+  initialEntries: TranscriptEntry[] = []
+) {
   const [phase, setPhase] = useState<SessionPhase>("connecting");
-  const [entries, setEntries] = useState<TranscriptEntry[]>([]);
+  const [entries, setEntries] = useState<TranscriptEntry[]>(initialEntries);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SessionEndedPayload | null>(null);
 
@@ -49,17 +53,24 @@ export function useConsultation(consultationId: string, token: string) {
   const speakingRef = useRef(false);
   const endedRef = useRef(false);
 
+  // Which line a reply's words belong to is decided HERE, not inside the
+  // state updater. React may run an updater twice (always in development) or
+  // later, after "assistant_end" has already cleared the ref. An updater that
+  // assigned the ref created the line on its first run and then, on its
+  // second, looked for a line that run had never committed — so the whole
+  // reply vanished from the screen while the patient heard it and the server
+  // saved it. Updaters must only read what they are given.
   const appendAssistantDelta = useCallback((text: string) => {
-    setEntries((prev) => {
-      if (assistantEntryRef.current === null) {
-        const id = ++entryId;
-        assistantEntryRef.current = id;
-        return [...prev, { id, role: "assistant", text }];
-      }
-      return prev.map((entry) =>
-        entry.id === assistantEntryRef.current ? { ...entry, text: entry.text + text } : entry
-      );
-    });
+    const current = assistantEntryRef.current;
+    if (current === null) {
+      const id = ++entryId;
+      assistantEntryRef.current = id;
+      setEntries((prev) => [...prev, { id, role: "assistant", text }]);
+      return;
+    }
+    setEntries((prev) =>
+      prev.map((entry) => (entry.id === current ? { ...entry, text: entry.text + text } : entry))
+    );
   }, []);
 
   const teardown = useCallback(async () => {
@@ -70,25 +81,60 @@ export function useConsultation(consultationId: string, token: string) {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!token) {
+      endedRef.current = true;
+      setPhase("ended");
+      return;
+    }
+    endedRef.current = false;
+    assistantEntryRef.current = null;
+    setEntries(initialEntries);
+    setError(null);
+    setSummary(null);
+    setPhase("connecting");
+    const sessionToken = token;
+    // Everything below belongs to THIS connection. React mounts effects
+    // twice in development, and a discarded socket's late events must not
+    // touch the live one — they once raised "connection lost" over a session
+    // that was working, and could stop the new session's microphone.
+    let disposed = false;
+    let opened = false;
+    let socket: WebSocket | null = null;
+    let ownRecorder: MicRecorder | null = null;
+    let ownPlayer: PcmPlayer | null = null;
+
+    const stopOwn = async () => {
+      await ownRecorder?.stop().catch(() => undefined);
+      await ownPlayer?.close().catch(() => undefined);
+      if (recorderRef.current === ownRecorder) recorderRef.current = null;
+      if (playerRef.current === ownPlayer) playerRef.current = null;
+    };
 
     async function connect() {
       const player = new PcmPlayer(22050, (playing) => {
+        if (disposed) return;
         speakingRef.current = playing;
         if (!endedRef.current) setPhase((p) => (playing ? "speaking" : p === "speaking" ? "listening" : p));
       });
+      ownPlayer = player;
       playerRef.current = player;
 
-      const ws = new WebSocket(consultationWsUrl(consultationId, token));
+      const ws = new WebSocket(consultationWsUrl(consultationId, sessionToken));
       ws.binaryType = "arraybuffer";
+      socket = ws;
       wsRef.current = ws;
 
       ws.onopen = async () => {
+        if (disposed) {
+          ws.close();
+          return;
+        }
+        opened = true;
         try {
           await player.init();
           const recorder = new MicRecorder(
             (frame) => {
-              if (ws.readyState === WebSocket.OPEN) ws.send(frame);
+              if (!disposed && ws.readyState === WebSocket.OPEN) ws.send(frame);
             },
             () => {
               // Barge-in is driven entirely by Sarvam's server-side VAD.
@@ -101,21 +147,19 @@ export function useConsultation(consultationId: string, token: string) {
               // Instead the server cancels the in-flight reply when Sarvam
               // emits an actual recognised utterance during playback, and
               // sends {"type":"interrupted"}, which this hook already handles
-              // by flushing playback. Interruption is marginally slower
-              // (it waits for Sarvam to finalise the utterance) but only ever
-              // triggers on real speech.
-              //
-              // To restore instant local barge-in, reinstate:
-              //   if (speakingRef.current && ws.readyState === WebSocket.OPEN) {
-              //     player.flush();
-              //     ws.send(JSON.stringify({ type: "interrupt" }));
-              //   }
+              // by flushing playback.
             }
           );
+          ownRecorder = recorder;
           recorderRef.current = recorder;
           await recorder.start();
-          if (!cancelled) setPhase("listening");
+          if (disposed) {
+            await stopOwn();
+            return;
+          }
+          setPhase("listening");
         } catch {
+          if (disposed) return;
           setError(
             "Microphone access is required for the voice consultation. Allow the microphone and reload."
           );
@@ -124,6 +168,7 @@ export function useConsultation(consultationId: string, token: string) {
       };
 
       ws.onmessage = (event: MessageEvent) => {
+        if (disposed) return;
         if (event.data instanceof ArrayBuffer) {
           player.enqueue(event.data);
           return;
@@ -163,6 +208,9 @@ export function useConsultation(consultationId: string, token: string) {
               );
             }
             assistantEntryRef.current = null;
+            // A reply that produced no audio (or has finished playing) must
+            // not leave the screen saying "Thinking".
+            if (!speakingRef.current) setPhase((p) => (p === "thinking" ? "listening" : p));
             break;
           case "interrupted":
             player.flush();
@@ -184,26 +232,34 @@ export function useConsultation(consultationId: string, token: string) {
         }
       };
 
-      ws.onclose = () => {
-        void teardown();
-        if (!endedRef.current) {
-          setPhase((p) => (p === "ended" || p === "error" ? p : "ended"));
+      ws.onclose = (event: CloseEvent) => {
+        void stopOwn();
+        if (disposed || endedRef.current) return;
+        if (event.code === 1008) {
+          // Policy close: this intake is no longer live (finished, or
+          // abandoned earlier). Nothing is wrong with the connection.
+          setPhase("ended");
+          return;
         }
+        setError(
+          opened
+            ? "The connection to the hospital dropped. Use Restart to continue this intake."
+            : "Could not reach the hospital. Check the network, then reload."
+        );
+        setPhase("error");
       };
-      ws.onerror = () => {
-        if (!endedRef.current) {
-          setError("Connection to the hospital was lost. Please reload to reconnect.");
-          setPhase("error");
-        }
-      };
+      // Every failure is followed by a close event, which reports it. An
+      // error on its own — including the one a socket fires when it is
+      // closed while still connecting — is not evidence of anything.
+      ws.onerror = () => undefined;
     }
 
     void connect();
     return () => {
-      cancelled = true;
+      disposed = true;
       endedRef.current = true;
-      wsRef.current?.close();
-      void teardown();
+      socket?.close();
+      void stopOwn();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consultationId, token]);

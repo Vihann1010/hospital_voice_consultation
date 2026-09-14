@@ -206,6 +206,11 @@ export function MedicineRowEditor({
                 <Sparkles className="h-3 w-3" /> From dictation
               </Badge>
             )}
+            {row.source === "template" && (
+              <Badge variant="ai" size="sm" className="gap-1">
+                <Sparkles className="h-3 w-3" /> Disease template
+              </Badge>
+            )}
             {row.formulary_code && !row.substituted && (
               <Badge variant="success" size="sm" className="gap-1">
                 <Check className="h-3 w-3" /> {row.generic || "In formulary"}

@@ -11,7 +11,11 @@ export type VisitStatus = "registered" | "in_consultation" | "completed" | "canc
 export type PayerType =
   | "self_pay" | "insurance" | "tpa" | "corporate" | "government_scheme";
 export type PaymentMode =
-  | "cash" | "card" | "upi" | "net_banking" | "insurance" | "waiver";
+  | "cash" | "card" | "upi" | "net_banking" | "cheque"
+  | "insurance" | "waiver"
+  // Credit the patient already deposited. A payment against the bill, but
+  // never a collection — the money arrived on the day it was deposited.
+  | "wallet";
 export type InvoiceStatus =
   | "draft" | "issued" | "paid" | "partially_paid" | "cancelled" | "refunded";
 export type ServiceCategory =
@@ -33,6 +37,7 @@ export interface Visit {
   id: string;
   visit_number: string;
   patient_id: string;
+  patient_name: string;
   consultation_id?: string | null;
   department: Department;
   doctor_name: string;
@@ -80,6 +85,10 @@ export interface PaymentRecord {
   received_by_name: string;
   is_refund: boolean;
   refund_reason?: string | null;
+  /** A struck receipt: the entry was a mistake and no money moved. Distinct
+   *  from a refund, where money genuinely went back to the patient. */
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
 }
 
 export interface Invoice {
@@ -98,6 +107,15 @@ export interface Invoice {
   total_paise: number;
   paid_paise: number;
   issued_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  /** The correction trail: a bill amended before payment, or cancelled and
+   *  reinstated, is a fact somebody may have to explain later. */
+  amended_at?: string | null;
+  amendment_reason?: string | null;
+  amendment_count: number;
+  /** Set once a consultant payout counted this bill; nothing may change. */
+  payout_locked_at?: string | null;
   created_by_name: string;
   created_at: string;
   lines: InvoiceLine[];
@@ -161,6 +179,7 @@ export const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "upi", label: "UPI" },
   { value: "card", label: "Card" },
   { value: "net_banking", label: "Net banking" },
+  { value: "cheque", label: "Cheque" },
   { value: "insurance", label: "Insurance / TPA" },
   { value: "waiver", label: "Waived" },
 ];
@@ -201,4 +220,211 @@ export function rupeesToPaise(input: string | number): number {
   const value = typeof input === "number" ? input : parseFloat(input || "0");
   if (Number.isNaN(value)) return 0;
   return Math.round(value * 100);
+}
+
+
+// ------------------------------------------------------------ the wallet
+export type WalletEntryKind =
+  | "deposit"
+  | "refund_credit"
+  | "applied"
+  | "withdrawal"
+  | "adjustment";
+
+export const WALLET_KIND_LABEL: Record<WalletEntryKind, string> = {
+  deposit: "Advance received",
+  refund_credit: "Refund credited",
+  applied: "Applied to a bill",
+  withdrawal: "Returned to patient",
+  adjustment: "Adjustment",
+};
+
+export interface WalletEntry {
+  id: string;
+  kind: WalletEntryKind;
+  /** Signed: positive puts money on account, negative takes it off. */
+  amount_paise: number;
+  balance_after_paise: number;
+  invoice_id?: string | null;
+  receipt_number?: string | null;
+  reason?: string | null;
+  created_by_name: string;
+  created_at: string;
+}
+
+export interface Wallet {
+  patient_id: string;
+  balance_paise: number;
+  entries: WalletEntry[];
+}
+
+/** What one payment mode needs recorded, as the server defines it. */
+export interface PaymentModeField {
+  name: string;
+  label: string;
+  required: boolean;
+  digits?: number | null;
+}
+
+export interface PaymentModeSpec {
+  mode: PaymentMode;
+  collects_cash: boolean;
+  fields: PaymentModeField[];
+}
+
+
+// -------------------------------------------------------- bill corrections
+export interface InvoiceSummary {
+  id: string;
+  invoice_number: string;
+  status: InvoiceStatus;
+  patient_id: string;
+  patient_name: string;
+  uhid?: string | null;
+  visit_number?: string | null;
+  visit_id?: string | null;
+  total_paise: number;
+  paid_paise: number;
+  balance_paise: number;
+  amendment_count: number;
+  /** Counted into a settled consultant payout: nothing about it may change. */
+  payout_locked: boolean;
+  issued_at?: string | null;
+  created_at: string;
+}
+
+export interface InvoiceList {
+  total: number;
+  items: InvoiceSummary[];
+}
+
+
+// ------------------------------------------------------------- the diary
+export interface DiaryEntry {
+  kind: "opd" | "ipd" | "wallet";
+  reference: string;
+  date: string;
+  description: string;
+  gross_paise: number;
+  discount_paise: number;
+  net_paise: number;
+  received_paise: number;
+  refunded_paise: number;
+  /** What this entry alone still owes. */
+  balance_paise: number;
+  running_balance_paise: number;
+  status: string;
+  cancelled: boolean;
+  /** Carried onto an inpatient bill — not collectable at the counter. */
+  credited_to_ipd: boolean;
+  invoice_id?: string | null;
+  visit_id?: string | null;
+  admission_id?: string | null;
+  notes: string[];
+}
+
+export interface PatientDiary {
+  patient: {
+    id: string;
+    uhid?: string | null;
+    name: string;
+    age: number;
+    gender: string;
+    phone_number: string;
+  };
+  totals: {
+    gross_paise: number;
+    discount_paise: number;
+    net_paise: number;
+    received_paise: number;
+    refunded_paise: number;
+    outstanding_paise: number;
+    wallet_balance_paise: number;
+    visit_count: number;
+    admission_count: number;
+  };
+  entries: DiaryEntry[];
+}
+
+// ----------------------------------------------------------- price quote
+export interface QuoteLine {
+  description: string;
+  code?: string | null;
+  quantity: number;
+  unit_rate_paise: number;
+  total_paise: number;
+}
+
+export interface Quote {
+  gross_paise: number;
+  discount_paise: number;
+  taxable_paise: number;
+  tax_paise: number;
+  total_paise: number;
+  /** Why a line came out as it did: a free follow-up, an agreed rate. */
+  notes: string[];
+  lines: QuoteLine[];
+}
+
+export interface Organisation {
+  id: string;
+  code: string;
+  name: string;
+  payer_type: PayerType;
+  default_discount_percent: number;
+  credit_days: number;
+  is_active: boolean;
+}
+
+
+// ---------------------------------------------------------------- reports
+export type ReportColumnType =
+  | "text" | "money" | "number" | "date" | "datetime" | "status";
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  type: ReportColumnType;
+  /** Summed into the footer. */
+  total: boolean;
+  visible: boolean;
+  position: number;
+}
+
+export interface ReportDefinition {
+  key: string;
+  title: string;
+  description: string;
+  single_day: boolean;
+  /** A cashier may run this against their own till without finance rights. */
+  self_service: boolean;
+}
+
+export interface ReportResult {
+  key: string;
+  title: string;
+  description: string;
+  date_from: string;
+  date_to: string;
+  /** Set when the report was narrowed to one person's till. */
+  scoped_to?: string | null;
+  columns: ReportColumn[];
+  rows: Record<string, unknown>[];
+  totals: Record<string, number>;
+  row_count: number;
+}
+
+
+// ------------------------------------------------- scan-to-upload from a phone
+export interface UploadLink {
+  consultation_id: string;
+  /** What the QR encodes; shown as text too, for a camera that will not focus. */
+  url: string;
+  token: string;
+  expires_in_minutes: number;
+  expires_at: string;
+  /** A data URI, so the code renders with no library and no second request. */
+  qr_data_uri: string;
+  /** The configured public address is one a phone cannot reach. */
+  unreachable_warning: boolean;
 }

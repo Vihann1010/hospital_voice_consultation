@@ -9,41 +9,109 @@
  * a photograph taken now is on the doctor's screen before the consultation
  * starts instead of being handed across the desk halfway through it.
  *
+ * The one question asked before the camera opens is what the page is — a
+ * prescription, a lab report or a scan. It is not paperwork. Those three
+ * things are read by three different analysers, and the wrong one produces
+ * confident nonsense rather than an error: a prescription put through the
+ * laboratory parser turned the dose instruction "1-0-0" into a reference
+ * range and flagged the patient's pantoprazole as an abnormal result.
+ *
+ * So the choice is the button. Tapping "Prescription" opens the camera, and
+ * the answer travels with the photograph. Nobody fills in a form.
+ *
  * Everything is optional. Nothing here blocks the patient from simply waiting
  * to be seen.
  */
 import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, Camera, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileText,
+  FlaskConical,
+  Loader2,
+  Pill,
+  Scan,
+  Upload,
+  X,
+} from "lucide-react";
 import { API_URL } from "@/lib/api";
+import type { DocumentKind } from "@/lib/investigationTypes";
 
 interface UploadedFile {
   id: string;
   name: string;
+  kind: DocumentKind;
   status: "uploading" | "done" | "failed";
   error?: string;
 }
 
 const MAX_FILES = 10;
 
-export function PreviousReportsUpload({ sessionToken }: { sessionToken: string }) {
+/**
+ * Worded for a patient, not a clerk. "Blood or lab report" beats "laboratory
+ * investigation", and the examples matter more than the label — people
+ * recognise their own paperwork by what is printed on it.
+ */
+const KINDS: {
+  kind: DocumentKind;
+  label: string;
+  hint: string;
+  icon: typeof Pill;
+}[] = [
+  {
+    kind: "prescription",
+    label: "Prescription",
+    hint: "A doctor's slip listing medicines",
+    icon: Pill,
+  },
+  {
+    kind: "lab_report",
+    label: "Blood or lab report",
+    hint: "Printed test results with numbers",
+    icon: FlaskConical,
+  },
+  {
+    kind: "imaging",
+    label: "Scan or X-ray report",
+    hint: "The typed report, not the film",
+    icon: Scan,
+  },
+  {
+    kind: "other",
+    label: "Something else",
+    hint: "Discharge summary, any other paper",
+    icon: FileText,
+  },
+];
+
+export function PreviousReportsUpload({
+  sessionToken,
+  /** Drop the heading when the page around it already says all this — the
+   *  phone upload page opens on nothing else, so it introduces itself. */
+  bare = false,
+}: {
+  sessionToken: string;
+  bare?: boolean;
+}) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [pendingKind, setPendingKind] = useState<DocumentKind | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const uploadOne = useCallback(
-    async (file: File) => {
+    async (file: File, kind: DocumentKind) => {
       const key = `${file.name}-${Date.now()}-${Math.random()}`;
       setFiles((current) => [
         ...current,
-        { id: key, name: file.name, status: "uploading" },
+        { id: key, name: file.name, kind, status: "uploading" },
       ]);
 
       const body = new FormData();
       body.append("session_token", sessionToken);
       body.append("file", file);
       body.append("title", file.name);
+      body.append("document_kind", kind);
 
       try {
         const response = await fetch(`${API_URL}/api/v1/patient-uploads/reports`, {
@@ -81,94 +149,112 @@ export function PreviousReportsUpload({ sessionToken }: { sessionToken: string }
 
   const accept = useCallback(
     (list: FileList | null) => {
-      if (!list) return;
+      // `pendingKind` is set by the tile that opened the picker. Losing it
+      // would mean uploading a document with no declared kind, so the files
+      // are dropped rather than sent unlabelled.
+      if (!list || !pendingKind) return;
       const room = MAX_FILES - files.length;
       Array.from(list)
         .slice(0, Math.max(room, 0))
-        .forEach((file) => void uploadOne(file));
+        .forEach((file) => void uploadOne(file, pendingKind));
+      setPendingKind(null);
     },
-    [files.length, uploadOne]
+    [files.length, pendingKind, uploadOne]
   );
+
+  const open = useCallback((kind: DocumentKind, camera: boolean) => {
+    setPendingKind(kind);
+    // The ref click has to follow the state update in the same tick; React
+    // batches the setState but the input opens regardless, and `accept`
+    // reads `pendingKind` from a later render.
+    (camera ? cameraRef : fileRef).current?.click();
+  }, []);
 
   const succeeded = files.filter((file) => file.status === "done").length;
   const full = files.length >= MAX_FILES;
 
   return (
-    <section className="rounded-2xl border border-pine/10 bg-white p-5">
-      <h2 className="font-display text-base font-semibold text-pine">
-        Have any earlier reports with you?
-      </h2>
-      <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-        Photograph or upload any previous X-rays, scans or blood tests you have
-        brought. The doctor will see them before you go in. This is optional —
-        you can simply wait to be called.
+    <section className={bare ? "" : "rounded-2xl border border-pine/10 bg-white p-5"}>
+      {!bare && (
+        <>
+          <h2 className="font-display text-base font-semibold text-pine">
+            Have any earlier reports with you?
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+            Photograph or upload any previous X-rays, scans or blood tests you
+            have brought. The doctor will see them before you go in. This is
+            optional — you can simply wait to be called.
+          </p>
+        </>
+      )}
+
+      <p className="mt-4 text-sm font-medium text-ink">
+        What are you adding?
+      </p>
+      <p className="mt-0.5 text-xs text-ink-muted">
+        Tap one and the camera opens. Add as many as you like, one kind at a time.
       </p>
 
-      <div
-        onDragOver={(event: React.DragEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event: React.DragEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          setDragging(false);
-          accept(event.dataTransfer.files);
-        }}
-        className={`mt-4 rounded-xl border-2 border-dashed p-5 text-center transition ${
-          dragging ? "border-marigold bg-marigold/[0.06]" : "border-pine/15 bg-mint/40"
-        }`}
-      >
-        <FileText className="mx-auto h-7 w-7 text-pine/40" aria-hidden="true" />
-        <p className="mt-2 text-sm text-ink-muted">
-          Photos or PDFs, up to {MAX_FILES} files
-        </p>
-
-        <div className="mt-3 flex flex-wrap justify-center gap-2">
-          {/* Separate camera entry point: on a phone this opens the camera
-              directly, which is how most patients will actually do this. */}
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {KINDS.map(({ kind, label, hint, icon: Icon }) => (
           <button
+            key={kind}
             type="button"
-            onClick={() => cameraRef.current?.click()}
             disabled={full}
-            className="inline-flex items-center gap-2 rounded-lg bg-pine px-4 py-2.5 text-sm font-semibold text-mint transition hover:bg-pine-deep disabled:opacity-50"
+            onClick={() => open(kind, true)}
+            className="flex items-center gap-3 rounded-xl border border-pine/15 bg-mint/40 px-3 py-3 text-left transition hover:border-pine/40 hover:bg-mint disabled:opacity-50"
           >
-            <Camera className="h-4 w-4" /> Take a photo
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pine/10">
+              <Icon className="h-4 w-4 text-pine" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-pine">{label}</span>
+              <span className="block text-[11px] leading-snug text-ink-muted">
+                {hint}
+              </span>
+            </span>
           </button>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={full}
-            className="inline-flex items-center gap-2 rounded-lg border border-pine/20 px-4 py-2.5 text-sm font-semibold text-pine transition hover:bg-mint disabled:opacity-50"
-          >
-            <Upload className="h-4 w-4" /> Choose a file
-          </button>
-        </div>
-
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          multiple
-          className="hidden"
-          onChange={(event) => {
-            accept(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          multiple
-          className="hidden"
-          onChange={(event) => {
-            accept(event.target.files);
-            event.target.value = "";
-          }}
-        />
+        ))}
       </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] text-ink-faint">Already have a PDF?</span>
+        {KINDS.map(({ kind, label }) => (
+          <button
+            key={kind}
+            type="button"
+            disabled={full}
+            onClick={() => open(kind, false)}
+            className="inline-flex items-center gap-1 rounded-md border border-pine/15 px-2 py-1 text-[11px] font-medium text-pine transition hover:bg-mint disabled:opacity-50"
+          >
+            <Upload className="h-3 w-3" /> {label}
+          </button>
+        ))}
+      </div>
+
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          accept(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          accept(event.target.files);
+          event.target.value = "";
+        }}
+      />
 
       {full && (
         <p className="mt-2 text-xs text-marigold-deep">
@@ -196,6 +282,9 @@ export function PreviousReportsUpload({ sessionToken }: { sessionToken: string }
             )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-ink">{file.name}</p>
+              <p className="text-[11px] text-ink-faint">
+                {KINDS.find((entry) => entry.kind === file.kind)?.label}
+              </p>
               {file.error && <p className="text-xs text-clay">{file.error}</p>}
             </div>
             {file.status === "failed" && (

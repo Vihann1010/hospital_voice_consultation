@@ -22,13 +22,34 @@ from app.ai.pipeline.investigation_engine import InvestigationEngineService
 from app.ai.pipeline.medical_json_generator import MedicalJSONGeneratorService
 from app.ai.pipeline.patient_education import PatientEducationService
 from app.ai.pipeline.risk_detection import RiskDetectionService
-from app.ai.pipeline.schemas import ClinicalDossier, MedicalRecord, SymptomExtraction
+from app.ai.pipeline.schemas import (
+    ClinicalDossier,
+    MedicalRecord,
+    PatientEducation,
+    SymptomExtraction,
+)
 from app.ai.pipeline.symptom_extractor import SymptomExtractorService
 from app.ai.providers.factory import LLMGateway, get_gateway
 from app.ai.session.memory import ConversationMemory
 from app.core.logging import get_logger
+from app.models.enums import Department
 
 logger = get_logger(__name__)
+
+
+def fallback_patient_education(department: Department) -> PatientEducation:
+    """Return safe two-line Hindi guidance when the education model is unavailable."""
+    if department == Department.ORTHOPEDICS:
+        instructions = [
+            "दर्द वाले अंग को आराम दें और उसे अनावश्यक दबाव या चोट से बचाएं।",
+            "अपनी सभी जांच रिपोर्ट साथ लाएं और डॉक्टर की सलाह के बिना दवा शुरू या बंद न करें।",
+        ]
+    else:
+        instructions = [
+            "आराम करें, पर्याप्त पानी पिएं और अपनी जांच रिपोर्ट तथा दवाओं की सूची साथ लाएं।",
+            "तेज दर्द, अधिक रक्तस्राव, चक्कर या सांस लेने में परेशानी हो तो तुरंत अस्पताल जाएं।",
+        ]
+    return PatientEducation(language="hi", general_self_care=instructions)
 
 
 class ClinicalPipeline:
@@ -147,6 +168,7 @@ class ClinicalPipeline:
             )
         except StageError as exc:
             dossier.pipeline_errors.append(str(exc))
+            dossier.patient_education = fallback_patient_education(memory.department)
 
         dossier.conversation_meta = memory.meta()
         logger.info(

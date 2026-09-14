@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { cn } from "@/lib/utils";
 
-export function TranscriptView({ turns }: { turns: ConversationTurn[] }) {
+export function TranscriptView({ turns, className }: { turns: ConversationTurn[]; className?: string }) {
   if (!turns || turns.length === 0) {
     return (
-      <Card>
+      <Card className={className}>
         <EmptyState
           icon={MessageSquare}
           title="No conversation recorded"
@@ -22,14 +22,14 @@ export function TranscriptView({ turns }: { turns: ConversationTurn[] }) {
   }
 
   return (
-    <Card>
+    <Card className={cn("flex min-h-0 flex-col overflow-hidden", className)}>
       <CardHeader className="pb-3">
         <CardTitle>Full transcript</CardTitle>
         <p className="text-xs text-ink-muted">
           {turns.length} turns · verbatim record of the intake conversation
         </p>
       </CardHeader>
-      <CardContent className="thin-scroll max-h-[640px] space-y-3 overflow-y-auto">
+      <CardContent className="thin-scroll min-h-0 flex-1 space-y-3 overflow-y-auto">
         {turns.map((turn, index) => {
           const isPatient = turn.role === "patient";
           return (

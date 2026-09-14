@@ -12,16 +12,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Banknote, Check, Loader2, Plus, Printer, Search, Trash2, UserPlus, X,
+  Banknote, Check, Loader2, Plus, Printer, Search, Trash2, UserPlus, Wallet, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { getToken } from "@/lib/auth";
 import type {
-  PatientCard, PaymentMode, RegisterAndBillResult, ServiceItem, VisitType,
+  Organisation, PatientCard, PaymentMode, Quote, RegisterAndBillResult,
+  ServiceItem, VisitType,
 } from "@/lib/emrTypes";
+import type { Consultant } from "@/lib/appointmentTypes";
 import { PAYMENT_MODES, VISIT_TYPES, formatINR, rupeesToPaise } from "@/lib/emrTypes";
+import {
+  PaymentModeFields,
+  cleanModeDetails,
+} from "@/components/finance/payment-mode-fields";
+import { WalletPanel } from "@/components/finance/wallet-panel";
 import type { Department, Gender } from "@/lib/types";
 import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +46,18 @@ let lineKey = 0;
 
 export function ReceptionCounter() {
   const toast = useToast();
+  const { user } = useAuth();
+  // Returning a balance is money leaving the hospital, so the button only
+  // appears for the roles that hold refund authority. The API enforces it
+  // regardless; this just avoids offering an action that would 403.
+  const canRefund = user?.role === "admin" || user?.role === "supervisor";
 
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientCard[] | null>(null);
   const [selected, setSelected] = useState<PatientCard | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [registeringOnly, setRegisteringOnly] = useState(false);
 
   // New patient fields
   const [name, setName] = useState("");
@@ -55,6 +69,17 @@ export function ReceptionCounter() {
   // Visit
   const [department, setDepartment] = useState<Department>("orthopedics");
   const [visitType, setVisitType] = useState<VisitType>("new");
+  // The counter used to send no doctor at all, which left every visit with a
+  // blank doctor name on the queue board and meant the consultant's own
+  // pricing rules — free follow-up, first consultation — could never fire.
+  const [consultants, setConsultants] = useState<Consultant[]>([]);
+  const [consultantId, setConsultantId] = useState("");
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
+  const [organisationId, setOrganisationId] = useState("");
+  // What the server says this bill comes to, and why. Fetched rather than
+  // computed here so the figure on screen is the figure that will be
+  // charged.
+  const [quote, setQuote] = useState<Quote | null>(null);
 
   // Bill
   const [lines, setLines] = useState<BillLine[]>([]);
@@ -64,7 +89,11 @@ export function ReceptionCounter() {
   // Payment
   const [collectNow, setCollectNow] = useState(true);
   const [mode, setMode] = useState<PaymentMode>("cash");
-  const [reference, setReference] = useState("");
+  const [modeDetails, setModeDetails] = useState<Record<string, string>>({});
+  // The selected patient's credit, so the counter can offer to spend it
+  // rather than taking cash from somebody who has already paid.
+  const [walletPaise, setWalletPaise] = useState(0);
+  const [settling, setSettling] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -137,8 +166,119 @@ export function ReceptionCounter() {
     setDone(null); setSelected(null); setQuery(""); setResults(null);
     setRegistering(false); setName(""); setAge(""); setPhone(""); setCity("");
     setLines([]); setDiscountRupees(""); setDiscountReason("");
-    setReference(""); setError(null);
+    setModeDetails({}); setWalletPaise(0); setQuote(null);
+    setOrganisationId(""); setError(null);
   }, []);
+
+  // The wallet panel only exists while a patient is selected, so the
+  // completed-sale screen reads the balance itself rather than trusting
+  // whatever the panel last reported.
+  useEffect(() => {
+    if (!done) return;
+    let active = true;
+    void staffApi
+      .wallet(done.patient.id)
+      .then((wallet) => active && setWalletPaise(wallet.balance_paise))
+      .catch(() => active && setWalletPaise(0));
+    return () => {
+      active = false;
+    };
+  }, [done]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [people, orgs] = await Promise.all([
+          staffApi.consultants({ active_only: true }),
+          staffApi.organisations(true),
+        ]);
+        setConsultants(people);
+        setOrganisations(orgs);
+      } catch {
+        // A counter that cannot reach the registers can still take money at
+        // tariff rates; it must not refuse to open.
+        setConsultants([]);
+        setOrganisations([]);
+      }
+    })();
+  }, []);
+
+  const departmentConsultants = useMemo(
+    () => consultants.filter((item) => item.department === department),
+    [consultants, department]
+  );
+
+  // Follow the department unless the clerk has picked somebody in it.
+  useEffect(() => {
+    setConsultantId((current) =>
+      departmentConsultants.some((item) => item.id === current)
+        ? current
+        : departmentConsultants[0]?.id ?? ""
+    );
+  }, [departmentConsultants]);
+
+  const chosenConsultant = consultants.find((item) => item.id === consultantId);
+
+  // Ask the server what this comes to whenever the bill changes. Debounced,
+  // because it changes on every keystroke in the quantity box.
+  useEffect(() => {
+    if (lines.length === 0) {
+      setQuote(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setQuote(
+          await staffApi.quoteBill({
+            patient_id: selected?.id ?? null,
+            consultant_id: consultantId || null,
+            doctor_name: chosenConsultant?.full_name ?? null,
+            organisation_id: organisationId || null,
+            items: lines.map((line) => ({
+              service_item_id: line.service.id,
+              quantity: line.quantity,
+            })),
+            invoice_discount_paise: discountPaise,
+          })
+        );
+      } catch {
+        // Falls back to the locally computed total, which is right whenever
+        // no rule applies — the common case.
+        setQuote(null);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [lines, selected, consultantId, chosenConsultant, organisationId, discountPaise]);
+
+  const canRegister = Boolean(name.trim() && age && phone.trim().length >= 10);
+
+  /** Issue a UHID and nothing else. */
+  async function registerOnly() {
+    setRegisteringOnly(true);
+    setError(null);
+    try {
+      const patient = await staffApi.registerPatient({
+        name: name.trim(),
+        age: Number(age),
+        gender,
+        phone_number: phone.trim(),
+        city: city.trim() || null,
+      });
+      // Selected rather than cleared: the commonest next step is to bill the
+      // person standing there, and making the clerk search for the record
+      // they just created would be a pointless round trip.
+      setSelected(patient);
+      setRegistering(false);
+      setName(""); setAge(""); setPhone(""); setCity("");
+      toast.success(`${patient.uhid} registered`, "No visit opened and no bill raised.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not register the patient.";
+      setError(message);
+      toast.error("Registration failed", message);
+    } finally {
+      setRegisteringOnly(false);
+    }
+  }
 
   async function submit() {
     setSubmitting(true);
@@ -147,6 +287,8 @@ export function ReceptionCounter() {
       const payload: Record<string, unknown> = {
         department,
         visit_type: visitType,
+        doctor_name: chosenConsultant?.full_name ?? "",
+        organisation_id: organisationId || null,
         items: lines.map((line) => ({
           service_item_id: line.service.id,
           quantity: line.quantity,
@@ -165,11 +307,15 @@ export function ReceptionCounter() {
           city: city.trim() || null,
         };
       }
-      if (collectNow && totalPaise > 0) {
+      // Collect what the server quoted, not what was computed locally: if a
+      // rule zeroed a line, taking the local figure would collect money the
+      // bill does not ask for.
+      const payable = quote?.total_paise ?? totalPaise;
+      if (collectNow && payable > 0) {
         payload.payment = {
-          amount_paise: totalPaise,
+          amount_paise: payable,
           mode,
-          reference: reference.trim() || null,
+          mode_details: cleanModeDetails(modeDetails),
         };
       }
 
@@ -189,31 +335,70 @@ export function ReceptionCounter() {
     }
   }
 
-  async function printInvoice(invoiceId: string) {
+  /** Spend the patient's credit against the bill just raised.
+   *
+   *  The counter tells the clerk they can do this, so it has to be one
+   *  button away rather than a note about a screen somewhere else. Capped
+   *  at whichever is smaller — the credit or what is still owed — because
+   *  overpaying a bill from a wallet is refused by the API and there is no
+   *  sense offering it.
+   */
+  async function settleFromWallet() {
+    if (!done) return;
+    const owed = done.invoice.total_paise - done.invoice.paid_paise;
+    const spend = Math.min(owed, walletPaise);
+    if (spend <= 0) return;
+    setSettling(true);
+    try {
+      const payment = await staffApi.payFromWallet(done.invoice.id, spend);
+      const invoice = await staffApi.invoice(done.invoice.id);
+      setDone({ ...done, invoice, payment });
+      const wallet = await staffApi.wallet(done.patient.id);
+      setWalletPaise(wallet.balance_paise);
+      window.dispatchEvent(new Event("reception-payment-recorded"));
+      toast.success(
+        `${formatINR(spend)} settled from the wallet`,
+        `Receipt ${payment.receipt_number} · ${formatINR(wallet.balance_paise)} left on account`
+      );
+    } catch (err) {
+      toast.error(
+        "Could not settle from the wallet",
+        err instanceof Error ? err.message : undefined
+      );
+    } finally {
+      setSettling(false);
+    }
+  }
+
+  /** Send a PDF straight to the printer through a hidden frame.
+   *  Shared by the bill and the receipt: both are handed to the patient at
+   *  the same moment, and duplicating the plumbing would mean fixing any
+   *  printing bug twice. */
+  async function printPdf(url: string, label: string) {
     setPrinting(true);
     try {
-      const response = await fetch(staffApi.invoicePdfUrl(invoiceId), {
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${getToken() ?? ""}` },
       });
-      if (!response.ok) throw new Error("The bill PDF is not available yet.");
-      const url = URL.createObjectURL(await response.blob());
+      if (!response.ok) throw new Error(`The ${label} PDF is not available yet.`);
+      const blobUrl = URL.createObjectURL(await response.blob());
       const frame = document.createElement("iframe");
       frame.style.position = "fixed";
       frame.style.width = "0";
       frame.style.height = "0";
       frame.style.border = "0";
-      frame.src = url;
+      frame.src = blobUrl;
       frame.onload = () => {
         frame.contentWindow?.focus();
         frame.contentWindow?.print();
         setTimeout(() => {
           frame.remove();
-          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(blobUrl);
         }, 60000);
       };
       document.body.appendChild(frame);
     } catch (err) {
-      toast.error("Could not print bill", err instanceof Error ? err.message : undefined);
+      toast.error(`Could not print the ${label}`, err instanceof Error ? err.message : undefined);
     } finally {
       setPrinting(false);
     }
@@ -259,10 +444,43 @@ export function ReceptionCounter() {
               </p>
             </div>
 
+            {done.invoice.total_paise > done.invoice.paid_paise && walletPaise > 0 && (
+              <button
+                type="button"
+                disabled={settling}
+                onClick={() => void settleFromWallet()}
+                className="mt-3 flex w-full items-center gap-2 rounded-xl border
+                           border-marigold-deep/30 bg-marigold/10 px-4 py-2.5 text-left
+                           text-sm text-marigold-deep transition hover:bg-marigold/20
+                           disabled:opacity-60"
+              >
+                <Wallet className="h-4 w-4 shrink-0" />
+                <span>
+                  {settling ? "Settling…" : "Settle from wallet"} —{" "}
+                  {formatINR(
+                    Math.min(done.invoice.total_paise - done.invoice.paid_paise, walletPaise)
+                  )}
+                </span>
+                <span className="ml-auto text-[11px]">
+                  {formatINR(walletPaise)} on account
+                </span>
+              </button>
+            )}
+
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button onClick={() => void printInvoice(done.invoice.id)} variant="outline" disabled={printing}>
+              <Button onClick={() => void printPdf(staffApi.invoicePdfUrl(done.invoice.id), "bill")} variant="outline" disabled={printing}>
                 <Printer /> {printing ? "Preparing bill..." : "Print bill"}
               </Button>
+              {done.payment && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    void printPdf(staffApi.receiptPdfUrl(done.payment!.id), "receipt")
+                  }
+                >
+                  <Printer /> Print receipt
+                </Button>
+              )}
               <Button variant="ghost" onClick={reset}>
                 Next patient
               </Button>
@@ -275,7 +493,7 @@ export function ReceptionCounter() {
 
   // -------------------------------------------------------------- counter
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
+    <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
       <div className="space-y-5">
         {/* Patient */}
         <Card>
@@ -284,6 +502,7 @@ export function ReceptionCounter() {
           </CardHeader>
           <CardContent className="space-y-3">
             {selected ? (
+              <>
               <div className="flex items-center gap-3 rounded-lg bg-mint px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-pine">{selected.name}</p>
@@ -300,6 +519,17 @@ export function ReceptionCounter() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
+              {/* Shown the moment a patient is chosen. Taking cash from
+                  somebody who already has credit on account is the
+                  expensive mistake here, and it is only avoidable if the
+                  balance is in front of the clerk before they ask. */}
+              <WalletPanel
+                patientId={selected.id}
+                canWithdraw={canRefund}
+                onChanged={setWalletPaise}
+                className="mt-3"
+              />
+              </>
             ) : registering ? (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -333,9 +563,25 @@ export function ReceptionCounter() {
                   <Input id="rc-city" value={city}
                          onChange={(e) => setCity(e.target.value)} />
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setRegistering(false)}>
-                  Search for an existing patient instead
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setRegistering(false)}>
+                    Search for an existing patient instead
+                  </Button>
+                  {/* Registration and attendance are not the same act. Somebody
+                      who rings for a card, or is being registered so an
+                      appointment can be booked, must not take a token in
+                      today's queue or appear on the doctor's list. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    disabled={registeringOnly || !canRegister}
+                    onClick={() => void registerOnly()}
+                  >
+                    {registeringOnly ? <Loader2 className="animate-spin" /> : <UserPlus />}
+                    Register only — no bill or token
+                  </Button>
+                </div>
               </div>
             ) : (
               <>
@@ -408,6 +654,33 @@ export function ReceptionCounter() {
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="rc-consultant">Consultant</label>
+              <select id="rc-consultant" value={consultantId} className="field-input"
+                      onChange={(e) => setConsultantId(e.target.value)}>
+                {departmentConsultants.length === 0 && <option value="">—</option>}
+                {departmentConsultants.map((item) => (
+                  <option key={item.id} value={item.id}>{item.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              {/* Only shown when the hospital actually has agreements. Most
+                  patients pay for themselves, and an empty dropdown on every
+                  registration is a field to skip past all day. */}
+              {organisations.length > 0 && (
+                <>
+                  <label className="field-label" htmlFor="rc-org">Paid by</label>
+                  <select id="rc-org" value={organisationId} className="field-input"
+                          onChange={(e) => setOrganisationId(e.target.value)}>
+                    <option value="">Patient (self-pay)</option>
+                    {organisations.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -486,30 +759,54 @@ export function ReceptionCounter() {
       <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
         <Card>
           <CardContent className="p-5">
+            {/* Every figure from one source. Mixing the locally computed
+                subtotal with the server's total showed "₹500 / ₹0" for a free
+                follow-up — implying a discount that appears on no line. */}
             <dl className="space-y-1.5 text-sm">
               <div className="flex justify-between">
                 <dt className="text-ink-muted">Subtotal</dt>
-                <dd className="tabular text-ink">{formatINR(grossPaise)}</dd>
+                <dd className="tabular text-ink">
+                  {formatINR(quote?.gross_paise ?? grossPaise)}
+                </dd>
               </div>
-              {discountPaise > 0 && (
+              {(quote?.discount_paise ?? discountPaise) > 0 && (
                 <div className="flex justify-between">
                   <dt className="text-ink-muted">Discount</dt>
-                  <dd className="tabular text-clay">−{formatINR(discountPaise)}</dd>
+                  <dd className="tabular text-clay">
+                    −{formatINR(quote?.discount_paise ?? discountPaise)}
+                  </dd>
                 </div>
               )}
-              {taxPaise > 0 && (
+              {(quote?.tax_paise ?? taxPaise) > 0 && (
                 <div className="flex justify-between">
                   <dt className="text-ink-muted">GST</dt>
-                  <dd className="tabular text-ink">{formatINR(taxPaise)}</dd>
+                  <dd className="tabular text-ink">
+                    {formatINR(quote?.tax_paise ?? taxPaise)}
+                  </dd>
                 </div>
               )}
             </dl>
             <div className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
               <span className="font-display font-semibold text-pine">Total</span>
               <span className="tabular font-display text-2xl font-semibold text-pine">
-                {formatINR(totalPaise)}
+                {formatINR(quote?.total_paise ?? totalPaise)}
               </span>
             </div>
+
+            {/* Why a line came out as it did. A zero the clerk cannot explain
+                to the patient in front of them is worse than no rule. */}
+            {quote && quote.notes.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {quote.notes.map((note) => (
+                  <li
+                    key={note}
+                    className="rounded-md bg-marigold/10 px-2 py-1 text-[11px] text-marigold-deep"
+                  >
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <div className="mt-4 space-y-2">
               <label className="field-label" htmlFor="rc-disc">Discount (₹)</label>
@@ -541,14 +838,24 @@ export function ReceptionCounter() {
               Collect now
             </label>
 
+            {collectNow && walletPaise > 0 && (
+              <p className="rounded-md bg-marigold/10 px-2.5 py-1.5 text-[11px] text-marigold-deep">
+                This patient has {formatINR(walletPaise)} on account. Bill them first, then
+                settle it from the wallet on the bill.
+              </p>
+            )}
+
             {collectNow && (
               <>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {PAYMENT_MODES.filter((m) => m.value !== "insurance" && m.value !== "waiver")
+                  {PAYMENT_MODES.filter(
+                    (m) => m.value !== "insurance" && m.value !== "waiver" &&
+                           m.value !== "wallet"
+                  )
                     .map((option) => (
                       <button
                         key={option.value}
-                        onClick={() => setMode(option.value)}
+                        onClick={() => { setMode(option.value); setModeDetails({}); }}
                         className={cn(
                           "rounded-lg border px-2 py-2 text-xs font-medium transition",
                           mode === option.value
@@ -560,10 +867,14 @@ export function ReceptionCounter() {
                       </button>
                     ))}
                 </div>
-                {mode !== "cash" && (
-                  <Input value={reference} onChange={(e) => setReference(e.target.value)}
-                         placeholder="Reference / last 4 digits" />
-                )}
+                {/* Rendered from the server's own rules rather than a
+                    guess here, so the counter always asks for exactly what
+                    the API will insist on. */}
+                <PaymentModeFields
+                  mode={mode}
+                  values={modeDetails}
+                  onChange={setModeDetails}
+                />
               </>
             )}
 
@@ -576,7 +887,10 @@ export function ReceptionCounter() {
             <Button className="w-full" size="lg" disabled={!canSubmit || submitting}
                     onClick={submit}>
               {submitting ? <Loader2 className="animate-spin" /> : <Plus />}
-              Register &amp; bill {totalPaise > 0 ? formatINR(totalPaise) : ""}
+              Register &amp; bill{" "}
+              {(quote?.total_paise ?? totalPaise) > 0
+                ? formatINR(quote?.total_paise ?? totalPaise)
+                : ""}
             </Button>
           </CardContent>
         </Card>

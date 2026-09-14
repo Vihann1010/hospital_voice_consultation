@@ -1,13 +1,14 @@
 """Inpatient ward: admission, bed board, chart, charges, discharge."""
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession, get_ipd_service, require_roles
+from app.api.deps import CurrentUser, DbSession, get_ipd_service, require_permission
+from app.core.permissions import Permission
 from app.core.audit import client_ip, record as audit_record
 from app.core.logging import get_logger
 from app.models.enums import (
@@ -25,21 +26,29 @@ from app.schemas.ipd_schemas import (
     TransferRequest, VitalsOut, VitalsRequest, WardUpsert,
 )
 from app.services.ipd_service import IPDError, IPDService
+from app.core.clock import local_today
+from app.schemas.drug_chart_schemas import DrugCheckIn, DrugOrderIn, GiveNowIn
+from app.services.drug_chart_service import DrugChartError, DrugChartService
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/ipd", tags=["ipd"])
 
 Service = Annotated[IPDService, Depends(get_ipd_service)]
 
-# Nursing staff record observations, give drugs and write nursing notes all
-# shift. That is the bulk of ward work and is not clinical authority.
-WARD = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
+# Reading the ward — the board, a chart, a running bill — is everyday work
+# for anyone who can open a patient.
+WARD_READ = require_permission(Permission.PATIENT_READ)
+# Writing on it — observations, doses, bed moves, charges — is ward charting.
+# It used to sit behind the read permission, so any account could record a
+# patient's blood pressure. It is not clinical authority, but it is not
+# nothing either.
+WARD = require_permission(Permission.WARD_CHART)
 # Admitting, discharging, prescribing and diagnosing are the doctor's.
-CLINICAL = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+CLINICAL = require_permission(Permission.CONSULTATION_REVIEW)
 
 
 # --------------------------------------------------------------- ward board
-@router.get("/board", dependencies=[Depends(WARD)])
+@router.get("/board", dependencies=[Depends(WARD_READ)])
 async def ward_board(
     service: Service, department: Optional[Department] = Query(default=None)
 ) -> Dict[str, Any]:
@@ -47,7 +56,7 @@ async def ward_board(
     return {"wards": await service.ward_board(department=department)}
 
 
-@router.get("/census", dependencies=[Depends(WARD)])
+@router.get("/census", dependencies=[Depends(WARD_READ)])
 async def census(service: Service) -> Dict[str, Any]:
     return await service.census()
 
@@ -132,7 +141,7 @@ async def admit(
     return AdmissionOut.model_validate(admission)
 
 
-@router.get("/admissions", response_model=List[AdmissionOut], dependencies=[Depends(WARD)])
+@router.get("/admissions", response_model=List[AdmissionOut], dependencies=[Depends(WARD_READ)])
 async def active_admissions(
     service: Service, department: Optional[Department] = Query(default=None)
 ) -> List[AdmissionOut]:
@@ -140,7 +149,7 @@ async def active_admissions(
     return [AdmissionOut.model_validate(row) for row in rows]
 
 
-@router.get("/admissions/{admission_id}", dependencies=[Depends(WARD)])
+@router.get("/admissions/{admission_id}", dependencies=[Depends(WARD_READ)])
 async def admission_chart(admission_id: uuid.UUID, service: Service) -> Dict[str, Any]:
     """The whole bedside chart in one call.
 
@@ -180,6 +189,8 @@ async def admission_chart(admission_id: uuid.UUID, service: Service) -> Dict[str
         ],
         "notes": [NoteOut.model_validate(n).model_dump() for n in admission.notes],
         "bill": await service.running_bill(admission_id),
+        "leaves": [_leave_out(leave) for leave in await service.leaves(admission_id)],
+        "readmission_of": await service.readmission_summary(admission),
     }
 
 
@@ -226,7 +237,7 @@ async def record_vitals(
     return {"vitals": VitalsOut.model_validate(record).model_dump(), "news2": score}
 
 
-@router.get("/alerts/deteriorating", dependencies=[Depends(WARD)])
+@router.get("/alerts/deteriorating", dependencies=[Depends(WARD_READ)])
 async def deteriorating(
     service: Service,
     department: Optional[Department] = Query(default=None),
@@ -240,58 +251,55 @@ async def deteriorating(
 
 
 # -------------------------------------------------------------- medications
+# --------------------------------------------------------------- drug chart
+def _chart_error(exc: DrugChartError) -> HTTPException:
+    return HTTPException(exc.status_code, str(exc))
+
+
+@router.post("/admissions/{admission_id}/medications/check", dependencies=[Depends(CLINICAL)])
+async def check_medication(
+    admission_id: uuid.UUID, payload: DrugCheckIn, session: DbSession
+) -> Dict[str, Any]:
+    """The safety alerts a new order would raise, before it is placed."""
+    try:
+        return await DrugChartService(session).check(admission_id, drug_name=payload.drug_name)
+    except DrugChartError as exc:
+        raise _chart_error(exc) from exc
+
+
 @router.post("/admissions/{admission_id}/medications", response_model=MedicationOrderOut,
              status_code=201, dependencies=[Depends(CLINICAL)])
 async def order_medication(
-    admission_id: uuid.UUID, payload: MedicationOrderRequest, service: Service,
-    user: CurrentUser,
+    admission_id: uuid.UUID, payload: DrugOrderIn, session: DbSession, user: CurrentUser,
 ) -> MedicationOrderOut:
-    """Prescribe a drug for the stay, and lay out the doses it is due.
+    """Prescribe a medicine for the stay and lay out its doses.
 
-    The administration rows are created up front for the next 48 hours so the
-    drug chart shows what is due, not only what has been given — a dose that
-    was never scheduled is a dose nobody notices was missed.
+    Checked for allergies, duplicates and interactions against the admission,
+    the same way an OPD prescription is. Doses are scheduled in hospital time
+    from the frequency's round times unless explicit times are given.
     """
-    admission = await service.session.get(Admission, admission_id)
-    if admission is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+    try:
+        order = await DrugChartService(session).order(
+            admission_id,
+            payload=payload.model_dump(exclude={"acknowledged_alerts"}),
+            acknowledged=payload.acknowledged_alerts,
+            user=user,
+        )
+    except DrugChartError as exc:
+        await session.rollback()
+        raise _chart_error(exc) from exc
+    return MedicationOrderOut.model_validate(order)
 
-    now = datetime.now(timezone.utc)
-    order = MedicationOrder(
-        admission_id=admission_id, started_at=now,
-        ordered_by_name=user.full_name, **payload.model_dump(),
-    )
-    service.session.add(order)
-    await service.session.flush()
 
-    if payload.is_stat:
-        service.session.add(MedicationAdministration(order_id=order.id, due_at=now))
-    elif payload.schedule_times and not payload.is_sos:
-        for day_offset in range(2):
-            for clock in payload.schedule_times:
-                try:
-                    hour, minute = (int(part) for part in clock.split(":")[:2])
-                except (ValueError, IndexError):
-                    continue
-                due = (now + timedelta(days=day_offset)).replace(
-                    hour=hour, minute=minute, second=0, microsecond=0
-                )
-                if due >= now:
-                    service.session.add(
-                        MedicationAdministration(order_id=order.id, due_at=due)
-                    )
-
-    await service.session.commit()
-    # The response includes the dose schedule, so the relationship must be
-    # loaded explicitly — serialising it would otherwise trigger a lazy load
-    # outside async context and fail.
-    refreshed = await service.session.execute(
-        select(MedicationOrder)
-        .options(selectinload(MedicationOrder.administrations))
-        .where(MedicationOrder.id == order.id)
-        .execution_options(populate_existing=True)
-    )
-    return MedicationOrderOut.model_validate(refreshed.scalar_one())
+@router.get("/admissions/{admission_id}/drug-chart", dependencies=[Depends(WARD_READ)])
+async def drug_chart(
+    admission_id: uuid.UUID, session: DbSession, on: Optional[date] = Query(default=None),
+) -> Dict[str, Any]:
+    """One day of the drug chart. Tops up the dose schedule as it reads."""
+    try:
+        return await DrugChartService(session).chart(admission_id, on or local_today())
+    except DrugChartError as exc:
+        raise _chart_error(exc) from exc
 
 
 @router.post("/medications/{administration_id}/administer", dependencies=[Depends(WARD)])
@@ -305,39 +313,44 @@ async def administer(
     significant as one given, and a blank is indistinguishable from a dose
     nobody got round to signing.
     """
-    dose = await session.get(MedicationAdministration, administration_id)
-    if dose is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dose not found")
-    if dose.was_given is not None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This dose is already signed for.")
-    if not payload.was_given and not (payload.omission_reason or "").strip():
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "A dose that was not given needs a reason recorded.",
+    try:
+        dose = await DrugChartService(session).administer(
+            administration_id, was_given=payload.was_given,
+            omission_reason=payload.omission_reason, notes=payload.notes, user=user,
         )
-
-    dose.was_given = payload.was_given
-    dose.given_at = datetime.now(timezone.utc)
-    dose.given_by_id = user.id
-    dose.given_by_name = user.full_name
-    dose.omission_reason = payload.omission_reason
-    dose.notes = payload.notes
-    await session.commit()
+    except DrugChartError as exc:
+        await session.rollback()
+        raise _chart_error(exc) from exc
     return {"id": str(dose.id), "was_given": dose.was_given,
             "given_at": dose.given_at.isoformat()}
 
 
+@router.post("/medications/{order_id}/give", dependencies=[Depends(WARD)])
+async def give_as_needed(
+    order_id: uuid.UUID, session: DbSession, user: CurrentUser,
+    payload: Optional[GiveNowIn] = None,
+) -> Dict[str, Any]:
+    """Record a when-needed (SOS) dose given now."""
+    try:
+        dose = await DrugChartService(session).give_as_needed(
+            order_id, notes=payload.notes if payload else None, user=user
+        )
+    except DrugChartError as exc:
+        await session.rollback()
+        raise _chart_error(exc) from exc
+    return {"id": str(dose.id), "given_at": dose.given_at.isoformat()}
+
+
 @router.post("/medications/{order_id}/stop", dependencies=[Depends(CLINICAL)])
 async def stop_medication(
-    order_id: uuid.UUID, session: DbSession, reason: str = Query(..., min_length=2)
+    order_id: uuid.UUID, session: DbSession, user: CurrentUser,
+    reason: str = Query(..., min_length=2),
 ) -> Dict[str, Any]:
-    order = await session.get(MedicationOrder, order_id)
-    if order is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
-    order.status = MedicationStatus.STOPPED
-    order.stopped_at = datetime.now(timezone.utc)
-    order.stop_reason = reason
-    await session.commit()
+    try:
+        order = await DrugChartService(session).stop(order_id, reason=reason, user=user)
+    except DrugChartError as exc:
+        await session.rollback()
+        raise _chart_error(exc) from exc
     return {"id": str(order.id), "status": order.status.value}
 
 
@@ -376,7 +389,7 @@ async def post_charge(
     return ChargeOut.model_validate(charge)
 
 
-@router.get("/admissions/{admission_id}/bill", dependencies=[Depends(WARD)])
+@router.get("/admissions/{admission_id}/bill", dependencies=[Depends(WARD_READ)])
 async def running_bill(admission_id: uuid.UUID, service: Service) -> Dict[str, Any]:
     """What the stay has cost so far — the question families ask daily."""
     try:
@@ -396,8 +409,6 @@ async def accrue(admission_id: uuid.UUID, service: Service) -> Dict[str, Any]:
     return {"posted": len(posted),
             "bill": await service.running_bill(admission_id)}
 
-
-<<<<<<< HEAD
 # ----------------------------------------------------------- final billing
 @router.post("/admissions/{admission_id}/invoice", dependencies=[Depends(WARD)])
 async def raise_final_invoice(
@@ -435,7 +446,7 @@ async def raise_final_invoice(
     return {"invoice": InvoiceOut.model_validate(invoice).model_dump(), **summary}
 
 
-@router.get("/patients/search", dependencies=[Depends(WARD)])
+@router.get("/patients/search", dependencies=[Depends(WARD_READ)])
 async def search_patients_for_admission(
     session: DbSession,
     q: str = Query(..., min_length=1, max_length=120),
@@ -491,9 +502,6 @@ async def register_patient_for_admission(
             "age": patient.age, "gender": patient.gender.value,
             "phone_number": patient.phone_number}
 
-
-=======
->>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
 # ---------------------------------------------------------------- discharge
 @router.post("/admissions/{admission_id}/discharge/initiate",
              dependencies=[Depends(CLINICAL)])
@@ -704,3 +712,128 @@ async def draft_handover(admission_id: uuid.UUID, service: Service) -> Dict[str,
             f"The handover could not be drafted right now ({exc}).",
         ) from exc
     return draft.model_dump()
+
+
+# -------------------------------------------------------------------- leave
+from datetime import date as _date  # noqa: E402
+
+from pydantic import BaseModel as _Model, Field as _Field  # noqa: E402
+
+CHARGES_ADMIN = require_permission(Permission.MASTER_MANAGE)
+
+
+class LeaveRequest(_Model):
+    reason: str = _Field(min_length=3, max_length=1000)
+    expected_return_on: Optional[_date] = None
+    bed_retained: bool = True
+
+
+class ReturnRequest(_Model):
+    bed_id: Optional[uuid.UUID] = None
+    note: Optional[str] = _Field(default=None, max_length=1000)
+
+
+def _leave_out(leave) -> Dict[str, Any]:
+    return {
+        "id": str(leave.id),
+        "started_at": leave.started_at.isoformat(),
+        "expected_return_on": leave.expected_return_on.isoformat() if leave.expected_return_on else None,
+        "reason": leave.reason,
+        "bed_retained": leave.bed_retained,
+        "released_bed": f"{leave.released_ward_name} {leave.released_bed_label}" if leave.released_bed_label else None,
+        "started_by_name": leave.started_by_name,
+        "returned_at": leave.returned_at.isoformat() if leave.returned_at else None,
+        "returned_by_name": leave.returned_by_name,
+        "return_note": leave.return_note,
+    }
+
+
+@router.post("/admissions/{admission_id}/leave", dependencies=[Depends(WARD)])
+async def start_leave(
+    admission_id: uuid.UUID, payload: LeaveRequest, service: Service, user: CurrentUser, request: Request
+) -> Dict[str, Any]:
+    """Send the patient home on leave. They stay admitted; the bed is kept unless released."""
+    try:
+        leave = await service.start_leave(
+            admission_id, reason=payload.reason, expected_return_on=payload.expected_return_on,
+            bed_retained=payload.bed_retained, started_by_name=user.full_name,
+        )
+        await service.session.commit()
+    except IPDError as exc:
+        await service.session.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    admission = await service.session.get(Admission, admission_id)
+    await audit_record(
+        AuditAction.LEAVE_START,
+        actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
+        entity_type="admission", entity_id=admission_id, patient_id=admission.patient_id if admission else None,
+        ip_address=client_ip(request),
+        detail={"bed_retained": payload.bed_retained, "reason": payload.reason,
+                "expected_return_on": payload.expected_return_on.isoformat() if payload.expected_return_on else None},
+    )
+    return _leave_out(leave)
+
+
+@router.post("/admissions/{admission_id}/return", dependencies=[Depends(WARD)])
+async def end_leave(
+    admission_id: uuid.UUID, payload: ReturnRequest, service: Service, user: CurrentUser, request: Request
+) -> Dict[str, Any]:
+    """The patient is back from leave."""
+    try:
+        leave, missed = await service.end_leave(
+            admission_id, bed_id=payload.bed_id, note=payload.note, returned_by_name=user.full_name
+        )
+        await service.session.commit()
+    except IPDError as exc:
+        await service.session.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    admission = await service.session.get(Admission, admission_id)
+    await audit_record(
+        AuditAction.LEAVE_RETURN,
+        actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
+        entity_type="admission", entity_id=admission_id, patient_id=admission.patient_id if admission else None,
+        ip_address=client_ip(request), detail={"missed_doses_recorded": missed},
+    )
+    return {**_leave_out(leave), "missed_doses_recorded": missed}
+
+
+# ------------------------------------------------------------ room charges
+def _run_out(run) -> Dict[str, Any]:
+    return {
+        "id": str(run.id), "run_on": run.run_on.isoformat(), "status": run.status,
+        "started_at": run.started_at.isoformat(),
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "summary": run.summary or {}, "error": run.error, "triggered_by": run.triggered_by,
+    }
+
+
+@router.get("/room-charges/runs", dependencies=[Depends(WARD_READ)])
+async def room_charge_runs(service: Service, limit: int = Query(default=14, ge=1, le=90)) -> Dict[str, Any]:
+    """The recent morning room-charge runs, newest first."""
+    from app.core.config import settings
+    from app.ipd.room_charges import JOB
+    from app.models.job_run import JobRun
+
+    from sqlalchemy import select as _select
+
+    runs = (await service.session.execute(
+        _select(JobRun).where(JobRun.job == JOB).order_by(JobRun.started_at.desc()).limit(limit)
+    )).scalars().all()
+    return {"run_at": settings.BED_CHARGE_RUN_AT, "enabled": settings.BED_CHARGE_WORKER_ENABLED,
+            "runs": [_run_out(run) for run in runs]}
+
+
+@router.post("/room-charges/run", dependencies=[Depends(CHARGES_ADMIN)])
+async def run_room_charges_now(user: CurrentUser, request: Request) -> Dict[str, Any]:
+    """Post room charges now. Safe to repeat: days already charged are skipped."""
+    from app.ipd.room_charges import run_room_charges
+
+    run = await run_room_charges(triggered_by=user.full_name)
+    await audit_record(
+        AuditAction.ROOM_CHARGES_RUN,
+        actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
+        entity_type="job_run", entity_id=run.id, ip_address=client_ip(request),
+        detail={"status": run.status, **{k: v for k, v in (run.summary or {}).items() if k != "failed"}},
+    )
+    return _run_out(run)
+

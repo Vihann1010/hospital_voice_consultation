@@ -1,0 +1,438 @@
+==============================================================================
+SATYA HOSPITAL PLATFORM - STAFF ROLES AND WHAT EACH ONE CAN DO
+==============================================================================
+
+Generated 2026-09-13 from app/core/permissions.py,
+which is the single place these rules live. Every API route names the
+permission it needs, so this document and the running system cannot
+disagree. Regenerate it with scripts/generate_roles_doc.py after any
+change to the catalogue.
+
+7 roles, 37 permissions.
+
+------------------------------------------------------------------------------
+ADMIN  -  The system owner.
+------------------------------------------------------------------------------
+  Everything, including staff accounts and system settings. Held by one or
+  two people, not used for daily work.
+
+  CAN (37 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Read the audit trail of who opened and changed what
+    + Sign off a consultation as the treating doctor
+    + Use the AI copilot: red flags, differentials, suggestions
+    + Order investigations
+    + Write and issue a prescription
+    + Send a prescription to the patient over WhatsApp
+    + Create and edit clinical templates
+    + Write in the Visit Pad and other clinical documents
+    + Sign a clinical document, or sign a corrected version
+    + Change the sections of a department's or the hospital's pad
+    + Record observations and doses, change bed status, move a patient's bed
+    + Write and sign the nursing assessment and nursing notes
+    + Book, reschedule and cancel an operation theatre case
+    + Record theatre times: wheel-in, incision, closure, wheel-out
+    + Register laboratory tests for a patient
+    + Enter laboratory results and mark samples collected
+    + Verify laboratory results, and reopen a verified one
+    + Edit the lab test list, units and reference ranges
+    + Upload a scanned or external report against a patient
+    + System administration, including staff accounts
+    + Look up consultants and referring doctors
+    + Edit the consultant register and the registration form
+    + Register a new patient and issue a UHID
+    + Open a visit and allot a queue token
+    + Raise a bill
+    + Read and reprint a bill
+    + Take payment and run the cash drawer
+    + See the appointment diary and the day's queue board
+    + Book, move and cancel appointments; check patients in
+    + Return money to a patient
+    + Cancel a bill that was already raised
+    + See hospital-wide revenue and collection figures
+    + Change the price list
+
+------------------------------------------------------------------------------
+MANAGER  -  The hospital's money and oversight.
+------------------------------------------------------------------------------
+  Sees revenue and collections, sets the price list, owns the consultant
+  register and the registration form, reads the audit trail. Deliberately
+  cannot work the till or register a patient - oversight is not operation.
+
+  CAN (11 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Read the audit trail of who opened and changed what
+    + Look up consultants and referring doctors
+    + Edit the consultant register and the registration form
+    + Read and reprint a bill
+    + See the appointment diary and the day's queue board
+    + See hospital-wide revenue and collection figures
+    + Change the price list
+
+  CANNOT:
+    - Sign off a consultation as the treating doctor
+    - Use the AI copilot: red flags, differentials, suggestions
+    - Order investigations
+    - Write and issue a prescription
+    - Send a prescription to the patient over WhatsApp
+    - Create and edit clinical templates
+    - Write in the Visit Pad and other clinical documents
+    - Sign a clinical document, or sign a corrected version
+    - Change the sections of a department's or the hospital's pad
+    - Record observations and doses, change bed status, move a patient's bed
+    - Write and sign the nursing assessment and nursing notes
+    - Book, reschedule and cancel an operation theatre case
+    - Record theatre times: wheel-in, incision, closure, wheel-out
+    - Register laboratory tests for a patient
+    - Enter laboratory results and mark samples collected
+    - Verify laboratory results, and reopen a verified one
+    - Edit the lab test list, units and reference ranges
+    - Upload a scanned or external report against a patient
+    - System administration, including staff accounts
+    - Register a new patient and issue a UHID
+    - Open a visit and allot a queue token
+    - Raise a bill
+    - Take payment and run the cash drawer
+    - Book, move and cancel appointments; check patients in
+    - Return money to a patient
+    - Cancel a bill that was already raised
+
+------------------------------------------------------------------------------
+DOCTOR  -  Clinical authority.
+------------------------------------------------------------------------------
+  Consults, prescribes, orders investigations, uses the copilot, signs off
+  records. Can cover the counter. Deliberately cannot reprice a service,
+  refund, cancel a bill, or see hospital-wide revenue - treatment decisions
+  are not pricing decisions.
+
+  CAN (28 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Sign off a consultation as the treating doctor
+    + Use the AI copilot: red flags, differentials, suggestions
+    + Order investigations
+    + Write and issue a prescription
+    + Send a prescription to the patient over WhatsApp
+    + Create and edit clinical templates
+    + Write in the Visit Pad and other clinical documents
+    + Sign a clinical document, or sign a corrected version
+    + Record observations and doses, change bed status, move a patient's bed
+    + Book, reschedule and cancel an operation theatre case
+    + Record theatre times: wheel-in, incision, closure, wheel-out
+    + Register laboratory tests for a patient
+    + Enter laboratory results and mark samples collected
+    + Verify laboratory results, and reopen a verified one
+    + Edit the lab test list, units and reference ranges
+    + Upload a scanned or external report against a patient
+    + Look up consultants and referring doctors
+    + Register a new patient and issue a UHID
+    + Open a visit and allot a queue token
+    + Raise a bill
+    + Read and reprint a bill
+    + Take payment and run the cash drawer
+    + See the appointment diary and the day's queue board
+    + Book, move and cancel appointments; check patients in
+
+  CANNOT:
+    - Read the audit trail of who opened and changed what
+    - Change the sections of a department's or the hospital's pad
+    - Write and sign the nursing assessment and nursing notes
+    - System administration, including staff accounts
+    - Edit the consultant register and the registration form
+    - Return money to a patient
+    - Cancel a bill that was already raised
+    - See hospital-wide revenue and collection figures
+    - Change the price list
+
+------------------------------------------------------------------------------
+SUPERVISOR  -  The counter's escalation point.
+------------------------------------------------------------------------------
+  Everything reception does, plus the two actions that undo counter work:
+  refunds and bill cancellations. No clinical authority.
+
+  CAN (17 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Record observations and doses, change bed status, move a patient's bed
+    + Register laboratory tests for a patient
+    + Upload a scanned or external report against a patient
+    + Look up consultants and referring doctors
+    + Register a new patient and issue a UHID
+    + Open a visit and allot a queue token
+    + Raise a bill
+    + Read and reprint a bill
+    + Take payment and run the cash drawer
+    + See the appointment diary and the day's queue board
+    + Book, move and cancel appointments; check patients in
+    + Return money to a patient
+    + Cancel a bill that was already raised
+
+  CANNOT:
+    - Read the audit trail of who opened and changed what
+    - Sign off a consultation as the treating doctor
+    - Use the AI copilot: red flags, differentials, suggestions
+    - Order investigations
+    - Write and issue a prescription
+    - Send a prescription to the patient over WhatsApp
+    - Create and edit clinical templates
+    - Write in the Visit Pad and other clinical documents
+    - Sign a clinical document, or sign a corrected version
+    - Change the sections of a department's or the hospital's pad
+    - Write and sign the nursing assessment and nursing notes
+    - Book, reschedule and cancel an operation theatre case
+    - Record theatre times: wheel-in, incision, closure, wheel-out
+    - Enter laboratory results and mark samples collected
+    - Verify laboratory results, and reopen a verified one
+    - Edit the lab test list, units and reference ranges
+    - System administration, including staff accounts
+    - Edit the consultant register and the registration form
+    - See hospital-wide revenue and collection figures
+    - Change the price list
+
+------------------------------------------------------------------------------
+RECEPTION  -  The front desk.
+------------------------------------------------------------------------------
+  Registers patients, books appointments, raises bills, takes payment, runs
+  the cash drawer, uploads reports. Cannot refund, cancel a bill, reprice
+  a service, or see hospital-wide revenue.
+
+  CAN (15 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Record observations and doses, change bed status, move a patient's bed
+    + Register laboratory tests for a patient
+    + Upload a scanned or external report against a patient
+    + Look up consultants and referring doctors
+    + Register a new patient and issue a UHID
+    + Open a visit and allot a queue token
+    + Raise a bill
+    + Read and reprint a bill
+    + Take payment and run the cash drawer
+    + See the appointment diary and the day's queue board
+    + Book, move and cancel appointments; check patients in
+
+  CANNOT:
+    - Read the audit trail of who opened and changed what
+    - Sign off a consultation as the treating doctor
+    - Use the AI copilot: red flags, differentials, suggestions
+    - Order investigations
+    - Write and issue a prescription
+    - Send a prescription to the patient over WhatsApp
+    - Create and edit clinical templates
+    - Write in the Visit Pad and other clinical documents
+    - Sign a clinical document, or sign a corrected version
+    - Change the sections of a department's or the hospital's pad
+    - Write and sign the nursing assessment and nursing notes
+    - Book, reschedule and cancel an operation theatre case
+    - Record theatre times: wheel-in, incision, closure, wheel-out
+    - Enter laboratory results and mark samples collected
+    - Verify laboratory results, and reopen a verified one
+    - Edit the lab test list, units and reference ranges
+    - System administration, including staff accounts
+    - Edit the consultant register and the registration form
+    - Return money to a patient
+    - Cancel a bill that was already raised
+    - See hospital-wide revenue and collection figures
+    - Change the price list
+
+------------------------------------------------------------------------------
+NURSE  -  The ward.
+------------------------------------------------------------------------------
+  Records observations and doses, and writes and signs the nursing
+  assessment and shift notes. Reads the doctor's notes. Cannot prescribe,
+  admit, discharge, bill, or sign a doctor's document.
+
+  CAN (11 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Record observations and doses, change bed status, move a patient's bed
+    + Write and sign the nursing assessment and nursing notes
+    + Record theatre times: wheel-in, incision, closure, wheel-out
+    + Register laboratory tests for a patient
+    + Upload a scanned or external report against a patient
+    + Look up consultants and referring doctors
+    + See the appointment diary and the day's queue board
+
+  CANNOT:
+    - Read the audit trail of who opened and changed what
+    - Sign off a consultation as the treating doctor
+    - Use the AI copilot: red flags, differentials, suggestions
+    - Order investigations
+    - Write and issue a prescription
+    - Send a prescription to the patient over WhatsApp
+    - Create and edit clinical templates
+    - Write in the Visit Pad and other clinical documents
+    - Sign a clinical document, or sign a corrected version
+    - Change the sections of a department's or the hospital's pad
+    - Book, reschedule and cancel an operation theatre case
+    - Enter laboratory results and mark samples collected
+    - Verify laboratory results, and reopen a verified one
+    - Edit the lab test list, units and reference ranges
+    - System administration, including staff accounts
+    - Edit the consultant register and the registration form
+    - Register a new patient and issue a UHID
+    - Open a visit and allot a queue token
+    - Raise a bill
+    - Read and reprint a bill
+    - Take payment and run the cash drawer
+    - Book, move and cancel appointments; check patients in
+    - Return money to a patient
+    - Cancel a bill that was already raised
+    - See hospital-wide revenue and collection figures
+    - Change the price list
+
+------------------------------------------------------------------------------
+LAB  -  The laboratory bench.
+------------------------------------------------------------------------------
+  Registers samples, marks them collected and enters results, including
+  culture sensitivity. Cannot verify a result, change a reference range,
+  raise a bill or take payment.
+
+  CAN (9 of 37):
+    + Open a patient's record and search the register
+    + Read consultations, intake summaries and transcripts
+    + Read uploaded investigation reports
+    + Read issued prescriptions
+    + Register laboratory tests for a patient
+    + Enter laboratory results and mark samples collected
+    + Upload a scanned or external report against a patient
+    + Look up consultants and referring doctors
+    + See the appointment diary and the day's queue board
+
+  CANNOT:
+    - Read the audit trail of who opened and changed what
+    - Sign off a consultation as the treating doctor
+    - Use the AI copilot: red flags, differentials, suggestions
+    - Order investigations
+    - Write and issue a prescription
+    - Send a prescription to the patient over WhatsApp
+    - Create and edit clinical templates
+    - Write in the Visit Pad and other clinical documents
+    - Sign a clinical document, or sign a corrected version
+    - Change the sections of a department's or the hospital's pad
+    - Record observations and doses, change bed status, move a patient's bed
+    - Write and sign the nursing assessment and nursing notes
+    - Book, reschedule and cancel an operation theatre case
+    - Record theatre times: wheel-in, incision, closure, wheel-out
+    - Verify laboratory results, and reopen a verified one
+    - Edit the lab test list, units and reference ranges
+    - System administration, including staff accounts
+    - Edit the consultant register and the registration form
+    - Register a new patient and issue a UHID
+    - Open a visit and allot a queue token
+    - Raise a bill
+    - Read and reprint a bill
+    - Take payment and run the cash drawer
+    - Book, move and cancel appointments; check patients in
+    - Return money to a patient
+    - Cancel a bill that was already raised
+    - See hospital-wide revenue and collection figures
+    - Change the price list
+
+==============================================================================
+AT A GLANCE
+==============================================================================
+
+                                                                              admin    manager     doctor  superviso  reception      nurse        lab
+                                                                          ---------  ---------  ---------  ---------  ---------  ---------  ---------
+Open a patient's record and search the register                                 YES        YES        YES        YES        YES        YES        YES
+Read consultations, intake summaries and transcripts                            YES        YES        YES        YES        YES        YES        YES
+Read uploaded investigation reports                                             YES        YES        YES        YES        YES        YES        YES
+Read issued prescriptions                                                       YES        YES        YES        YES        YES        YES        YES
+Read the audit trail of who opened and changed what                             YES        YES          .          .          .          .          .
+Sign off a consultation as the treating doctor                                  YES          .        YES          .          .          .          .
+Use the AI copilot: red flags, differentials, suggestions                       YES          .        YES          .          .          .          .
+Order investigations                                                            YES          .        YES          .          .          .          .
+Write and issue a prescription                                                  YES          .        YES          .          .          .          .
+Send a prescription to the patient over WhatsApp                                YES          .        YES          .          .          .          .
+Create and edit clinical templates                                              YES          .        YES          .          .          .          .
+Write in the Visit Pad and other clinical documents                             YES          .        YES          .          .          .          .
+Sign a clinical document, or sign a corrected version                           YES          .        YES          .          .          .          .
+Change the sections of a department's or the hospital's pad                     YES          .          .          .          .          .          .
+Record observations and doses, change bed status, move a patient's bed          YES          .        YES        YES        YES        YES          .
+Write and sign the nursing assessment and nursing notes                         YES          .          .          .          .        YES          .
+Book, reschedule and cancel an operation theatre case                           YES          .        YES          .          .          .          .
+Record theatre times: wheel-in, incision, closure, wheel-out                    YES          .        YES          .          .        YES          .
+Register laboratory tests for a patient                                         YES          .        YES        YES        YES        YES        YES
+Enter laboratory results and mark samples collected                             YES          .        YES          .          .          .        YES
+Verify laboratory results, and reopen a verified one                            YES          .        YES          .          .          .          .
+Edit the lab test list, units and reference ranges                              YES          .        YES          .          .          .          .
+Upload a scanned or external report against a patient                           YES          .        YES        YES        YES        YES        YES
+System administration, including staff accounts                                 YES          .          .          .          .          .          .
+Look up consultants and referring doctors                                       YES        YES        YES        YES        YES        YES        YES
+Edit the consultant register and the registration form                          YES        YES          .          .          .          .          .
+Register a new patient and issue a UHID                                         YES          .        YES        YES        YES          .          .
+Open a visit and allot a queue token                                            YES          .        YES        YES        YES          .          .
+Raise a bill                                                                    YES          .        YES        YES        YES          .          .
+Read and reprint a bill                                                         YES        YES        YES        YES        YES          .          .
+Take payment and run the cash drawer                                            YES          .        YES        YES        YES          .          .
+See the appointment diary and the day's queue board                             YES        YES        YES        YES        YES        YES        YES
+Book, move and cancel appointments; check patients in                           YES          .        YES        YES        YES          .          .
+Return money to a patient                                                       YES          .          .        YES          .          .          .
+Cancel a bill that was already raised                                           YES          .          .        YES          .          .          .
+See hospital-wide revenue and collection figures                                YES        YES          .          .          .          .          .
+Change the price list                                                           YES        YES          .          .          .          .          .
+
+==============================================================================
+NOTES
+==============================================================================
+
+  * A doctor cannot refund or reprice. If a refund is needed and no supervisor
+    is on shift it takes an admin, so create at least one supervisor account
+    before go-live.
+
+  * A manager cannot register a patient or take payment. If the same person
+    does both jobs, give them two accounts rather than widening the manager
+    role.
+
+  * Reception and supervisor both land on the reception terminal at login;
+    everyone else lands on the clinical dashboard.
+
+  * Earlier versions had a single 'staff' role. Those users are now
+    'reception', with exactly the permissions they held before.
+
+  * Consultant records are separate from logins. A visiting doctor can appear
+    on a prescription without ever having an account, and deactivating an
+    account does not remove the consultant from the history of patients they
+    treated.
+
+  * Ward charting (observations, doses, bed moves) is held by nurses and,
+    for now, by doctors, supervisors and reception too, because the ward has
+    been run on those accounts. The nursing documents themselves are nurses'
+    only. Decide whether reception should keep charting once nurse accounts
+    exist.
+
+  * A nurse signs in to the ward terminal, not the clinical dashboard.
+
+  * A signed clinical document is never edited, by anyone. A correction is a
+    new signed version with a reason, and the original stays readable. This
+    holds for admins too.
+
+  * A doctor can rearrange their own Visit Pad. Changing the pad for a whole
+    department or the hospital is an admin action, because it changes what
+    prints on every doctor's documents.
+
+  * A lab report goes out only when a doctor verifies it. The lab role types
+    results; the pathologist's account (a doctor) verifies them. A test whose
+    reference ranges were edited cannot be verified until a doctor reviews
+    the ranges again.
+
+  * A lab technician signs in to the laboratory terminal (/lab).
+
+  * A receptionist may book and cancel an appointment but not cancel a bill.
+    Freeing a slot costs the hospital nothing; unpicking a raised invoice is
+    an accounting act, which is why it sits with the supervisor.

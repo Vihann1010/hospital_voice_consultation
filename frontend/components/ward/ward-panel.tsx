@@ -15,6 +15,7 @@
  * out with an unsigned summary or an unpaid bill.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle, ArrowRight, BedDouble, Check, Droplet, FileText, IndianRupee,
@@ -431,9 +432,22 @@ function BedSheet({
             {occupant.ip_number} · {ward.name} {bed.label} · Day{" "}
             {dayOfStay(occupant.admitted_at)} · {occupant.doctor}
           </p>
+          {occupant.on_leave && (
+            <p className="mt-1 text-sm font-medium text-marigold-deep">
+              On leave{occupant.expected_return_on ? ` · expected back ${occupant.expected_return_on}` : ""}
+            </p>
+          )}
           {occupant.diagnosis && (
             <p className="mt-1 text-sm text-ink">{occupant.diagnosis}</p>
           )}
+          {/* Notes, observations and the discharge summary live on the case
+              sheet. This panel stays the quick bedside view. */}
+          <Link
+            href={`/ward/admissions/${occupant.admission_id}`}
+            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-pine hover:underline"
+          >
+            Open case sheet <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
         <button onClick={onClose} aria-label="Close"
                 className="rounded p-1 text-ink-faint hover:text-clay">
@@ -748,6 +762,9 @@ export function WardPanel() {
                           <p className="mt-0.5 truncate text-[10px] text-ink-faint">
                             {bed.occupant.diagnosis || bed.occupant.ip_number}
                           </p>
+                          {bed.occupant.on_leave && (
+                            <p className="mt-0.5 text-[10px] font-semibold text-marigold-deep">On leave</p>
+                          )}
                         </div>
                       ) : (
                         <div className="mt-1 flex flex-1 flex-col items-center justify-center">
