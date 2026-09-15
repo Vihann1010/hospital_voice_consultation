@@ -9,22 +9,17 @@ import {
   Activity,
   BedDouble,
   CheckCircle2,
-  ClipboardList,
   FileImage,
   FlaskConical,
-  Receipt,
   LayoutDashboard,
   LogOut,
   Menu,
   Scissors,
   Settings,
   ShieldCheck,
-  Contact,
   Stethoscope,
   Landmark,
   UtensilsCrossed,
-  Salad,
-  UserCog,
   Users,
   Wallet,
   X,
@@ -65,14 +60,9 @@ const NAV: {
   { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
     roles: ["admin", "manager", "doctor", "supervisor", "reception"] },
   { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
-  // Staff accounts are administration, not daily work: only an admin sees it.
-  // The operation list sets theatre prices: kept by management.
+  // Consultants, operation list, room charges, diet list, pad layouts and staff
+  // accounts are all opened from the Settings page, filtered there by role.
   { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "doctor"] },
-  { href: "/settings/consultants", label: "Consultants", icon: Contact, roles: ["admin", "manager"] },
-  { href: "/settings/theatre", label: "Operation list", icon: ClipboardList, roles: ["admin", "manager"] },
-  { href: "/settings/room-charges", label: "Room charges", icon: Receipt, roles: ["admin", "manager"] },
-  { href: "/settings/diet-modes", label: "Diet list", icon: Salad, roles: ["admin", "manager"] },
-  { href: "/settings/users", label: "Staff accounts", icon: UserCog, adminOnly: true },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
