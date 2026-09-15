@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { Milestone, Surgery, TheatreDocumentStatus, TheatreRoom } from "@/lib/theatreTypes";
+import type { Milestone, Surgery, TheatreDocumentStatus, TheatreRoom } from "@/lib/types/theatre";
 import {
   MILESTONES,
   SURGERY_STATUS_LABEL,
@@ -33,7 +33,7 @@ import {
   fromHospitalInput,
   minutesLabel,
   toHospitalInput,
-} from "@/lib/theatreTypes";
+} from "@/lib/types/theatre";
 import { formatDateTime, formatHospitalDate, formatHospitalTime } from "@/lib/format";
 import { VisitPad } from "@/components/pad/visit-pad";
 import { PatientForms } from "@/components/pad/patient-forms";

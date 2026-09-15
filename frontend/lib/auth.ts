@@ -10,7 +10,7 @@
  * Serve over HTTPS in production so the cookie is sent with `Secure`.
  */
 import { API_URL } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { User } from "@/lib/types/core";
 
 export const TOKEN_COOKIE = "satya_staff_token";
 

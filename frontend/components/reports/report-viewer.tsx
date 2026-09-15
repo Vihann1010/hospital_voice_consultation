@@ -35,8 +35,8 @@ import type {
   ReportColumn,
   ReportDefinition,
   ReportResult,
-} from "@/lib/emrTypes";
-import { formatINR } from "@/lib/emrTypes";
+} from "@/lib/types/emr";
+import { formatINR } from "@/lib/types/emr";
 import { formatDate, formatDateTime, hospitalToday, titleCase } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -28,7 +28,7 @@ import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { CashCounter } from "@/components/finance/cash-counter";
 import { staffApi } from "@/lib/staffApi";
-import type { Visit } from "@/lib/emrTypes";
+import type { Visit } from "@/lib/types/emr";
 import { formatFullDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

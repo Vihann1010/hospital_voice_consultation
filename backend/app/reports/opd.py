@@ -41,6 +41,7 @@ from app.models.enums import (
 )
 from app.models.patient import Patient
 from app.reports.definitions import Column, ColumnType, ReportSpec, register
+from app.reports.sources import invoice_sources
 
 M = ColumnType.MONEY
 T = ColumnType.TEXT
@@ -95,6 +96,9 @@ async def _cash_ledger(
         # Credit spent against a bill is not cash arriving; it was banked on
         # the day it was deposited, and the deposit is listed below.
         Payment.mode != PaymentMode.WALLET,
+        # Nor is an insurer's share put on the bill; that money arrives later
+        # as a claim settlement, and never through a drawer.
+        Payment.mode != PaymentMode.INSURANCE,
     ]
     if user_name:
         conditions.append(Payment.received_by_name == user_name)
@@ -149,7 +153,7 @@ async def _cash_ledger(
             "patient_name": patient.name,
             "uhid": patient.uhid or "",
             "particulars": "Advance received" if incoming else "Advance returned",
-            "mode": "cash",
+            "mode": entry.mode.value if entry.mode else "cash",
             "instrument": entry.reason or "",
             "in_paise": entry.amount_paise if incoming else 0,
             "out_paise": 0 if incoming else abs(entry.amount_paise),
@@ -199,6 +203,7 @@ async def _day_wise(
             Payment.received_at < end,
             Payment.cancelled_at.is_(None),
             Payment.mode != PaymentMode.WALLET,
+            Payment.mode != PaymentMode.INSURANCE,
         )
     )
     for payment in result.scalars():
@@ -255,6 +260,7 @@ INVOICE_LIST = ReportSpec(
         Column("patient_name", "Patient"),
         Column("uhid", "UHID"),
         Column("doctor_name", "Consultant"),
+        Column("source", "From"),
         Column("visit_number", "Visit", default_visible=False),
         Column("gross_paise", "Gross", M, total=True),
         Column("discount_paise", "Discount", M, total=True),
@@ -278,8 +284,10 @@ async def _invoice_list(
         .order_by(Invoice.created_at.desc())
     )
 
+    found = result.all()
+    sources = await invoice_sources(session, [invoice for invoice, _, _ in found])
     rows = []
-    for invoice, patient, visit in result.all():
+    for invoice, patient, visit in found:
         cancelled = invoice.status is InvoiceStatus.CANCELLED
         rows.append({
             "issued_on": to_local(invoice.issued_at or invoice.created_at).date(),
@@ -287,6 +295,7 @@ async def _invoice_list(
             "patient_name": patient.name,
             "uhid": patient.uhid or "",
             "doctor_name": invoice.doctor_name or (visit.doctor_name if visit else ""),
+            "source": sources.get(invoice.id, ""),
             "visit_number": visit.visit_number if visit else "",
             # A cancelled bill stays in the list and out of every total.
             "gross_paise": 0 if cancelled else invoice.gross_paise,
@@ -368,6 +377,7 @@ REFUNDS = ReportSpec(
         Column("patient_name", "Patient"),
         Column("uhid", "UHID", default_visible=False),
         Column("against", "Against"),
+        Column("source", "From"),
         Column("mode", "Mode", ColumnType.STATUS),
         Column("amount_paise", "Amount", M, total=True),
         Column("reason", "Reason"),
@@ -393,13 +403,16 @@ async def _refunds(
             Payment.cancelled_at.is_(None),
         )
     )
-    for payment, invoice, patient in result.all():
+    found = result.all()
+    sources = await invoice_sources(session, [invoice for _, invoice, _ in found])
+    for payment, invoice, patient in found:
         rows.append({
             "at": to_local(payment.received_at),
             "receipt_number": payment.receipt_number,
             "patient_name": patient.name,
             "uhid": patient.uhid or "",
             "against": invoice.invoice_number,
+            "source": sources.get(invoice.id, ""),
             # A refund credited to the wallet is listed as such: the money
             # did not leave the building, and a report that showed it as cash
             # out would not reconcile against the drawer.
@@ -425,7 +438,8 @@ async def _refunds(
             "patient_name": patient.name,
             "uhid": patient.uhid or "",
             "against": "Advance on account",
-            "mode": "cash",
+            "source": "Wallet",
+            "mode": entry.mode.value if entry.mode else "cash",
             "amount_paise": abs(entry.amount_paise),
             "reason": entry.reason or "",
             "issued_by": entry.created_by_name,
@@ -517,6 +531,9 @@ async def _daily_closing(
             continue
         row = till(payment.received_by_name)
         amount = abs(payment.amount_paise)
+        if payment.mode is PaymentMode.INSURANCE:
+            # The insurer's share on a bill: no money at any counter.
+            continue
         if payment.mode is PaymentMode.CASH:
             key = "cash_out_paise" if payment.is_refund else "cash_paise"
             row[key] += amount
@@ -536,7 +553,11 @@ async def _daily_closing(
         if user_name and entry.created_by_name != user_name:
             continue
         row = till(entry.created_by_name)
-        if entry.amount_paise > 0:
+        # Only cash reaches the drawer; an advance paid by card or UPI is
+        # counted with the other modes.
+        if entry.mode not in (None, PaymentMode.CASH):
+            row["other_modes_paise"] += entry.amount_paise
+        elif entry.amount_paise > 0:
             row["cash_paise"] += entry.amount_paise
         else:
             row["cash_out_paise"] += abs(entry.amount_paise)

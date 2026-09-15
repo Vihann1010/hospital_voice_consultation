@@ -1,5 +1,5 @@
 /** Contracts for the investigation module (mirrors investigation_schemas.py). */
-import type { Department } from "@/lib/types";
+import type { Department } from "@/lib/types/core";
 
 export type InvestigationCategory =
   | "blood" | "urine" | "xray" | "mri" | "ct" | "ultrasound"

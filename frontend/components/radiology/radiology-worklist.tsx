@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FileImage, Loader2, X } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { RadiologyWorkItem } from "@/lib/recordsTypes";
+import type { RadiologyWorkItem } from "@/lib/types/records";
 import { formatDateTime } from "@/lib/format";
 import { VisitPad } from "@/components/pad/visit-pad";
 import { Badge } from "@/components/ui/badge";

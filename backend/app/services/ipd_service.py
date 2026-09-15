@@ -160,6 +160,22 @@ class IPDService:
             occupant["on_leave"] = key in away
             occupant["expected_return_on"] = away[key].isoformat() if away.get(key) else None
 
+        # The diet in effect now, so the ward board answers "what is bed 4 on?"
+        from app.models.diet import DietOrder
+
+        moment = datetime.now(timezone.utc)
+        diets = {
+            row.admission_id: row.mode_name
+            for row in (await self.session.execute(
+                select(DietOrder).where(
+                    DietOrder.starts_at <= moment,
+                    (DietOrder.ends_at.is_(None)) | (DietOrder.ends_at > moment),
+                )
+            )).scalars()
+        }
+        for occupant in by_bed.values():
+            occupant["diet"] = diets.get(uuid.UUID(occupant["admission_id"]))
+
         board: List[Dict[str, Any]] = []
         for ward in wards:
             beds = []
@@ -238,6 +254,8 @@ class IPDService:
         attendant_phone: Optional[str] = None,
         attendant_relation: Optional[str] = None,
         advance_paid_paise: int = 0,
+        advance_mode: str = "cash",
+        advance_mode_details: Optional[Dict[str, Any]] = None,
         visit_id: Optional[uuid.UUID] = None,
         admitted_by_name: str = "",
         allergies: Optional[List[str]] = None,
@@ -305,10 +323,20 @@ class IPDService:
             attendant_name=attendant_name,
             attendant_phone=attendant_phone,
             attendant_relation=attendant_relation,
-            advance_paid_paise=advance_paid_paise,
+            # Holds only advances recorded before they were receipted. A new
+            # advance is taken below as a deposit with a receipt.
+            advance_paid_paise=0,
         )
         self.session.add(admission)
         await self.session.flush()
+        if advance_paid_paise > 0:
+            entry = await self._receipt_advance(
+                admission, amount_paise=advance_paid_paise, mode=advance_mode,
+                mode_details=advance_mode_details, received_by_name=admitted_by_name,
+            )
+            # Carried back to the route so the receipt can be printed at once.
+            admission.advance_receipt_number = entry.receipt_number
+            admission.advance_receipt_entry_id = entry.id
 
         self.session.add(
             BedOccupancy(
@@ -477,6 +505,15 @@ class IPDService:
             up_to=up_to,
         )
 
+        # Days before the go-live date are never posted automatically: an
+        # admission entered before the hospital started charging here must not
+        # be back-billed for every day since it was admitted.
+        from app.core.config import settings
+
+        if settings.BED_CHARGE_POST_FROM:
+            post_from = date.fromisoformat(settings.BED_CHARGE_POST_FROM)
+            bed_days = [day for day in bed_days if day.on >= post_from]
+
         already = await self._existing_charge_keys(admission_id)
         posted: List[AdmissionCharge] = []
 
@@ -621,16 +658,85 @@ class IPDService:
             for category, count, total in rows
         }
         total = sum(item["total_paise"] for item in by_category.values())
+        advance = await self.advance_position(admission)
 
         return {
             "admission_id": str(admission_id),
             "ip_number": admission.ip_number,
             "by_category": by_category,
             "total_paise": total,
-            "advance_paid_paise": admission.advance_paid_paise,
-            "balance_paise": total - admission.advance_paid_paise,
+            # What is held against this stay: receipted advances still in the
+            # wallet, plus any advance recorded before receipts existed.
+            "advance_paid_paise": advance["credit_paise"],
+            "advance_received_paise": advance["received_paise"],
+            "advance_held_paise": advance["available_paise"],
+            "advance_unreceipted_paise": advance["unreceipted_paise"],
+            "balance_paise": total - advance["credit_paise"],
             "days_so_far": by_category.get("bed", {}).get("count", 0),
         }
+
+    # ------------------------------------------------------------- advances
+    async def advance_position(self, admission: Admission) -> Dict[str, int]:
+        """What is held against a stay.
+
+        Receipted advances are wallet deposits tagged to the admission. What is
+        still available is capped by the wallet's balance: credit the family
+        has since spent or taken back is not there to set against the bill.
+        `unreceipted_paise` is an advance typed on the admission form before
+        advances were receipted; it is reported, never invented into a receipt.
+        """
+        from app.models.emr import PatientWallet, WalletEntry
+        from app.models.enums import WalletEntryKind
+
+        received = int((await self.session.execute(
+            select(func.coalesce(func.sum(WalletEntry.amount_paise), 0)).where(
+                WalletEntry.admission_id == admission.id, WalletEntry.kind == WalletEntryKind.DEPOSIT
+            )
+        )).scalar_one() or 0)
+        wallet = (await self.session.execute(
+            select(PatientWallet.balance_paise).where(PatientWallet.patient_id == admission.patient_id)
+        )).scalar_one_or_none() or 0
+        available = min(received, wallet)
+        legacy = admission.advance_paid_paise or 0
+        return {"received_paise": received, "available_paise": available, "unreceipted_paise": legacy,
+                "wallet_balance_paise": wallet, "credit_paise": available + legacy}
+
+    async def _receipt_advance(
+        self, admission: Admission, *, amount_paise: int, mode: str,
+        mode_details: Optional[Dict[str, Any]], received_by_name: str,
+    ):
+        from app.models.enums import PaymentMode
+        from app.services.reception_service import ReceptionError, ReceptionService
+
+        try:
+            chosen = PaymentMode(mode)
+        except ValueError as exc:
+            raise IPDError(f"{mode} is not a payment mode.") from exc
+        try:
+            return await ReceptionService(self.session).wallet_deposit(
+                patient_id=admission.patient_id, amount_paise=amount_paise, mode=chosen,
+                mode_details=mode_details, reason=f"Advance for admission {admission.ip_number}",
+                received_by_name=received_by_name, admission_id=admission.id,
+            )
+        except ReceptionError as exc:
+            raise IPDError(str(exc)) from exc
+
+    async def take_advance(
+        self, admission_id: uuid.UUID, *, amount_paise: int, mode: str,
+        mode_details: Optional[Dict[str, Any]], received_by_name: str,
+    ):
+        """A further advance during the stay, receipted like the first."""
+        admission = await self.session.get(Admission, admission_id)
+        if admission is None:
+            raise IPDError("Admission not found.")
+        if admission.status not in (AdmissionStatus.ADMITTED, AdmissionStatus.DISCHARGE_INITIATED):
+            raise IPDError("An advance can only be taken while the patient is admitted.")
+        if admission.final_invoice_id is not None:
+            raise IPDError("The final bill is already raised. Take payment against that bill instead.")
+        return await self._receipt_advance(
+            admission, amount_paise=amount_paise, mode=mode, mode_details=mode_details,
+            received_by_name=received_by_name,
+        )
 
     # --------------------------------------------------------------- vitals
     async def record_vitals(
@@ -916,6 +1022,24 @@ class IPDService:
                 else InvoiceStatus.PARTIALLY_PAID
             )
 
+        # Receipted advances wait in the patient's wallet and settle the bill
+        # from there, as a wallet payment with its own receipt line. The money
+        # was counted in the drawer on the day it was taken, so settling from
+        # the wallet adds nothing to today's collection. Credit the patient
+        # holds from elsewhere is theirs too, and is applied the same way.
+        applied_from_wallet = 0
+        remaining = invoice.total_paise - invoice.paid_paise
+        held = await reception.wallet_balance(admission.patient_id)
+        if remaining > 0 and held > 0:
+            applied_from_wallet = min(remaining, held)
+            try:
+                await reception.pay_from_wallet(
+                    invoice_id=invoice.id, amount_paise=applied_from_wallet,
+                    received_by_name=created_by_name,
+                )
+            except ReceptionError as exc:
+                raise IPDError(str(exc)) from exc
+
         await self.session.flush()
         fresh = await reception.get_invoice(invoice.id)
         logger.info(
@@ -927,6 +1051,7 @@ class IPDService:
         return fresh, {
             "ip_number": admission.ip_number,
             "advance_paid_paise": admission.advance_paid_paise,
+            "applied_from_wallet_paise": applied_from_wallet,
             "balance_paise": fresh.total_paise - fresh.paid_paise,
         }
 

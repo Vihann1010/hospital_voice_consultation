@@ -23,8 +23,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarPlus, Loader2, PhoneCall, Search, Sparkles } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { Consultant, Slot } from "@/lib/appointmentTypes";
-import type { PatientCard, VisitType } from "@/lib/emrTypes";
+import type { Consultant, Slot } from "@/lib/types/appointments";
+import type { PatientCard, VisitType } from "@/lib/types/emr";
 import { formatHospitalDate, formatHospitalTime, hospitalToday } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

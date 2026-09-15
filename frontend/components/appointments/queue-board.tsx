@@ -35,10 +35,10 @@ import type {
   AppointmentStatus,
   Board,
   BoardRow,
-} from "@/lib/appointmentTypes";
-import { STATUS_LABEL } from "@/lib/appointmentTypes";
+} from "@/lib/types/appointments";
+import { STATUS_LABEL } from "@/lib/types/appointments";
 import { DEPARTMENT_LABEL, formatHospitalTime, hospitalToday } from "@/lib/format";
-import type { PatientCard } from "@/lib/emrTypes";
+import type { PatientCard } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { ReasonDialog } from "@/components/ui/reason-dialog";
 import { Input } from "@/components/ui/input";

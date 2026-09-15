@@ -19,15 +19,15 @@ import { getToken } from "@/lib/auth";
 import type {
   Organisation, PatientCard, PaymentMode, Quote, RegisterAndBillResult,
   ServiceItem, VisitType,
-} from "@/lib/emrTypes";
-import type { Consultant } from "@/lib/appointmentTypes";
-import { PAYMENT_MODES, VISIT_TYPES, formatINR, rupeesToPaise } from "@/lib/emrTypes";
+} from "@/lib/types/emr";
+import type { Consultant } from "@/lib/types/appointments";
+import { PAYMENT_MODES, VISIT_TYPES, formatINR, rupeesToPaise } from "@/lib/types/emr";
 import {
   PaymentModeFields,
   cleanModeDetails,
 } from "@/components/finance/payment-mode-fields";
 import { WalletPanel } from "@/components/finance/wallet-panel";
-import type { Department, Gender } from "@/lib/types";
+import type { Department, Gender } from "@/lib/types/core";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";

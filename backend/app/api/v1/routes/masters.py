@@ -13,20 +13,22 @@ import uuid
 from datetime import date, time
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import delete, select
 
-from app.api.deps import DbSession, require_permission
+from app.api.deps import CurrentUser, DbSession, require_permission
 from app.core import financial_year
+from app.core.audit import client_ip, record as audit_record
 from app.core.permissions import Permission
 from app.models.consultant import Consultant, ReferralProvider
+from app.models.user import User
 from app.models.emr import ServiceItem
 from app.models.organisation import NegotiatedRate, Organisation
 from app.models.patient import PatientFieldSetting
 from app.models.printing import PrintSetting
 from app.printing.layout import PAGE_HEIGHT
-from app.models.enums import Department, PayerType
+from app.models.enums import AuditAction, Department, PayerType
 
 router = APIRouter(prefix="/masters", tags=["masters"])
 
@@ -52,10 +54,16 @@ class ConsultantOut(BaseModel):
     free_follow_up_days: int
     consultation_service_code: Optional[str] = None
     payout_share_percent: int
+    payout_categories: List[str] = []
+    notes: Optional[str] = None
     is_active: bool
 
 
 class ConsultantUpsert(BaseModel):
+    # Unknown fields are refused, so a payout share sent here is an error the
+    # caller sees rather than a value silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str = Field(min_length=2, max_length=255)
     department: Department
     qualification: Optional[str] = Field(default=None, max_length=255)
@@ -76,9 +84,11 @@ class ConsultantUpsert(BaseModel):
     opd_days: str = Field(default="1,2,3,4,5,6", pattern=r"^[1-7](,[1-7])*$")
     free_follow_up_days: int = Field(default=0, ge=0, le=365)
     consultation_service_code: Optional[str] = Field(default=None, max_length=32)
-    payout_share_percent: int = Field(default=0, ge=0, le=100)
+    # The payout share is deliberately not here. It is set on the Accounts
+    # screen, where the change is audited; accepting it here would let every
+    # save of this form quietly reset a doctor's share.
+    notes: Optional[str] = Field(default=None, max_length=1000)
     is_active: bool = True
-
 
     @model_validator(mode="after")
     def _hours_run_forwards(self) -> "ConsultantUpsert":
@@ -308,29 +318,85 @@ async def list_consultants(
     return [ConsultantOut.model_validate(c) for c in result.scalars().all()]
 
 
+async def _check_consultant(
+    session, payload: ConsultantUpsert, consultant_id: Optional[uuid.UUID] = None
+) -> None:
+    """Refuse the two clashes that would otherwise surface as a server error or a wrong signature."""
+    others = [Consultant.id != consultant_id] if consultant_id else []
+    if payload.registration_number and payload.registration_number.strip():
+        clash = await session.scalar(select(Consultant).where(
+            Consultant.registration_number == payload.registration_number.strip(), *others,
+        ))
+        if clash is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"Registration number {payload.registration_number.strip()} is already on {clash.full_name}.",
+            )
+    if payload.user_id is not None:
+        if await session.get(User, payload.user_id) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "That login does not exist.")
+        linked = await session.scalar(select(Consultant).where(
+            Consultant.user_id == payload.user_id, *others,
+        ))
+        if linked is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"That login already belongs to {linked.full_name}.")
+
+
+def _clean_consultant(payload: ConsultantUpsert) -> dict:
+    data = payload.model_dump()
+    for key in ("qualification", "registration_number", "phone_number", "consultation_service_code", "notes"):
+        if isinstance(data.get(key), str):
+            data[key] = data[key].strip() or None
+    data["full_name"] = data["full_name"].strip()
+    return data
+
+
+async def _audit_consultant(user, request: Request, consultant: Consultant, created: bool, changed: dict) -> None:
+    await audit_record(
+        AuditAction.CONSULTANT_SAVE, actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
+        entity_type="consultant", entity_id=consultant.id, ip_address=client_ip(request),
+        detail={"created": created, "name": consultant.full_name, "changed": changed},
+    )
+
+
 @router.post("/consultants", response_model=ConsultantOut,
              status_code=status.HTTP_201_CREATED,
              dependencies=[Depends(MANAGE_MASTERS)])
-async def create_consultant(payload: ConsultantUpsert, session: DbSession) -> ConsultantOut:
-    consultant = Consultant(**payload.model_dump())
+async def create_consultant(
+    payload: ConsultantUpsert, session: DbSession, user: CurrentUser, request: Request
+) -> ConsultantOut:
+    await _check_consultant(session, payload)
+    data = _clean_consultant(payload)
+    consultant = Consultant(**data)
     session.add(consultant)
     await session.commit()
     await session.refresh(consultant)
+    await _audit_consultant(user, request, consultant, True,
+                            {key: str(value) for key, value in data.items() if value not in (None, "")})
     return ConsultantOut.model_validate(consultant)
 
 
 @router.put("/consultants/{consultant_id}", response_model=ConsultantOut,
             dependencies=[Depends(MANAGE_MASTERS)])
 async def update_consultant(
-    consultant_id: uuid.UUID, payload: ConsultantUpsert, session: DbSession
+    consultant_id: uuid.UUID, payload: ConsultantUpsert, session: DbSession, user: CurrentUser,
+    request: Request,
 ) -> ConsultantOut:
     consultant = await session.get(Consultant, consultant_id)
     if consultant is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such consultant.")
-    for field, value in payload.model_dump().items():
+    await _check_consultant(session, payload, consultant_id)
+    changed = {}
+    for field, value in _clean_consultant(payload).items():
+        before = getattr(consultant, field)
+        if before != value:
+            changed[field] = {"from": str(before) if before is not None else None,
+                              "to": str(value) if value is not None else None}
         setattr(consultant, field, value)
     await session.commit()
     await session.refresh(consultant)
+    if changed:
+        await _audit_consultant(user, request, consultant, False, changed)
     return ConsultantOut.model_validate(consultant)
 
 

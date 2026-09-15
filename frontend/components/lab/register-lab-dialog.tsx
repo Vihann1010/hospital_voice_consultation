@@ -14,10 +14,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2, Search, X } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { Consultant } from "@/lib/appointmentTypes";
-import type { PatientCard } from "@/lib/emrTypes";
-import type { LabBilling, LabPriority, LabRequest, LabTest } from "@/lib/labTypes";
-import { canBillAtCounter } from "@/lib/labTypes";
+import type { Consultant } from "@/lib/types/appointments";
+import type { PatientCard } from "@/lib/types/emr";
+import type { LabBilling, LabPriority, LabRequest, LabTest } from "@/lib/types/lab";
+import { canBillAtCounter } from "@/lib/types/lab";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

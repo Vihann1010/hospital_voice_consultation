@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { IndianRupee, Loader2, Lock, Wallet } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { CashSession } from "@/lib/emrTypes";
-import { formatINR, rupeesToPaise } from "@/lib/emrTypes";
+import type { CashSession } from "@/lib/types/emr";
+import { formatINR, rupeesToPaise } from "@/lib/types/emr";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -13,9 +13,9 @@ import {
   AlertTriangle, Check, FileText, Loader2, Mic, MicOff, Plus, ShieldAlert, Sparkles, Trash2,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import { useDictation } from "@/lib/useDictation";
-import type { MedicineRow, Prescription, PrescriptionAssist, SafetyAlert } from "@/lib/prescriptionTypes";
-import { FOLLOW_UP_OPTIONS, durationForFollowUp } from "@/lib/prescriptionTypes";
+import { useDictation } from "@/lib/hooks/useDictation";
+import type { MedicineRow, Prescription, PrescriptionAssist, SafetyAlert } from "@/lib/types/prescriptions";
+import { FOLLOW_UP_OPTIONS, durationForFollowUp } from "@/lib/types/prescriptions";
 import { MedicineRowEditor } from "@/components/prescriptions/medicine-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

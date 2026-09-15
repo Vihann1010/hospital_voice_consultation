@@ -28,8 +28,8 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { getToken } from "@/lib/auth";
-import type { DiaryEntry, PatientCard, PatientDiary } from "@/lib/emrTypes";
-import { formatINR } from "@/lib/emrTypes";
+import type { DiaryEntry, PatientCard, PatientDiary } from "@/lib/types/emr";
+import { formatINR } from "@/lib/types/emr";
 import { formatDate } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

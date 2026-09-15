@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import { formatINR } from "@/lib/emrTypes";
+import { formatINR } from "@/lib/types/emr";
 import { formatDateTime } from "@/lib/format";
 import type {
   CultureAntibiotic,
@@ -38,7 +38,7 @@ import type {
   LabMaster,
   LabRequest,
   PrintoutReading,
-} from "@/lib/labTypes";
+} from "@/lib/types/lab";
 import {
   BILLING_LABEL,
   FLAG_MARK,
@@ -50,7 +50,7 @@ import {
   canVerifyLab,
   isAbnormal,
   isCritical,
-} from "@/lib/labTypes";
+} from "@/lib/types/lab";
 import { ReasonDialog } from "@/components/ui/reason-dialog";
 import type { ReasonRequest } from "@/components/ui/reason-dialog";
 import { Button } from "@/components/ui/button";

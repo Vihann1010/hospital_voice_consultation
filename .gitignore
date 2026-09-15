@@ -7,3 +7,8 @@ __pycache__/
 .venv/
 satya_pgdata/
 .DS_Store
+
+# Build and tool caches
+*.tsbuildinfo
+.pytest_cache/
+.ruff_cache/

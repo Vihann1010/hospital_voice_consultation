@@ -9,6 +9,11 @@ from app.models.theatre import Operation, Surgery, TheatreRoom
 from app.models.patient_file import PatientFile  # noqa: F401
 from app.models.admission_leave import AdmissionLeave  # noqa: F401
 from app.models.job_run import JobRun  # noqa: F401
+from app.models.diet import DietMode, DietOrder  # noqa: F401
+from app.models.insurance import ClaimSettlement  # noqa: F401
+from app.models.accounts import (  # noqa: F401
+    AccountGroup, ConsultantPayout, ConsultantPayoutItem, Ledger, Voucher, VoucherLine,
+)
 from app.models.lab import LabMaster, LabParameter, LabRequest, LabRequestItem, LabTest  # noqa: F401
 from app.models.investigation import (
     DoctorFavoriteInvestigation,

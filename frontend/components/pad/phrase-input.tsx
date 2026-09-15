@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { CatalogueSuggestion } from "@/lib/padTypes";
+import type { CatalogueSuggestion } from "@/lib/types/pad";
 import { cn } from "@/lib/utils";
 
 export function PhraseInput({

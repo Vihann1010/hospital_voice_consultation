@@ -33,9 +33,9 @@ import {
   X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PadDocumentSummary } from "@/lib/padTypes";
-import type { AdmissionChart, DischargeType } from "@/lib/ipdTypes";
-import { DISCHARGE_TYPE_LABEL, NEWS_BANDS, dayOfStay } from "@/lib/ipdTypes";
+import type { PadDocumentSummary } from "@/lib/types/pad";
+import type { AdmissionChart, DischargeType } from "@/lib/types/ipd";
+import { DISCHARGE_TYPE_LABEL, NEWS_BANDS, dayOfStay } from "@/lib/types/ipd";
 import { formatDateTime } from "@/lib/format";
 import { VisitPad } from "@/components/pad/visit-pad";
 import { DrugChartView } from "@/components/ipd/drug-chart";
@@ -45,6 +45,7 @@ import { PatientFiles } from "@/components/patient/patient-files";
 import { LabResultsPanel } from "@/components/lab/lab-results-panel";
 import { RecordsBundle } from "@/components/ipd/records-bundle";
 import { LeavePanel } from "@/components/ipd/leave-panel";
+import { DietPanel } from "@/components/ipd/diet-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -744,6 +745,12 @@ export function CaseSheet({
           <div className="lg:col-span-2">
             <LeavePanel chart={chart} onChanged={() => void load()} />
           </div>
+          <div className="lg:col-span-2">
+            <DietPanel
+              admissionId={admissionId}
+              active={["admitted", "discharge_initiated"].includes(String(chart.admission.status))}
+            />
+          </div>
           <Card>
             <CardHeader className="pb-2"><CardTitle>Admission</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -806,7 +813,7 @@ export function CaseSheet({
             <CardHeader className="pb-2"><CardTitle>Running bill</CardTitle></CardHeader>
             <CardContent className="space-y-1 text-sm">
               <div className="flex justify-between"><span className="text-ink-muted">Charges so far</span><span className="tabular">{money(chart.bill.total_paise)}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Advance paid</span><span className="tabular">{money(chart.bill.advance_paid_paise)}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Advance held</span><span className="tabular">{money(chart.bill.advance_paid_paise)}</span></div>
               <div className="flex justify-between font-medium"><span>Balance</span><span className="tabular">{money(chart.bill.balance_paise)}</span></div>
             </CardContent>
           </Card>

@@ -13,7 +13,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { CalendarDays, TrendingUp } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PatientHistory } from "@/lib/types";
+import type { PatientHistory } from "@/lib/types/core";
 import { DEPARTMENT_LABEL, formatDate, formatDateTime, timeAgo } from "@/lib/format";
 import { RiskBadge } from "@/components/dashboard/badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

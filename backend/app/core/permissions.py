@@ -74,6 +74,9 @@ class Permission(str, Enum):
     LAB_RESULT_ENTER = "lab:result"
     LAB_RESULT_VERIFY = "lab:verify"
     LAB_MASTER_MANAGE = "lab:master"
+    # What the kitchen sends to a patient. Ordered by the doctor and, on the
+    # doctor's instruction, by the nurse at the bedside.
+    DIET_ORDER = "diet:order"
     # Operational
     REPORT_UPLOAD = "report:upload"
     SYSTEM_ADMIN = "system:admin"
@@ -82,6 +85,7 @@ class Permission(str, Enum):
     # prescription claims about who signed it.
     MASTER_READ = "master:read"
     MASTER_MANAGE = "master:manage"
+    CLAIM_MANAGE = "insurance:claim"
     # Front desk
     PATIENT_REGISTER = "patient:register"
     VISIT_CREATE = "visit:create"
@@ -98,6 +102,9 @@ class Permission(str, Enum):
     INVOICE_CANCEL = "invoice:cancel"
     FINANCE_READ = "finance:read"
     TARIFF_MANAGE = "tariff:manage"
+    # The books: posting vouchers, changing the chart of accounts, and running
+    # and paying consultant payouts. Reading them is finance:read.
+    ACCOUNTS_MANAGE = "accounts:manage"
 
 
 _READ_ONLY: Set[Permission] = {
@@ -126,6 +133,9 @@ _FRONT_DESK: Set[Permission] = {
     Permission.APPOINTMENT_MANAGE,
     # Sending a patient's sample to the laboratory from the counter.
     Permission.LAB_REGISTER,
+    # Insurance cases are worked at the counter: policies, pre-authorisation,
+    # claim status, and putting the approved share on the bill.
+    Permission.CLAIM_MANAGE,
     # The ward has been run on reception and supervisor accounts, so they
     # keep charting rather than finding the ward locked on the day this
     # ships. Whether they should is a decision for the hospital.
@@ -149,6 +159,7 @@ _CLINICAL: Set[Permission] = _READ_ONLY | _FRONT_DESK | {
     Permission.LAB_RESULT_ENTER,
     Permission.LAB_RESULT_VERIFY,
     Permission.LAB_MASTER_MANAGE,
+    Permission.DIET_ORDER,
 }
 
 # The counter's escalation path: the same work reception does, plus the two
@@ -169,6 +180,10 @@ _MANAGEMENT: Set[Permission] = _READ_ONLY | {
     # A consultant's free-follow-up window and fee decide what a patient is
     # charged, which makes the register a pricing control.
     Permission.MASTER_MANAGE,
+    # The accountant's work: vouchers, the chart of accounts, consultant payouts.
+    Permission.ACCOUNTS_MANAGE,
+    # Following up what insurers and TPAs owe is management's job too.
+    Permission.CLAIM_MANAGE,
 }
 
 # The ward. Reads the record, charts on it, and writes and signs the
@@ -183,6 +198,7 @@ _NURSING: Set[Permission] = _READ_ONLY | {
     # Sending an inpatient's sample to the laboratory. Billed to the stay:
     # a nurse raises no invoice.
     Permission.LAB_REGISTER,
+    Permission.DIET_ORDER,
 }
 
 # The laboratory bench. Registers samples and types results; cannot verify

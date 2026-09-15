@@ -1,5 +1,5 @@
 /** Contracts for the prescription module. */
-import type { Department } from "@/lib/types";
+import type { Department } from "@/lib/types/core";
 
 export type PrescriptionStatus = "draft" | "issued" | "cancelled";
 export type DeliveryChannel = "whatsapp" | "sms" | "email";

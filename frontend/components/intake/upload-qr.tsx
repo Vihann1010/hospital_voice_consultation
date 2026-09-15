@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Loader2, QrCode, RefreshCw, X } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { UploadLink } from "@/lib/emrTypes";
+import type { UploadLink } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

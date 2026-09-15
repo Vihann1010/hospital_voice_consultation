@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ChevronRight, Inbox, RefreshCw, Search } from "lucide-react";
 import { staffApi, type ConsultationFilters } from "@/lib/staffApi";
-import type { ConsultationListItem } from "@/lib/types";
+import type { ConsultationListItem } from "@/lib/types/core";
 import { timeAgo } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

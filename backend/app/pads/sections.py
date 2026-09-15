@@ -415,6 +415,76 @@ def _dedupe(items: Iterable[str]) -> List[str]:
     return seen
 
 
+# ------------------------------------------------------------- intake vitals
+INTAKE_VITALS = "intake:vitals"
+
+# Intake screen field -> Visit Pad vitals field. Blood pressure is written the
+# way the pad writes it, "120/80", and only when both numbers were typed.
+_INTAKE_VITALS_MAP = {
+    "pulse": "pulse",
+    "spo2": "spo2",
+    "temperature": "temperature",
+    "respiration": "respiratory_rate",
+    "weight": "weight",
+    "height": "height",
+}
+
+
+def vitals_from_intake(section: Dict[str, Any], intake: Any) -> Optional[Dict[str, Any]]:
+    """The vitals typed at intake, in this section's own fields. None when there are none.
+
+    Copied as typed: nothing is converted or guessed. A reading the pad's field
+    cannot hold (a number field given words) is left out rather than altered.
+    """
+    if section.get("kind") != "fields" or section.get("key") != "vitals" or not isinstance(intake, dict):
+        return None
+    specs = {spec["key"]: spec for spec in section.get("fields", [])}
+    given: Dict[str, Any] = {}
+    systolic = str(intake.get("bpSys") or "").strip()
+    diastolic = str(intake.get("bpDia") or "").strip()
+    if "bp" in specs and systolic and diastolic:
+        given["bp"] = f"{systolic}/{diastolic}"
+    for source, target in _INTAKE_VITALS_MAP.items():
+        if target in specs:
+            given[target] = intake.get(source)
+    cleaned = {key: _clean_field(specs[key], value) for key, value in given.items()}
+    cleaned = {key: value for key, value in cleaned.items() if value not in (None, "", [])}
+    return {"fields": cleaned} if cleaned else None
+
+
+def refresh_intake_vitals(
+    sections: List[Dict[str, Any]],
+    values: Optional[Dict[str, Any]],
+    provenance: Optional[Dict[str, Any]],
+    intake: Any,
+) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
+    """Bring a draft's vitals in line with what was saved at intake since it was opened.
+
+    Only a vitals section that is still empty, or still exactly as copied from
+    intake, is replaced. Once the doctor has typed their own readings, intake
+    never overwrites them. Returns (values, provenance, changed).
+    """
+    values = dict(values or {})
+    provenance = dict(provenance or {})
+    changed = False
+    for section in sections:
+        key = section["key"]
+        entry = vitals_from_intake(section, intake)
+        if entry is None:
+            continue
+        origin = provenance.get(key) or {}
+        untouched = origin.get("source") == INTAKE_VITALS and not origin.get("edited")
+        if not (is_empty(section, values.get(key)) or untouched):
+            continue
+        cleaned = clean_values([section], {key: entry})[key]
+        if values.get(key) == cleaned:
+            continue
+        values[key] = cleaned
+        provenance[key] = {"source": INTAKE_VITALS, "drafted_at": datetime.now(timezone.utc).isoformat()}
+        changed = True
+    return values, provenance, changed
+
+
 def draft_from_intake(
     sections: List[Dict[str, Any]], dossier: Optional[Dict[str, Any]]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -479,6 +549,14 @@ def draft_from_intake(
         if entry:
             values[section["key"]] = entry
             provenance[section["key"]] = {"source": f"ai:{source}", "drafted_at": drafted_at}
+
+    # The vitals the nurse typed at intake, so the doctor does not see an
+    # empty section and assume nothing was recorded.
+    for section in sections:
+        vitals = vitals_from_intake(section, dossier.get("vitals"))
+        if vitals:
+            values[section["key"]] = vitals
+            provenance[section["key"]] = {"source": INTAKE_VITALS, "drafted_at": drafted_at}
 
     return clean_values(sections, values), provenance
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useConsultation, type SessionPhase } from "@/lib/useConsultation";
+import { useConsultation, type SessionPhase } from "@/lib/hooks/useConsultation";
 import { PreviousReportsUpload } from "@/components/patient/previous-reports-upload";
 
 const PHASE_COPY: Record<SessionPhase, { title: string; hint: string }> = {

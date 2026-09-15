@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession, get_ipd_service, require_permission
-from app.core.permissions import Permission
+from app.core.permissions import Permission, has_permission
 from app.core.audit import client_ip, record as audit_record
 from app.core.logging import get_logger
 from app.models.enums import (
@@ -122,6 +122,9 @@ async def set_bed_status(
 async def admit(
     payload: AdmitRequest, service: Service, user: CurrentUser, request: Request
 ) -> AdmissionOut:
+    if payload.advance_paid_paise > 0 and not has_permission(user.role, Permission.PAYMENT_COLLECT):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Taking an advance needs permission to collect payment.")
     try:
         admission = await service.admit(
             **payload.model_dump(), admitted_by_name=user.full_name
@@ -136,7 +139,8 @@ async def admit(
         actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
         entity_type="admission", entity_id=admission.id,
         patient_id=admission.patient_id, ip_address=client_ip(request),
-        detail={"ip_number": admission.ip_number},
+        detail={"ip_number": admission.ip_number,
+                "advance_receipt": getattr(admission, "advance_receipt_number", None)},
     )
     return AdmissionOut.model_validate(admission)
 

@@ -281,6 +281,19 @@ class PadService:
 
         existing = await self._draft_for(consultation_id, document_type)
         if existing is not None:
+            # Vitals saved at intake after this draft was made are brought in
+            # when the pad is opened — never while it is open, which would
+            # collide with the doctor's autosave — and only where the doctor
+            # has not typed their own readings.
+            values, provenance, changed = rules.refresh_intake_vitals(
+                existing.sections, existing.values, existing.provenance,
+                (consultation.medical_json or {}).get("vitals"),
+            )
+            if changed:
+                existing.values = values
+                existing.provenance = provenance
+                await self.session.commit()
+                await self.session.refresh(existing)
             return existing
         signed = await self._latest_signed_for(consultation_id, document_type)
         if signed is not None:

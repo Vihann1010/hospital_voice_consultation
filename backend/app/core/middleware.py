@@ -15,45 +15,72 @@ from starlette.responses import JSONResponse, Response
 
 from app.core import ratelimit
 from app.core.config import settings
-from app.core.logging import get_logger
+from app.core.logging import access_level, bind_request, get_logger, reset_request
 from app.core.metrics import metrics
 
 logger = get_logger(__name__)
 
+# Polled every few seconds by the load balancer and monitoring; logging them
+# would bury every real request.
+QUIET_PATHS = ("/api/v1/health", "/api/v1/metrics", "/metrics")
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    """Assigns a request id, times the request and logs the outcome."""
+    """Assigns a request id, times the request and logs one line for it.
+
+    The request line records the path only, never the query string, which can
+    carry a patient's name from a search box.
+    """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         incoming = request.headers.get(settings.REQUEST_ID_HEADER)
         request_id = incoming or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
+        token = bind_request(request_id)
+        path = request.url.path
 
         started = time.perf_counter()
         try:
-            response = await call_next(request)
-        except Exception:
+            try:
+                response = await call_next(request)
+            except Exception:
+                duration_ms = (time.perf_counter() - started) * 1000
+                metrics.record_request(path, 500, duration_ms)
+                logger.exception(
+                    "request_failed",
+                    extra={"path": path, "method": request.method, "duration_ms": round(duration_ms, 1),
+                           "user_id": getattr(request.state, "user_id", None)},
+                )
+                raise
+
             duration_ms = (time.perf_counter() - started) * 1000
-            metrics.record_request(request.url.path, 500, duration_ms)
-            logger.exception(
-                "request_failed",
-                extra={"request_id": request_id, "path": request.url.path,
-                       "method": request.method, "duration_ms": round(duration_ms, 1)},
-            )
-            raise
+            metrics.record_request(path, response.status_code, duration_ms)
+            response.headers[settings.REQUEST_ID_HEADER] = request_id
+            response.headers["X-Response-Time-ms"] = f"{duration_ms:.1f}"
 
-        duration_ms = (time.perf_counter() - started) * 1000
-        metrics.record_request(request.url.path, response.status_code, duration_ms)
-        response.headers[settings.REQUEST_ID_HEADER] = request_id
-        response.headers["X-Response-Time-ms"] = f"{duration_ms:.1f}"
-
-        if duration_ms > 2000:
-            logger.warning(
-                "slow_request",
-                extra={"request_id": request_id, "path": request.url.path,
-                       "duration_ms": round(duration_ms, 1)},
-            )
-        return response
+            if settings.LOG_REQUESTS and not path.startswith(QUIET_PATHS):
+                # The endpoint runs in its own task, so the signed-in user is read
+                # from request.state (set during authentication), not the log context.
+                logger.log(
+                    access_level(response.status_code),
+                    "request",
+                    extra={"method": request.method, "path": path, "status": response.status_code,
+                           "duration_ms": round(duration_ms, 1), "client_ip": _client_ip(request),
+                           "user_id": getattr(request.state, "user_id", None),
+                           "user_role": getattr(request.state, "user_role", None)},
+                )
+            if duration_ms > 2000:
+                logger.warning("slow_request", extra={"path": path, "duration_ms": round(duration_ms, 1)})
+            return response
+        finally:
+            reset_request(token)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

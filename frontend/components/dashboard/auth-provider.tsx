@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout as doLogout } from "@/lib/auth";
-import type { User } from "@/lib/types";
+import type { User } from "@/lib/types/core";
 
 type Role = User["role"];
 

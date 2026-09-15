@@ -18,11 +18,11 @@ import { AlertTriangle, BedDouble, Droplet, RefreshCw, Users } from "lucide-reac
 import { staffApi } from "@/lib/staffApi";
 import type {
   BedCell, Census, DeterioratingPatient, WardBoard,
-} from "@/lib/ipdTypes";
+} from "@/lib/types/ipd";
 import {
   BED_STATUS_STYLE, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay,
-} from "@/lib/ipdTypes";
-import { formatINR } from "@/lib/emrTypes";
+} from "@/lib/types/ipd";
+import { formatINR } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

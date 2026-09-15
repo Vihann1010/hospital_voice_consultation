@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { getToken } from "@/lib/auth";
-import type { Delivery, DeliveryStatus, Prescription } from "@/lib/prescriptionTypes";
-import { DELIVERY_LABEL } from "@/lib/prescriptionTypes";
+import type { Delivery, DeliveryStatus, Prescription } from "@/lib/types/prescriptions";
+import { DELIVERY_LABEL } from "@/lib/types/prescriptions";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { PrescriptionComposer } from "@/components/prescriptions/prescription-composer";
 import { EmptyState } from "@/components/dashboard/empty-state";

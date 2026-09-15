@@ -10,8 +10,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlaskConical, Loader2, Printer } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PatientLabResult } from "@/lib/labTypes";
-import { FLAG_MARK, isAbnormal, isCritical } from "@/lib/labTypes";
+import type { PatientLabResult } from "@/lib/types/lab";
+import { FLAG_MARK, isAbnormal, isCritical } from "@/lib/types/lab";
 import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -7,13 +7,13 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { Surgery } from "@/lib/theatreTypes";
+import type { Surgery } from "@/lib/types/theatre";
 import {
   SURGERY_STATUS_LABEL,
   SURGERY_STATUS_VARIANT,
   canSchedule,
   checklistSigned,
-} from "@/lib/theatreTypes";
+} from "@/lib/types/theatre";
 import { formatHospitalDate, formatHospitalTime } from "@/lib/format";
 import { BookSurgeryDialog, type BookingPatient } from "@/components/theatre/book-surgery-dialog";
 import { Badge } from "@/components/ui/badge";

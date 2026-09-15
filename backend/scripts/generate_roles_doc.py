@@ -52,6 +52,8 @@ DESCRIPTIONS = {
     Permission.LAB_RESULT_ENTER: "Enter laboratory results and mark samples collected",
     Permission.LAB_RESULT_VERIFY: "Verify laboratory results, and reopen a verified one",
     Permission.LAB_MASTER_MANAGE: "Edit the lab test list, units and reference ranges",
+    Permission.DIET_ORDER: "Order, change and stop an inpatient's diet",
+    Permission.ACCOUNTS_MANAGE: "Post vouchers, keep the chart of accounts, run and pay consultant payouts",
     Permission.REPORT_UPLOAD: "Upload a scanned or external report against a patient",
     Permission.SYSTEM_ADMIN: "System administration, including staff accounts",
     Permission.MASTER_READ: "Look up consultants and referring doctors",
@@ -67,6 +69,7 @@ DESCRIPTIONS = {
     Permission.INVOICE_CANCEL: "Cancel a bill that was already raised",
     Permission.FINANCE_READ: "See hospital-wide revenue and collection figures",
     Permission.TARIFF_MANAGE: "Change the price list",
+    Permission.CLAIM_MANAGE: "Keep insurance policies and TPA claims; put an approved claim on the bill",
 }
 
 ROLE_SUMMARY = {
@@ -157,7 +160,15 @@ NOTES = """  * A doctor cannot refund or reprice. If a refund is needed and no s
 
   * A receptionist may book and cancel an appointment but not cancel a bill.
     Freeing a slot costs the hospital nothing; unpicking a raised invoice is
-    an accounting act, which is why it sits with the supervisor."""
+    an accounting act, which is why it sits with the supervisor.
+
+  * TPA claims are worked at the counter: policies, pre-authorisation, claim
+    status, and putting the approved amount on the bill. Recording what the
+    TPA or insurer actually paid, with TDS and disallowances, is accounts
+    work and needs the finance PIN.
+
+  * A consultant's payout share is set only on the Accounts screen, where the
+    change is audited; the consultant register does not change it."""
 
 
 def describe(permission: Permission) -> str:

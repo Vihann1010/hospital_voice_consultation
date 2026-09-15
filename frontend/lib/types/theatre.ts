@@ -1,5 +1,5 @@
 /** The operation theatre: bookings, theatre times, and the lists behind them. */
-import type { Department } from "@/lib/types";
+import type { Department } from "@/lib/types/core";
 
 export type SurgeryStatus = "scheduled" | "in_theatre" | "completed" | "cancelled";
 

@@ -50,7 +50,7 @@ import type {
   SectionOrigin,
   SectionSpec,
   SectionValue,
-} from "@/lib/padTypes";
+} from "@/lib/types/pad";
 import { formatDateTime } from "@/lib/format";
 import { PhraseInput } from "@/components/pad/phrase-input";
 import { useShortcut } from "@/components/keyboard/keyboard-provider";

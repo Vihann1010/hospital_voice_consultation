@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MessageSquare } from "lucide-react";
-import type { ConversationTurn } from "@/lib/types";
+import type { ConversationTurn } from "@/lib/types/core";
 import { formatTime } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/dashboard/empty-state";

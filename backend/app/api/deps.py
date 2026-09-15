@@ -2,10 +2,11 @@
 import uuid
 from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import bind_user
 from app.core.permissions import Permission, has_permission
 from app.core.security import TOKEN_TYPE_ACCESS, decode_token
 from app.db.session import get_db
@@ -69,6 +70,7 @@ def get_ipd_service(session: DbSession) -> IPDService:
 
 
 async def get_current_user(
+    request: Request,
     session: DbSession,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> User:
@@ -84,6 +86,11 @@ async def get_current_user(
     user = await UserRepository(session).get(user_id)
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
+    # Who made this request: on request.state for the request log line, and in
+    # the log context so every line a service writes names the user.
+    request.state.user_id = str(user.id)
+    request.state.user_role = user.role.value
+    bind_user(user.id, user.role.value)
     return user
 
 

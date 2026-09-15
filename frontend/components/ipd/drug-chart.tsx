@@ -25,8 +25,8 @@ import {
   X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { FormularyMedicine, SafetyAlert } from "@/lib/prescriptionTypes";
-import type { ChartDose, ChartOrder, DoseState, DrugChart } from "@/lib/ipdTypes";
+import type { FormularyMedicine, SafetyAlert } from "@/lib/types/prescriptions";
+import type { ChartDose, ChartOrder, DoseState, DrugChart } from "@/lib/types/ipd";
 import { formatDateTime, formatHospitalTime, hospitalToday } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

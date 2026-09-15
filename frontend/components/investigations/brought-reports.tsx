@@ -37,8 +37,8 @@ import type {
   InvestigationReport,
   ReportListItem,
   ReportResult,
-} from "@/lib/investigationTypes";
-import { FLAG_LABEL } from "@/lib/investigationTypes";
+} from "@/lib/types/investigations";
+import { FLAG_LABEL } from "@/lib/types/investigations";
 import { formatDateTime } from "@/lib/format";
 import { ReportAnalysisView } from "@/components/investigations/report-analysis";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

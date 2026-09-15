@@ -12,8 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, FileStack, Loader2 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { BundleJob, ChecklistItem, RecordsChecklist } from "@/lib/recordsTypes";
-import { openBlob } from "@/lib/recordsTypes";
+import type { BundleJob, ChecklistItem, RecordsChecklist } from "@/lib/types/records";
+import { openBlob } from "@/lib/types/records";
 import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

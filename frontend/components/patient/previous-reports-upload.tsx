@@ -36,7 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { API_URL } from "@/lib/api";
-import type { DocumentKind } from "@/lib/investigationTypes";
+import type { DocumentKind } from "@/lib/types/investigations";
 
 interface UploadedFile {
   id: string;

@@ -15,7 +15,7 @@
  */
 import { useEffect, useState } from "react";
 import { staffApi } from "@/lib/staffApi";
-import type { PaymentMode, PaymentModeSpec } from "@/lib/emrTypes";
+import type { PaymentMode, PaymentModeSpec } from "@/lib/types/emr";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 

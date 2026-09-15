@@ -10,6 +10,7 @@ Startup order matters and is deliberate:
 Shutdown reverses it, draining in-flight work before closing pools.
 """
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -38,6 +39,7 @@ from app.messaging.factory import close_provider, get_provider
 from app.services.auth_service import seed_default_users
 from app.services.delivery_service import retry_worker
 from app.ipd.room_charges import room_charge_worker
+from app.accounts.worker import books_posting_worker
 
 configure_logging()
 logger = get_logger(__name__)
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
     get_provider()      # surface messaging misconfiguration at boot, not first send
     retry_worker.start()
     room_charge_worker.start()
+    books_posting_worker.start()
 
     mark_ready(True)
     logger.info("startup_complete",
@@ -95,6 +98,7 @@ async def lifespan(app: FastAPI):
 
     await retry_worker.stop()
     await room_charge_worker.stop()
+    await books_posting_worker.stop()
     await session_manager.shutdown()
     await close_provider()
     await close_gateway()
@@ -143,6 +147,15 @@ app.add_middleware(RequestContextMiddleware)
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # The refusal's reason, next to the request line, so a "could not save"
+    # reported by staff can be explained from the log alone.
+    if exc.status_code >= 400:
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        logger.log(
+            logging.ERROR if exc.status_code >= 500 else logging.WARNING,
+            "http_error",
+            extra={"status": exc.status_code, "path": request.url.path, "detail": detail[:500]},
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail,
@@ -153,15 +166,18 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = [
+        {"field": ".".join(str(part) for part in error.get("loc", [])[1:]),
+         "message": error.get("msg")}
+        for error in exc.errors()[:10]
+    ]
+    # Which fields and why, never the submitted values: they may be clinical.
+    logger.warning("validation_error", extra={"path": request.url.path, "errors": errors})
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Some of the submitted values were not valid.",
-            "errors": [
-                {"field": ".".join(str(part) for part in error.get("loc", [])[1:]),
-                 "message": error.get("msg")}
-                for error in exc.errors()[:10]
-            ],
+            "errors": errors,
             "request_id": getattr(request.state, "request_id", None),
         },
     )

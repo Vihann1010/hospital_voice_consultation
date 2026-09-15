@@ -13,11 +13,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors } from "lucide-react";
+import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { staffApi } from "@/lib/staffApi";
-import type { Census } from "@/lib/ipdTypes";
+import type { Census } from "@/lib/types/ipd";
 import { cn } from "@/lib/utils";
 
 const CENSUS_REFRESH_MS = 30000;
@@ -86,6 +86,8 @@ export function WardShell({ children }: { children: React.ReactNode }) {
                 active: pathname === "/ward" || pathname.startsWith("/ward/admissions") },
               { href: "/ward/theatre", label: "Theatre", icon: Scissors,
                 active: pathname.startsWith("/ward/theatre") },
+              { href: "/ward/diet", label: "Diet", icon: UtensilsCrossed,
+                active: pathname.startsWith("/ward/diet") },
               { href: "/lab", label: "Lab", icon: FlaskConical, active: false },
             ].map((link) => (
               <Link

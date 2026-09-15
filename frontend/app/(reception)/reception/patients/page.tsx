@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Search, UserSearch } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PatientListItem } from "@/lib/types";
+import type { PatientListItem } from "@/lib/types/core";
 import { formatDate, initials } from "@/lib/format";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Card } from "@/components/ui/card";

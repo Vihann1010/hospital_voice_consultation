@@ -686,7 +686,7 @@ async def wallet_receipt_pdf(
         patient=patient,
         receipt_number=entry.receipt_number or "-",
         amount_paise=entry.amount_paise,
-        mode=PaymentMode.CASH,
+        mode=entry.mode or PaymentMode.CASH,
         received_at=entry.created_at,
         received_by_name=entry.created_by_name,
         purpose="Advance returned" if is_withdrawal else "Advance received",

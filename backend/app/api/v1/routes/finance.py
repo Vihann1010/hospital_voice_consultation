@@ -1,4 +1,6 @@
-"""Finance: the day's collections, cash sessions, tariff and insurance.
+"""Finance: the day's collections, cash sessions and tariff.
+
+Insurance policies and TPA claims live in app/api/v1/routes/insurance.py.
 
 The reports here answer the questions a hospital actually asks at closing
 time — what did we bill, what did we collect, in what form, and does the
@@ -23,8 +25,6 @@ from app.core.security import (
 )
 from app.models.emr import (
     CashSession,
-    InsuranceClaim,
-    InsurancePolicy,
     Invoice,
     Payment,
     ServiceItem,
@@ -33,7 +33,6 @@ from app.models.emr import (
 )
 from app.models.enums import (
     CashSessionStatus,
-    ClaimStatus,
     InvoiceStatus,
     PaymentMode,
     UserRole,
@@ -43,12 +42,7 @@ from app.schemas.emr_schemas import (
     CashSessionCloseRequest,
     CashSessionOpenRequest,
     CashSessionOut,
-    ClaimCreateRequest,
-    ClaimOut,
-    ClaimUpdateRequest,
     CollectionSummaryOut,
-    PolicyOut,
-    PolicyUpsert,
     ServiceItemOut,
     ServiceItemUpsert,
 )
@@ -136,6 +130,7 @@ async def collections(
             Payment.received_at >= start,
             Payment.received_at < end,
             Payment.mode != PaymentMode.WALLET,
+            Payment.cancelled_at.is_(None),
         )
         .group_by(Payment.mode)
     )
@@ -147,6 +142,7 @@ async def collections(
             Payment.received_at < end,
             Payment.mode == PaymentMode.WALLET,
             Payment.is_refund.is_(False),
+            Payment.cancelled_at.is_(None),
         )
     )
     settled_from_wallet_paise = int(from_wallet.scalar_one() or 0)
@@ -160,6 +156,12 @@ async def collections(
         Payment.received_at >= start,
         Payment.received_at < end,
         Payment.mode != PaymentMode.WALLET,
+        # A struck receipt records money that never moved; the cash ledger and
+        # the daily closing already leave it out, and this figure must agree.
+        Payment.cancelled_at.is_(None),
+        # The insurer's share put on a bill is not money in hand; it arrives
+        # later as a claim settlement. It still shows under by_mode.
+        Payment.mode != PaymentMode.INSURANCE,
     ]
 
     refunded = await session.execute(
@@ -361,116 +363,3 @@ async def upsert_service(
             setattr(item, field, value)
     await session.commit()
     return ServiceItemOut.model_validate(item)
-
-
-# ---------------------------------------------------------------- insurance
-@router.post("/policies", response_model=PolicyOut,
-             status_code=status.HTTP_201_CREATED, dependencies=[Depends(DESK)])
-async def add_policy(payload: PolicyUpsert, session: DbSession) -> PolicyOut:
-    policy = InsurancePolicy(
-        **payload.model_dump(), balance_paise=payload.sum_insured_paise
-    )
-    session.add(policy)
-    await session.commit()
-    return PolicyOut.model_validate(policy)
-
-
-@router.get("/policies", response_model=List[PolicyOut], dependencies=[Depends(DESK)])
-async def list_policies(
-    session: DbSession, patient_id: uuid.UUID = Query(...)
-) -> List[PolicyOut]:
-    result = await session.execute(
-        select(InsurancePolicy)
-        .where(InsurancePolicy.patient_id == patient_id)
-        .order_by(InsurancePolicy.created_at.desc())
-    )
-    return [PolicyOut.model_validate(policy) for policy in result.scalars().all()]
-
-
-@router.post("/claims", response_model=ClaimOut, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(DESK)])
-async def create_claim(
-    payload: ClaimCreateRequest, session: DbSession, user: CurrentUser
-) -> ClaimOut:
-    """Open a cashless claim against a policy.
-
-    Transmission to the payer is deliberately out of scope here: every TPA has
-    its own portal and form, so this records and tracks the claim's state, and
-    the submission itself is done through the payer's own channel.
-    """
-    policy = await session.get(InsurancePolicy, payload.policy_id)
-    if policy is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Policy not found")
-
-    count = await session.execute(select(func.count()).select_from(InsuranceClaim))
-    claim = InsuranceClaim(
-        claim_number=f"CLM-{local_today():%y%m}-{int(count.scalar_one()) + 1:05d}",
-        policy_id=policy.id,
-        patient_id=policy.patient_id,
-        visit_id=payload.visit_id,
-        invoice_id=payload.invoice_id,
-        status=ClaimStatus.DRAFT,
-        claimed_paise=payload.claimed_paise,
-        diagnosis=payload.diagnosis,
-        treatment_summary=payload.treatment_summary,
-        history=[{
-            "at": datetime.now(timezone.utc).isoformat(),
-            "status": ClaimStatus.DRAFT.value,
-            "by": user.full_name,
-        }],
-    )
-    session.add(claim)
-    await session.commit()
-    return ClaimOut.model_validate(claim)
-
-
-@router.patch("/claims/{claim_id}", response_model=ClaimOut, dependencies=[Depends(DESK)])
-async def update_claim(
-    claim_id: uuid.UUID, payload: ClaimUpdateRequest, session: DbSession,
-    user: CurrentUser,
-) -> ClaimOut:
-    """Advance a claim, recording who moved it and when."""
-    claim = await session.get(InsuranceClaim, claim_id)
-    if claim is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Claim not found")
-
-    now = datetime.now(timezone.utc)
-    claim.status = payload.status
-    for field in ("external_reference", "approved_paise", "settled_paise",
-                  "patient_liability_paise", "rejection_reason", "query_detail"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(claim, field, value)
-
-    if payload.status is ClaimStatus.SUBMITTED and claim.submitted_at is None:
-        claim.submitted_at = now
-    if payload.status in (ClaimStatus.APPROVED, ClaimStatus.PARTIALLY_APPROVED,
-                          ClaimStatus.REJECTED):
-        claim.decided_at = now
-    if payload.status is ClaimStatus.SETTLED:
-        claim.settled_at = now
-
-    claim.history = list(claim.history or []) + [{
-        "at": now.isoformat(),
-        "status": payload.status.value,
-        "by": user.full_name,
-        "note": payload.note,
-    }]
-    await session.commit()
-    return ClaimOut.model_validate(claim)
-
-
-@router.get("/claims", response_model=List[ClaimOut], dependencies=[Depends(DESK)])
-async def list_claims(
-    session: DbSession,
-    patient_id: Optional[uuid.UUID] = Query(default=None),
-    claim_status: Optional[ClaimStatus] = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-) -> List[ClaimOut]:
-    statement = select(InsuranceClaim).order_by(InsuranceClaim.created_at.desc()).limit(limit)
-    if patient_id is not None:
-        statement = statement.where(InsuranceClaim.patient_id == patient_id)
-    if claim_status is not None:
-        statement = statement.where(InsuranceClaim.status == claim_status)
-    result = await session.execute(statement)
-    return [ClaimOut.model_validate(claim) for claim in result.scalars().all()]

@@ -19,7 +19,7 @@ from datetime import time
 from typing import Optional
 
 from sqlalchemy import Boolean, Enum as SAEnum, ForeignKey, Integer, String, Text, Time
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -89,6 +89,9 @@ class Consultant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # percent. Read by the payout report; recorded here so a payout run can be
     # reproduced from the settings that applied.
     payout_share_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Which kinds of billed service the share is taken on. Consultations only,
+    # unless agreed otherwise; see app/accounts/payout.py.
+    payout_categories: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: ["consultation"])
 
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, index=True

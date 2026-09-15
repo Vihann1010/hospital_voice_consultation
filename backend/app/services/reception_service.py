@@ -570,6 +570,8 @@ class ReceptionService:
         payment_id: Optional[uuid.UUID] = None,
         receipt_number: Optional[str] = None,
         created_by_name: str = "",
+        mode: Optional[PaymentMode] = None,
+        admission_id: Optional[uuid.UUID] = None,
     ) -> WalletEntry:
         """Apply a signed movement and append the ledger line for it."""
         new_balance = wallet.balance_paise + amount_paise
@@ -590,6 +592,8 @@ class ReceptionService:
             receipt_number=receipt_number,
             reason=reason,
             created_by_name=created_by_name,
+            mode=mode,
+            admission_id=admission_id,
         )
         self.session.add(entry)
         await self.session.flush()
@@ -626,6 +630,7 @@ class ReceptionService:
         mode_details: Optional[Dict[str, Any]] = None,
         reason: Optional[str] = None,
         received_by_name: str = "",
+        admission_id: Optional[uuid.UUID] = None,
     ) -> WalletEntry:
         """Take an advance and put it on the patient's account.
 
@@ -658,6 +663,8 @@ class ReceptionService:
             reason=reason or summarise_mode(mode, details),
             receipt_number=receipt_number,
             created_by_name=received_by_name,
+            mode=mode,
+            admission_id=admission_id,
         )
         logger.info(
             "wallet_deposit",
@@ -692,6 +699,7 @@ class ReceptionService:
             reason=reason.strip(),
             receipt_number=receipt_number,
             created_by_name=received_by_name,
+            mode=PaymentMode.CASH,
         )
         logger.info(
             "wallet_withdrawal",

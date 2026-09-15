@@ -237,6 +237,45 @@ def test_intake_flag_codes_are_shown_as_words():
     assert values["red_flags"]["items"] == ["Severe pain", "Night pain"]
 
 
+# ------------------------------------------------------------- intake vitals
+def test_intake_vitals_are_copied_into_the_pad_as_typed():
+    values, provenance = rules.draft_from_intake(_opd(), {"vitals": {
+        "bpSys": "120", "bpDia": "70", "spo2": "92", "pulse": "", "temperature": "98.6", "weight": "abc"}})
+    fields = values["vitals"]["fields"]
+    assert fields["bp"] == "120/70"
+    assert fields["spo2"] == 92
+    assert fields["temperature"] == 98.6
+    assert fields["pulse"] is None
+    assert fields["weight"] is None  # words in a number field are left out, not altered
+    assert provenance["vitals"]["source"] == rules.INTAKE_VITALS
+
+
+def test_half_a_blood_pressure_is_not_written():
+    values, provenance = rules.draft_from_intake(_opd(), {"vitals": {"bpSys": "120", "bpDia": ""}})
+    assert "vitals" not in values
+    assert "vitals" not in provenance
+
+
+def test_refreshed_intake_vitals_never_overwrite_the_doctors_readings():
+    sections = _opd()
+    values, provenance, changed = rules.refresh_intake_vitals(sections, {}, {}, {"spo2": "95"})
+    assert changed and values["vitals"]["fields"]["spo2"] == 95
+
+    values, provenance, changed = rules.refresh_intake_vitals(sections, values, provenance, {"spo2": "97"})
+    assert changed and values["vitals"]["fields"]["spo2"] == 97
+
+    _, _, changed = rules.refresh_intake_vitals(sections, values, provenance, {"spo2": "97"})
+    assert not changed
+
+    edited = {**provenance, "vitals": {**provenance["vitals"], "edited": True}}
+    _, _, changed = rules.refresh_intake_vitals(sections, values, edited, {"spo2": "90"})
+    assert not changed
+
+    typed_by_doctor = {"vitals": {"fields": {"pulse": 80}}}
+    _, _, changed = rules.refresh_intake_vitals(sections, typed_by_doctor, {}, {"spo2": "90"})
+    assert not changed
+
+
 def test_validated_builtin_layout_carries_every_switch():
     # Regression: the built-in layout once reached the browser without these
     # keys, and a section missing `visible_in_pad` was hidden — so the whole

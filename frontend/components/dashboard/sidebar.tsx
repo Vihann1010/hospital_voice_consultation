@@ -12,13 +12,18 @@ import {
   ClipboardList,
   FileImage,
   FlaskConical,
-  LayoutTemplate,
   Receipt,
   LayoutDashboard,
   LogOut,
   Menu,
   Scissors,
+  Settings,
+  ShieldCheck,
+  Contact,
   Stethoscope,
+  Landmark,
+  UtensilsCrossed,
+  Salad,
   UserCog,
   Users,
   Wallet,
@@ -50,17 +55,23 @@ const NAV: {
   { href: "/patients", label: "Patient search", icon: Stethoscope },
   { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward" },
   { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward" },
+  { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward" },
   { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
   // The laboratory runs in its own terminal; doctors verify results there.
   { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward", roles: ["admin", "doctor"] },
-  { href: "/finance", label: "Finance", icon: Wallet, group: "desk" },
+  // Hospital-wide takings: finance:read is held by admin and manager only.
+  { href: "/finance", label: "Finance", icon: Wallet, group: "desk", roles: ["admin", "manager"] },
+  { href: "/finance/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
+  { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
+    roles: ["admin", "manager", "doctor", "supervisor", "reception"] },
   { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
   // Staff accounts are administration, not daily work: only an admin sees it.
   // The operation list sets theatre prices: kept by management.
+  { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "doctor"] },
+  { href: "/settings/consultants", label: "Consultants", icon: Contact, roles: ["admin", "manager"] },
   { href: "/settings/theatre", label: "Operation list", icon: ClipboardList, roles: ["admin", "manager"] },
   { href: "/settings/room-charges", label: "Room charges", icon: Receipt, roles: ["admin", "manager"] },
-  // Doctors keep their own layouts; department and hospital layouts are the admin's.
-  { href: "/settings/pad-layouts", label: "Pad layouts", icon: LayoutTemplate, roles: ["admin", "doctor"] },
+  { href: "/settings/diet-modes", label: "Diet list", icon: Salad, roles: ["admin", "manager"] },
   { href: "/settings/users", label: "Staff accounts", icon: UserCog, adminOnly: true },
 ];
 
@@ -75,7 +86,10 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="thin-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
       {items.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        // The most specific link wins, so "Settings" is not lit on every settings page.
+        const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+        const active = matches(item.href)
+          && !items.some((other) => other.href.length > item.href.length && matches(other.href));
         return (
           <Link
             key={item.href}

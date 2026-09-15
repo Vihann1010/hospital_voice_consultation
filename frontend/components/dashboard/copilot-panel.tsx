@@ -35,7 +35,7 @@ import type {
   CopilotBriefing,
   CopilotDecision,
   MedicationAlert,
-} from "@/lib/types";
+} from "@/lib/types/core";
 import { titleCase } from "@/lib/format";
 import { AiBadge } from "@/components/dashboard/badges";
 import { Button } from "@/components/ui/button";

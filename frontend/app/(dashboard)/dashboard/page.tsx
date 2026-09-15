@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Activity, ArrowRight, CheckCircle2, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { ConsultationListItem, ConsultationStats } from "@/lib/types";
+import type { ConsultationListItem, ConsultationStats } from "@/lib/types/core";
 import { DEPARTMENT_LABEL, formatFullDate, timeAgo } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { PageHeader } from "@/components/dashboard/page-header";

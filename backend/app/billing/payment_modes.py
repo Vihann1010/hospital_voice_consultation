@@ -84,7 +84,9 @@ MODE_FIELDS: Dict[PaymentMode, List[Field]] = {
 # Modes that move money into the till today. A wallet payment does not: the
 # cash arrived when the patient deposited it, and counting it again here is
 # the double-count that makes a day's takings irreconcilable. A waiver never
-# arrives at all.
+# arrives at all. Nor does an insurance payment: it moves the payer's share of
+# the bill off the family and onto the insurer, and the money arrives weeks
+# later as a claim settlement.
 COLLECTING_MODES = frozenset(
     {
         PaymentMode.CASH,
@@ -92,7 +94,6 @@ COLLECTING_MODES = frozenset(
         PaymentMode.UPI,
         PaymentMode.NET_BANKING,
         PaymentMode.CHEQUE,
-        PaymentMode.INSURANCE,
     }
 )
 

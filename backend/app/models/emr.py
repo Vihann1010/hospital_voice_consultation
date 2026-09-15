@@ -407,6 +407,15 @@ class WalletEntry(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     amount_paise: Mapped[int] = mapped_column(Integer, nullable=False)
     balance_after_paise: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # How the money came or went, for deposits and withdrawals. The drawer
+    # holds only the cash ones; a UPI advance is never in it.
+    mode: Mapped[Optional[PaymentMode]] = mapped_column(
+        SAEnum(PaymentMode, name="payment_mode", values_callable=_VALUES, create_type=False)
+    )
+    # The stay an advance was taken for, so it is set against that stay's bill.
+    admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admissions.id", ondelete="SET NULL"), index=True
+    )
     # What the movement was for, when it involved a bill or a receipt.
     invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"), index=True
@@ -476,6 +485,11 @@ class InsurancePolicy(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     balance_paise: Mapped[Optional[int]] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     card_file: Mapped[Optional[str]] = mapped_column(String(512))
+    # The TPA or insurer in the organisation register, when it is there. The
+    # names above stay as typed from the card, which is what the payer quotes.
+    organisation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="SET NULL"), index=True
+    )
 
 
 class InsuranceClaim(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -512,9 +526,30 @@ class InsuranceClaim(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # The payer's own reference, once they issue one.
     external_reference: Mapped[Optional[str]] = mapped_column(String(120), index=True)
 
+    # Who pays: the organisation the policy names, and its name as it stood
+    # when the claim was opened.
+    organisation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="SET NULL"), index=True
+    )
+    payer_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admissions.id", ondelete="SET NULL"), index=True
+    )
+
+    # Cashless: what was asked for before treatment and what the payer allowed.
+    pre_auth_requested_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pre_auth_approved_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     claimed_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     approved_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The payer's share put on the hospital bill, as an insurance payment. The
+    # family owes the rest.
+    booked_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    booking_payment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL")
+    )
+    # Received plus TDS, from live settlements. Kept in step by the claim service.
     settled_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     # What the patient pays regardless: deductible, co-pay, non-covered items.
     patient_liability_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

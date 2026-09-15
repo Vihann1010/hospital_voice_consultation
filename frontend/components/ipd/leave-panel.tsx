@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import { DoorOpen, Loader2 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { AdmissionChart } from "@/lib/ipdTypes";
+import type { AdmissionChart } from "@/lib/types/ipd";
 import { formatDate, formatDateTime, hospitalToday } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

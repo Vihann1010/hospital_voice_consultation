@@ -1,5 +1,5 @@
 /** Contracts for the Visit Pad (mirrors backend/app/schemas/pad_schemas.py). */
-import type { Department } from "@/lib/types";
+import type { Department } from "@/lib/types/core";
 
 export type SectionKind = "text" | "fields" | "list" | "ai";
 export type FieldType =

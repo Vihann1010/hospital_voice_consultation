@@ -18,7 +18,7 @@ import {
   ArrowRight, Download, FileText, FlaskConical, Info, Plus, RefreshCw, XCircle,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { InvestigationOrder, ReportListItem } from "@/lib/investigationTypes";
+import type { InvestigationOrder, ReportListItem } from "@/lib/types/investigations";
 import { formatDateTime, titleCase } from "@/lib/format";
 import { getToken } from "@/lib/auth";
 import { InvestigationPicker } from "@/components/investigations/investigation-picker";

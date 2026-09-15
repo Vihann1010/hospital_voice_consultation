@@ -184,6 +184,28 @@ class AuditAction(str, enum.Enum):
     LAB_VERIFY = "lab_verify"
     LAB_REOPEN = "lab_reopen"
     LAB_CANCEL = "lab_cancel"
+    # A diet ordered for an inpatient, and a diet order stopped.
+    DIET_ORDER = "diet_order"
+    DIET_STOP = "diet_stop"
+    # The books: a manual voucher, a reversal, a posting run, and payouts.
+    VOUCHER_CREATE = "voucher_create"
+    VOUCHER_REVERSE = "voucher_reverse"
+    BOOKS_POSTING_RUN = "books_posting_run"
+    PAYOUT_APPROVE = "payout_approve"
+    PAYOUT_PAY = "payout_pay"
+    PAYOUT_CANCEL = "payout_cancel"
+    PAYOUT_TERMS = "payout_terms"
+    # TPA and insurance: a policy saved, a claim opened or moved, its share put
+    # on or taken off the bill, and a payer's settlement recorded or cancelled.
+    POLICY_SAVE = "policy_save"
+    CLAIM_CREATE = "claim_create"
+    CLAIM_STATUS = "claim_status"
+    CLAIM_BOOK = "claim_book"
+    CLAIM_UNBOOK = "claim_unbook"
+    CLAIM_SETTLE = "claim_settle"
+    CLAIM_SETTLE_CANCEL = "claim_settle_cancel"
+    # A consultant added to the register or changed.
+    CONSULTANT_SAVE = "consultant_save"
 
 
 class VisitType(str, enum.Enum):

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, FileSignature, Loader2, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { FormWording, PadDocumentSummary, PadDocumentTypeInfo } from "@/lib/padTypes";
+import type { FormWording, PadDocumentSummary, PadDocumentTypeInfo } from "@/lib/types/pad";
 import { formatDateTime } from "@/lib/format";
 import { VisitPad } from "@/components/pad/visit-pad";
 import { Badge } from "@/components/ui/badge";

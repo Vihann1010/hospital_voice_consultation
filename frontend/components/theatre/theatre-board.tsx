@@ -14,14 +14,14 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { Surgery } from "@/lib/theatreTypes";
+import type { Surgery } from "@/lib/types/theatre";
 import {
   SURGERY_STATUS_LABEL,
   SURGERY_STATUS_VARIANT,
   canSchedule,
   checklistSigned,
   minutesLabel,
-} from "@/lib/theatreTypes";
+} from "@/lib/types/theatre";
 import { formatHospitalDate, formatHospitalTime, hospitalToday } from "@/lib/format";
 import { BookSurgeryDialog } from "@/components/theatre/book-surgery-dialog";
 import { Badge } from "@/components/ui/badge";

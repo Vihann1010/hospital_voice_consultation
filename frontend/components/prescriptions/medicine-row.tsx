@@ -4,8 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Sparkles, X } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { FormularyMedicine, MedicineRow } from "@/lib/prescriptionTypes";
-import { FREQUENCY_OPTIONS, TIMING_OPTIONS } from "@/lib/prescriptionTypes";
+import type { FormularyMedicine, MedicineRow } from "@/lib/types/prescriptions";
+import { FREQUENCY_OPTIONS, TIMING_OPTIONS } from "@/lib/types/prescriptions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";

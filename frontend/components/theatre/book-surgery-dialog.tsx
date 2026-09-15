@@ -15,10 +15,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { Consultant } from "@/lib/appointmentTypes";
-import type { BedOccupant } from "@/lib/ipdTypes";
-import type { Operation, Surgery, TheatreOptions, TheatreRoom } from "@/lib/theatreTypes";
-import { fromHospitalInput } from "@/lib/theatreTypes";
+import type { Consultant } from "@/lib/types/appointments";
+import type { BedOccupant } from "@/lib/types/ipd";
+import type { Operation, Surgery, TheatreOptions, TheatreRoom } from "@/lib/types/theatre";
+import { fromHospitalInput } from "@/lib/types/theatre";
 import { hospitalToday } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {

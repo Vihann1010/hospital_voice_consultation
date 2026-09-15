@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    # json: one object per line, for log shipping. pretty: readable lines, for local debugging.
+    LOG_FORMAT: str = "json"
+    # One line per HTTP request: method, path, status, duration and who made it.
+    LOG_REQUESTS: bool = True
     CORS_ORIGINS: str = "http://localhost:3000"
 
     # --- Database ----------------------------------------------------------
@@ -206,6 +210,18 @@ class Settings(BaseSettings):
     BED_CHARGE_WORKER_ENABLED: bool = True
     BED_CHARGE_RUN_AT: str = "08:30"
     BED_CHARGE_CHECK_S: float = 300.0
+    # The go-live date (YYYY-MM-DD). Bed and nursing days before it are never
+    # posted, so an admission already in a bed is not back-billed.
+    BED_CHARGE_POST_FROM: str = ""
+
+    # The books follow the counter: new and changed bills, receipts and
+    # advances are posted this often. See app/accounts/worker.py.
+    BOOKS_POSTING_ENABLED: bool = True
+    BOOKS_POSTING_INTERVAL_S: float = 600.0
+
+    # The kitchen sheet serves each meal against the diet order in effect at
+    # that meal's time, in hospital time. Label=HH:MM, in the order served.
+    DIET_MEAL_TIMES: str = "Breakfast=08:00,Lunch=13:00,Dinner=20:00"
 
     # --- Session management ---------------------------------------------------
     SESSION_IDLE_TTL_S: int = 1800

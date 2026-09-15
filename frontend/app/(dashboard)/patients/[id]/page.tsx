@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PatientHistory } from "@/lib/types";
+import type { PatientHistory } from "@/lib/types/core";
 import { DEPARTMENT_LABEL, formatDateTime, initials, timeAgo } from "@/lib/format";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RiskBadge, StatusBadge } from "@/components/dashboard/badges";

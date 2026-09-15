@@ -5,8 +5,8 @@
  *  Kanpur — a doctor checking the morning from a phone abroad must see the
  *  hospital's nine o'clock, not their own.
  */
-import type { Department } from "@/lib/types";
-import type { VisitType } from "@/lib/emrTypes";
+import type { Department } from "@/lib/types/core";
+import type { VisitType } from "@/lib/types/emr";
 
 export type AppointmentStatus =
   | "pending"
@@ -96,6 +96,10 @@ export interface Consultant {
   opd_days: string;
   free_follow_up_days: number;
   consultation_service_code?: string | null;
+  first_consultation_free?: boolean;
+  /** Set on the Accounts screen only; read-only everywhere else. */
   payout_share_percent: number;
+  payout_categories?: string[];
+  notes?: string | null;
   is_active: boolean;
 }

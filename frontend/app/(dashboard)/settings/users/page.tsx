@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
-import type { Department, StaffRole, User } from "@/lib/types";
+import type { Department, StaffRole, User } from "@/lib/types/core";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";

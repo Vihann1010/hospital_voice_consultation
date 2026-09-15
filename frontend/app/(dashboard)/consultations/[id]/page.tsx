@@ -12,7 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { ConsultationDetail } from "@/lib/types";
+import type { ConsultationDetail } from "@/lib/types/core";
 import {
   DEPARTMENT_LABEL,
   formatDateTime,
@@ -30,6 +30,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+
+/** The vitals typed at intake, shown exactly as they were entered. */
+function intakeVitals(stored?: Record<string, unknown> | null): [string, string][] {
+  if (!stored) return [];
+  const read = (key: string) => String(stored[key] ?? "").trim();
+  const rows: [string, string][] = [];
+  if (read("bpSys") || read("bpDia")) rows.push(["Blood pressure", `${read("bpSys") || "—"} / ${read("bpDia") || "—"}`]);
+  const named: [string, string][] = [
+    ["pulse", "Pulse"], ["spo2", "SpO2"], ["temperature", "Temperature"], ["respiration", "Respiration"],
+    ["weight", "Weight"], ["height", "Height"], ["sugar", "Blood sugar"], ["notes", "Notes"],
+  ];
+  for (const [key, label] of named) {
+    if (read(key)) rows.push([label, read(key)]);
+  }
+  return rows;
+}
 
 export default function ConsultationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -92,6 +108,7 @@ export default function ConsultationDetailPage() {
   const dossier = data.medical_json;
   const record = dossier?.medical_json;
   const summary = dossier?.clinical_summary;
+  const vitals = intakeVitals((dossier as { vitals?: Record<string, unknown> } | null | undefined)?.vitals);
   const reviewed = Boolean(dossier?.reviewed_at);
   const live = data.status === "in_progress";
   const intakePoints = [
@@ -197,7 +214,13 @@ export default function ConsultationDetailPage() {
                 </Card>
                 <Card>
                   <CardHeader className="pb-3"><CardTitle>Vitals</CardTitle></CardHeader>
-                  <CardContent><p className="text-sm text-ink-muted">Not recorded yet.</p></CardContent>
+                  <CardContent>
+                    {vitals.length > 0 ? (
+                      <div className="divide-y divide-border rounded-xl border border-border px-3">
+                        {vitals.map(([label, value]) => <InfoRow key={label} label={label} value={value} />)}
+                      </div>
+                    ) : <p className="text-sm text-ink-muted">Not recorded yet.</p>}
+                  </CardContent>
                 </Card>
               </div>
             </TabsContent>

@@ -4,7 +4,7 @@
  *  rupee float would reintroduce the precision problem the billing layer
  *  exists to avoid, so conversion happens only for display.
  */
-import type { Department, Gender } from "@/lib/types";
+import type { Department, Gender } from "@/lib/types/core";
 
 export type VisitType = "new" | "follow_up" | "review" | "procedure";
 export type VisitStatus = "registered" | "in_consultation" | "completed" | "cancelled";

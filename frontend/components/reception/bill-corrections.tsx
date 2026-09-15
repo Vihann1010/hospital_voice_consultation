@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { getToken } from "@/lib/auth";
-import type { Invoice, InvoiceStatus, InvoiceSummary } from "@/lib/emrTypes";
-import { formatINR } from "@/lib/emrTypes";
+import type { Invoice, InvoiceStatus, InvoiceSummary } from "@/lib/types/emr";
+import { formatINR } from "@/lib/types/emr";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { ReasonDialog, type ReasonRequest } from "@/components/ui/reason-dialog";

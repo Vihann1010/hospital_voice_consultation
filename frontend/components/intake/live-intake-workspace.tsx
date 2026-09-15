@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Clock, Loader2, Mic, Save } from "lucide-react";
-import { useConsultation } from "@/lib/useConsultation";
-import type { QueuedPatient } from "@/lib/emrTypes";
-import type { ConsultationDetail, MedicalRecord } from "@/lib/types";
+import { useConsultation } from "@/lib/hooks/useConsultation";
+import type { QueuedPatient } from "@/lib/types/emr";
+import type { ConsultationDetail, MedicalRecord } from "@/lib/types/core";
 import { staffApi } from "@/lib/staffApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

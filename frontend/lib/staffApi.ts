@@ -3,21 +3,42 @@
 /** Typed client for the authenticated staff/clinical endpoints. */
 import { API_URL, WS_URL } from "@/lib/api";
 import { getToken, clearToken } from "@/lib/auth";
-import type { StaffRole, User } from "@/lib/types";
+import type { StaffRole, User } from "@/lib/types/core";
+import type { AdmissionDiet, DietMode, DietOrder, KitchenSheet } from "@/lib/types/diet";
+import type {
+  Claim,
+  ClaimDetail,
+  ClaimPolicy,
+  InsuranceOptions,
+  PatientInsurance,
+  PayerOutstanding,
+} from "@/lib/types/insurance";
+import type {
+  AccountGroup,
+  LedgerRow,
+  LedgerStatement,
+  Payout,
+  PayoutOptions,
+  PayoutPreview,
+  PostingRun,
+  TrialBalance,
+  VoucherDetail,
+  VoucherRow,
+} from "@/lib/types/accounts";
 import type {
   Appointment,
   AppointmentStatus,
   Board,
   Consultant,
   Slot,
-} from "@/lib/appointmentTypes";
+} from "@/lib/types/appointments";
 import type {
   Milestone,
   Operation,
   Surgery,
   TheatreOptions,
   TheatreRoom,
-} from "@/lib/theatreTypes";
+} from "@/lib/types/theatre";
 import type {
   LabMaster,
   LabOptions,
@@ -28,14 +49,14 @@ import type {
   PatientLabResult,
   PendingLabOrder,
   PrintoutReading,
-} from "@/lib/labTypes";
+} from "@/lib/types/lab";
 import type {
   BundleJob,
   FileCategoryOption,
   PatientFileRecord,
   RadiologyWorkItem,
   RecordsChecklist,
-} from "@/lib/recordsTypes";
+} from "@/lib/types/records";
 import type {
   AdmissionChart,
   AdmissionLeave,
@@ -47,7 +68,7 @@ import type {
   RoomChargeRuns,
   RunningBill,
   WardBoard,
-} from "@/lib/ipdTypes";
+} from "@/lib/types/ipd";
 import type {
   CashSession,
   QueuedPatient,
@@ -69,7 +90,7 @@ import type {
   UploadLink,
   Wallet,
   WalletEntry,
-} from "@/lib/emrTypes";
+} from "@/lib/types/emr";
 import type {
   Delivery,
   DictatedMedicine,
@@ -79,7 +100,7 @@ import type {
   PrescriptionAssist,
   SafetyAlert,
   SafetyCheckResponse,
-} from "@/lib/prescriptionTypes";
+} from "@/lib/types/prescriptions";
 import type {
   Catalog,
   InvestigationOrder,
@@ -89,7 +110,7 @@ import type {
   ReportListItem,
   ReportVersionHistory,
   Workspace,
-} from "@/lib/investigationTypes";
+} from "@/lib/types/investigations";
 import type {
   ArrangementItem,
   CatalogueSuggestion,
@@ -102,7 +123,7 @@ import type {
   PadTemplate,
   SectionSpec,
   SectionValue,
-} from "@/lib/padTypes";
+} from "@/lib/types/pad";
 import type {
   ConsultationDetail,
   ConsultationListItem,
@@ -114,10 +135,11 @@ import type {
   Paginated,
   PatientHistory,
   PatientListItem,
-} from "@/lib/types";
+} from "@/lib/types/core";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** `requestId` finds the matching server log lines: `docker logs satya-backend | grep <id>`. */
+  constructor(public status: number, message: string, public requestId: string | null = null) {
     super(message);
   }
 }
@@ -126,18 +148,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const financeUnlock =
     typeof window !== "undefined" ? sessionStorage.getItem("finance_unlock") : null;
-  const response = await fetch(`${API_URL}/api/v1${path}`, {
-    ...init,
-    headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(financeUnlock && path.startsWith("/finance/")
-        ? { "X-Finance-Unlock": financeUnlock }
-        : {}),
-      ...(init.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  const method = init.method ?? "GET";
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/v1${path}`, {
+      ...init,
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(financeUnlock && path.startsWith("/finance/")
+          ? { "X-Finance-Unlock": financeUnlock }
+          : {}),
+        ...(init.headers ?? {}),
+      },
+      cache: "no-store",
+    });
+  } catch (err) {
+    console.error(`[api] ${method} ${path} -> network error`, err);
+    throw new ApiError(0, "Could not reach the server. Check the connection and try again.");
+  }
 
   if (response.status === 401) {
     clearToken();
@@ -149,13 +178,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     let detail = `Request failed (${response.status})`;
+    let requestId = response.headers.get("X-Request-ID");
     try {
       const body = await response.json();
       if (typeof body.detail === "string") detail = body.detail;
+      if (typeof body.request_id === "string") requestId = body.request_id;
     } catch {
       /* keep default */
     }
-    throw new ApiError(response.status, detail);
+    // For whoever debugs this later: the request id matches the server's log lines.
+    console.warn(
+      `[api] ${method} ${path} -> ${response.status}${requestId ? ` (request ${requestId})` : ""}: ${detail}`
+    );
+    // A server fault gives staff a reference to quote; a refusal already explains itself.
+    if (response.status >= 500 && requestId) detail = `${detail} (reference ${requestId})`;
+    throw new ApiError(response.status, detail, requestId);
   }
   return response.json();
 }
@@ -555,6 +592,87 @@ export const staffApi = {
       body: JSON.stringify({ pin }),
     }),
 
+  // ----------------------------------------------------------- the books
+  postingRuns: () => request<PostingRun[]>("/finance/accounts/runs"),
+  postToBooks: (full = false) =>
+    request<PostingRun>(`/finance/accounts/post${query({ full: full || undefined })}`, { method: "POST" }),
+  accountGroups: () => request<AccountGroup[]>("/finance/accounts/groups"),
+  ledgers: (asOf?: string) => request<LedgerRow[]>(`/finance/accounts/ledgers${query({ as_of: asOf })}`),
+  saveLedger: (payload: Record<string, unknown>, id?: string) =>
+    request<{ id: string }>(id ? `/finance/accounts/ledgers/${id}` : "/finance/accounts/ledgers", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+  ledgerStatement: (id: string, from: string, to: string) =>
+    request<LedgerStatement>(`/finance/accounts/ledgers/${id}/statement${query({ from, to })}`),
+  trialBalance: (from: string, to: string) =>
+    request<TrialBalance>(`/finance/accounts/trial-balance${query({ from, to })}`),
+  vouchers: (params: { from: string; to: string; type?: string; q?: string }) =>
+    request<VoucherRow[]>(`/finance/accounts/vouchers${query({ ...params })}`),
+  voucher: (id: string) => request<VoucherDetail>(`/finance/accounts/vouchers/${id}`),
+  createVoucher: (payload: Record<string, unknown>) =>
+    request<VoucherDetail>("/finance/accounts/vouchers", { method: "POST", body: JSON.stringify(payload) }),
+  reverseVoucher: (id: string, reason: string) =>
+    request<VoucherDetail>(`/finance/accounts/vouchers/${id}/reverse`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  payoutOptions: () => request<PayoutOptions>("/finance/accounts/payout-options"),
+  setPayoutTerms: (consultantId: string, payload: { share_percent: number; categories: string[] }) =>
+    request<Record<string, unknown>>(`/finance/accounts/consultants/${consultantId}/payout-terms`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  payoutPreview: (consultantId: string, from: string, to: string) =>
+    request<PayoutPreview>(`/finance/accounts/payouts/preview${query({ consultant_id: consultantId, from, to })}`),
+  payouts: (params: { from?: string; to?: string; consultant_id?: string } = {}) =>
+    request<Payout[]>(`/finance/accounts/payouts${query({ ...params })}`),
+  payout: (id: string) => request<Payout>(`/finance/accounts/payouts/${id}`),
+  approvePayout: (payload: { consultant_id: string; date_from: string; date_to: string; notes?: string | null }) =>
+    request<Payout>("/finance/accounts/payouts", { method: "POST", body: JSON.stringify(payload) }),
+  payPayout: (id: string, payload: { mode: string; reference?: string | null; tds_paise: number; paid_on: string }) =>
+    request<Payout>(`/finance/accounts/payouts/${id}/pay`, { method: "POST", body: JSON.stringify(payload) }),
+  cancelPayout: (id: string, reason: string) =>
+    request<Payout>(`/finance/accounts/payouts/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  // ------------------------------------------------------ TPA and insurance
+  insuranceOptions: () => request<InsuranceOptions>("/insurance/options"),
+  patientInsurance: (patientId: string) => request<PatientInsurance>(`/insurance/patients/${patientId}`),
+  savePolicy: (payload: Record<string, unknown>, id?: string) =>
+    request<ClaimPolicy>(id ? `/insurance/policies/${id}` : "/insurance/policies", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+  claims: (params: { status?: string; organisation_id?: string; patient_id?: string; q?: string } = {}) =>
+    request<Claim[]>(`/insurance/claims${query({ ...params })}`),
+  claim: (id: string) => request<ClaimDetail>(`/insurance/claims/${id}`),
+  openClaim: (payload: Record<string, unknown>) =>
+    request<ClaimDetail>("/insurance/claims", { method: "POST", body: JSON.stringify(payload) }),
+  moveClaim: (id: string, payload: Record<string, unknown>) =>
+    request<ClaimDetail>(`/insurance/claims/${id}/status`, { method: "POST", body: JSON.stringify(payload) }),
+  bookClaim: (id: string, amountPaise: number) =>
+    request<ClaimDetail>(`/insurance/claims/${id}/book`, {
+      method: "POST",
+      body: JSON.stringify({ amount_paise: amountPaise }),
+    }),
+  unbookClaim: (id: string, reason: string) =>
+    request<ClaimDetail>(`/insurance/claims/${id}/unbook`, { method: "POST", body: JSON.stringify({ reason }) }),
+  recordSettlement: (id: string, payload: Record<string, unknown>) =>
+    request<ClaimDetail>(`/insurance/claims/${id}/settlements`, { method: "POST", body: JSON.stringify(payload) }),
+  cancelSettlement: (id: string, reason: string) =>
+    request<ClaimDetail>(`/insurance/settlements/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
+  payerOutstanding: (asOf?: string) => request<PayerOutstanding>(`/insurance/outstanding${query({ as_of: asOf })}`),
+
+  // ---------------------------------------------------- consultant register
+  saveConsultant: (payload: Record<string, unknown>, id?: string) =>
+    request<Consultant>(id ? `/masters/consultants/${id}` : "/masters/consultants", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+
   serviceItems: () => request<ServiceItem[]>("/finance/services"),
 
   collections: (on?: string) =>
@@ -628,6 +746,16 @@ export const staffApi = {
 
   admissionChart: (id: string) =>
     request<AdmissionChart>(`/ipd/admissions/${id}`),
+
+  /** A further advance during the stay; returns the receipt and the updated bill. */
+  takeAdmissionAdvance: (
+    admissionId: string,
+    payload: { amount_paise: number; mode: string; mode_details?: Record<string, string> | null }
+  ) =>
+    request<{ entry: { id: string; receipt_number: string; amount_paise: number }; bill: RunningBill }>(
+      `/ipd/admissions/${admissionId}/advance`,
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
 
   admitPatient: (payload: Record<string, unknown>) =>
     request<Record<string, unknown>>("/ipd/admissions", {
@@ -769,6 +897,30 @@ export const staffApi = {
       if (err instanceof SyntaxError) return;
       throw err;
     }),
+
+  // --------------------------------------------------------------- diet
+  dietModes: (includeInactive = false) =>
+    request<DietMode[]>(`/diet/modes${query({ include_inactive: includeInactive || undefined })}`),
+  saveDietMode: (payload: Omit<DietMode, "id">, id?: string) =>
+    request<DietMode>(id ? `/diet/modes/${id}` : "/diet/modes", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+  admissionDiet: (admissionId: string) => request<AdmissionDiet>(`/diet/admissions/${admissionId}`),
+  orderDiet: (
+    admissionId: string,
+    payload: { mode_id: string; instructions?: string | null; starts_at?: string | null }
+  ) =>
+    request<DietOrder>(`/diet/admissions/${admissionId}/orders`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  stopDiet: (admissionId: string, reason: string) =>
+    request<DietOrder>(`/diet/admissions/${admissionId}/stop`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  kitchenSheet: (on?: string) => request<KitchenSheet>(`/diet/kitchen${query({ on })}`),
 
   // ------------------------------------------------------- patient files
   patientFileCategories: () => request<{ items: FileCategoryOption[] }>("/patient-files/categories"),

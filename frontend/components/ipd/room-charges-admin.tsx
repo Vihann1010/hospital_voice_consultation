@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Receipt } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
-import type { RoomChargeRuns } from "@/lib/ipdTypes";
+import type { RoomChargeRuns } from "@/lib/types/ipd";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

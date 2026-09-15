@@ -1,6 +1,6 @@
 /** IPD contracts. Amounts are integer paise, matching the backend. */
-import type { Department } from "@/lib/types";
-import type { SafetyAlert } from "@/lib/prescriptionTypes";
+import type { Department } from "@/lib/types/core";
+import type { SafetyAlert } from "@/lib/types/prescriptions";
 
 export type WardType =
   | "general" | "semi_private" | "private" | "deluxe" | "icu" | "hdu"
@@ -27,6 +27,8 @@ export interface BedOccupant {
   diagnosis: string | null;
   on_leave?: boolean;
   expected_return_on?: string | null;
+  /** The diet in effect now. */
+  diet?: string | null;
 }
 
 export interface BedCell {
@@ -108,7 +110,11 @@ export interface RunningBill {
   ip_number: string;
   by_category: Record<string, { count: number; total_paise: number }>;
   total_paise: number;
+  /** Everything held against the stay: receipted advances still in the wallet plus any old unreceipted one. */
   advance_paid_paise: number;
+  advance_received_paise?: number;
+  advance_held_paise?: number;
+  advance_unreceipted_paise?: number;
   balance_paise: number;
   days_so_far: number;
 }

@@ -31,8 +31,8 @@ import type {
   InvestigationReport,
   MedicineRead,
   ReportResult,
-} from "@/lib/investigationTypes";
-import { FLAG_LABEL } from "@/lib/investigationTypes";
+} from "@/lib/types/investigations";
+import { FLAG_LABEL } from "@/lib/types/investigations";
 import { AiBadge } from "@/components/dashboard/badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

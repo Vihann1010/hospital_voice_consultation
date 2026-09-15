@@ -2,13 +2,13 @@
 SATYA HOSPITAL PLATFORM - STAFF ROLES AND WHAT EACH ONE CAN DO
 ==============================================================================
 
-Generated 2026-09-13 from app/core/permissions.py,
+Generated 2026-09-15 from app/core/permissions.py,
 which is the single place these rules live. Every API route names the
 permission it needs, so this document and the running system cannot
 disagree. Regenerate it with scripts/generate_roles_doc.py after any
 change to the catalogue.
 
-7 roles, 37 permissions.
+7 roles, 40 permissions.
 
 ------------------------------------------------------------------------------
 ADMIN  -  The system owner.
@@ -16,7 +16,7 @@ ADMIN  -  The system owner.
   Everything, including staff accounts and system settings. Held by one or
   two people, not used for daily work.
 
-  CAN (37 of 37):
+  CAN (40 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -39,10 +39,12 @@ ADMIN  -  The system owner.
     + Enter laboratory results and mark samples collected
     + Verify laboratory results, and reopen a verified one
     + Edit the lab test list, units and reference ranges
+    + Order, change and stop an inpatient's diet
     + Upload a scanned or external report against a patient
     + System administration, including staff accounts
     + Look up consultants and referring doctors
     + Edit the consultant register and the registration form
+    + Keep insurance policies and TPA claims; put an approved claim on the bill
     + Register a new patient and issue a UHID
     + Open a visit and allot a queue token
     + Raise a bill
@@ -54,6 +56,7 @@ ADMIN  -  The system owner.
     + Cancel a bill that was already raised
     + See hospital-wide revenue and collection figures
     + Change the price list
+    + Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ------------------------------------------------------------------------------
 MANAGER  -  The hospital's money and oversight.
@@ -62,7 +65,7 @@ MANAGER  -  The hospital's money and oversight.
   register and the registration form, reads the audit trail. Deliberately
   cannot work the till or register a patient - oversight is not operation.
 
-  CAN (11 of 37):
+  CAN (13 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -70,10 +73,12 @@ MANAGER  -  The hospital's money and oversight.
     + Read the audit trail of who opened and changed what
     + Look up consultants and referring doctors
     + Edit the consultant register and the registration form
+    + Keep insurance policies and TPA claims; put an approved claim on the bill
     + Read and reprint a bill
     + See the appointment diary and the day's queue board
     + See hospital-wide revenue and collection figures
     + Change the price list
+    + Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
   CANNOT:
     - Sign off a consultation as the treating doctor
@@ -93,6 +98,7 @@ MANAGER  -  The hospital's money and oversight.
     - Enter laboratory results and mark samples collected
     - Verify laboratory results, and reopen a verified one
     - Edit the lab test list, units and reference ranges
+    - Order, change and stop an inpatient's diet
     - Upload a scanned or external report against a patient
     - System administration, including staff accounts
     - Register a new patient and issue a UHID
@@ -111,7 +117,7 @@ DOCTOR  -  Clinical authority.
   refund, cancel a bill, or see hospital-wide revenue - treatment decisions
   are not pricing decisions.
 
-  CAN (28 of 37):
+  CAN (30 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -131,8 +137,10 @@ DOCTOR  -  Clinical authority.
     + Enter laboratory results and mark samples collected
     + Verify laboratory results, and reopen a verified one
     + Edit the lab test list, units and reference ranges
+    + Order, change and stop an inpatient's diet
     + Upload a scanned or external report against a patient
     + Look up consultants and referring doctors
+    + Keep insurance policies and TPA claims; put an approved claim on the bill
     + Register a new patient and issue a UHID
     + Open a visit and allot a queue token
     + Raise a bill
@@ -151,6 +159,7 @@ DOCTOR  -  Clinical authority.
     - Cancel a bill that was already raised
     - See hospital-wide revenue and collection figures
     - Change the price list
+    - Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ------------------------------------------------------------------------------
 SUPERVISOR  -  The counter's escalation point.
@@ -158,7 +167,7 @@ SUPERVISOR  -  The counter's escalation point.
   Everything reception does, plus the two actions that undo counter work:
   refunds and bill cancellations. No clinical authority.
 
-  CAN (17 of 37):
+  CAN (18 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -167,6 +176,7 @@ SUPERVISOR  -  The counter's escalation point.
     + Register laboratory tests for a patient
     + Upload a scanned or external report against a patient
     + Look up consultants and referring doctors
+    + Keep insurance policies and TPA claims; put an approved claim on the bill
     + Register a new patient and issue a UHID
     + Open a visit and allot a queue token
     + Raise a bill
@@ -194,10 +204,12 @@ SUPERVISOR  -  The counter's escalation point.
     - Enter laboratory results and mark samples collected
     - Verify laboratory results, and reopen a verified one
     - Edit the lab test list, units and reference ranges
+    - Order, change and stop an inpatient's diet
     - System administration, including staff accounts
     - Edit the consultant register and the registration form
     - See hospital-wide revenue and collection figures
     - Change the price list
+    - Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ------------------------------------------------------------------------------
 RECEPTION  -  The front desk.
@@ -206,7 +218,7 @@ RECEPTION  -  The front desk.
   the cash drawer, uploads reports. Cannot refund, cancel a bill, reprice
   a service, or see hospital-wide revenue.
 
-  CAN (15 of 37):
+  CAN (16 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -215,6 +227,7 @@ RECEPTION  -  The front desk.
     + Register laboratory tests for a patient
     + Upload a scanned or external report against a patient
     + Look up consultants and referring doctors
+    + Keep insurance policies and TPA claims; put an approved claim on the bill
     + Register a new patient and issue a UHID
     + Open a visit and allot a queue token
     + Raise a bill
@@ -240,12 +253,14 @@ RECEPTION  -  The front desk.
     - Enter laboratory results and mark samples collected
     - Verify laboratory results, and reopen a verified one
     - Edit the lab test list, units and reference ranges
+    - Order, change and stop an inpatient's diet
     - System administration, including staff accounts
     - Edit the consultant register and the registration form
     - Return money to a patient
     - Cancel a bill that was already raised
     - See hospital-wide revenue and collection figures
     - Change the price list
+    - Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ------------------------------------------------------------------------------
 NURSE  -  The ward.
@@ -254,7 +269,7 @@ NURSE  -  The ward.
   assessment and shift notes. Reads the doctor's notes. Cannot prescribe,
   admit, discharge, bill, or sign a doctor's document.
 
-  CAN (11 of 37):
+  CAN (12 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -263,6 +278,7 @@ NURSE  -  The ward.
     + Write and sign the nursing assessment and nursing notes
     + Record theatre times: wheel-in, incision, closure, wheel-out
     + Register laboratory tests for a patient
+    + Order, change and stop an inpatient's diet
     + Upload a scanned or external report against a patient
     + Look up consultants and referring doctors
     + See the appointment diary and the day's queue board
@@ -284,6 +300,7 @@ NURSE  -  The ward.
     - Edit the lab test list, units and reference ranges
     - System administration, including staff accounts
     - Edit the consultant register and the registration form
+    - Keep insurance policies and TPA claims; put an approved claim on the bill
     - Register a new patient and issue a UHID
     - Open a visit and allot a queue token
     - Raise a bill
@@ -294,6 +311,7 @@ NURSE  -  The ward.
     - Cancel a bill that was already raised
     - See hospital-wide revenue and collection figures
     - Change the price list
+    - Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ------------------------------------------------------------------------------
 LAB  -  The laboratory bench.
@@ -302,7 +320,7 @@ LAB  -  The laboratory bench.
   culture sensitivity. Cannot verify a result, change a reference range,
   raise a bill or take payment.
 
-  CAN (9 of 37):
+  CAN (9 of 40):
     + Open a patient's record and search the register
     + Read consultations, intake summaries and transcripts
     + Read uploaded investigation reports
@@ -330,8 +348,10 @@ LAB  -  The laboratory bench.
     - Record theatre times: wheel-in, incision, closure, wheel-out
     - Verify laboratory results, and reopen a verified one
     - Edit the lab test list, units and reference ranges
+    - Order, change and stop an inpatient's diet
     - System administration, including staff accounts
     - Edit the consultant register and the registration form
+    - Keep insurance policies and TPA claims; put an approved claim on the bill
     - Register a new patient and issue a UHID
     - Open a visit and allot a queue token
     - Raise a bill
@@ -342,50 +362,54 @@ LAB  -  The laboratory bench.
     - Cancel a bill that was already raised
     - See hospital-wide revenue and collection figures
     - Change the price list
+    - Post vouchers, keep the chart of accounts, run and pay consultant payouts
 
 ==============================================================================
 AT A GLANCE
 ==============================================================================
 
-                                                                              admin    manager     doctor  superviso  reception      nurse        lab
-                                                                          ---------  ---------  ---------  ---------  ---------  ---------  ---------
-Open a patient's record and search the register                                 YES        YES        YES        YES        YES        YES        YES
-Read consultations, intake summaries and transcripts                            YES        YES        YES        YES        YES        YES        YES
-Read uploaded investigation reports                                             YES        YES        YES        YES        YES        YES        YES
-Read issued prescriptions                                                       YES        YES        YES        YES        YES        YES        YES
-Read the audit trail of who opened and changed what                             YES        YES          .          .          .          .          .
-Sign off a consultation as the treating doctor                                  YES          .        YES          .          .          .          .
-Use the AI copilot: red flags, differentials, suggestions                       YES          .        YES          .          .          .          .
-Order investigations                                                            YES          .        YES          .          .          .          .
-Write and issue a prescription                                                  YES          .        YES          .          .          .          .
-Send a prescription to the patient over WhatsApp                                YES          .        YES          .          .          .          .
-Create and edit clinical templates                                              YES          .        YES          .          .          .          .
-Write in the Visit Pad and other clinical documents                             YES          .        YES          .          .          .          .
-Sign a clinical document, or sign a corrected version                           YES          .        YES          .          .          .          .
-Change the sections of a department's or the hospital's pad                     YES          .          .          .          .          .          .
-Record observations and doses, change bed status, move a patient's bed          YES          .        YES        YES        YES        YES          .
-Write and sign the nursing assessment and nursing notes                         YES          .          .          .          .        YES          .
-Book, reschedule and cancel an operation theatre case                           YES          .        YES          .          .          .          .
-Record theatre times: wheel-in, incision, closure, wheel-out                    YES          .        YES          .          .        YES          .
-Register laboratory tests for a patient                                         YES          .        YES        YES        YES        YES        YES
-Enter laboratory results and mark samples collected                             YES          .        YES          .          .          .        YES
-Verify laboratory results, and reopen a verified one                            YES          .        YES          .          .          .          .
-Edit the lab test list, units and reference ranges                              YES          .        YES          .          .          .          .
-Upload a scanned or external report against a patient                           YES          .        YES        YES        YES        YES        YES
-System administration, including staff accounts                                 YES          .          .          .          .          .          .
-Look up consultants and referring doctors                                       YES        YES        YES        YES        YES        YES        YES
-Edit the consultant register and the registration form                          YES        YES          .          .          .          .          .
-Register a new patient and issue a UHID                                         YES          .        YES        YES        YES          .          .
-Open a visit and allot a queue token                                            YES          .        YES        YES        YES          .          .
-Raise a bill                                                                    YES          .        YES        YES        YES          .          .
-Read and reprint a bill                                                         YES        YES        YES        YES        YES          .          .
-Take payment and run the cash drawer                                            YES          .        YES        YES        YES          .          .
-See the appointment diary and the day's queue board                             YES        YES        YES        YES        YES        YES        YES
-Book, move and cancel appointments; check patients in                           YES          .        YES        YES        YES          .          .
-Return money to a patient                                                       YES          .          .        YES          .          .          .
-Cancel a bill that was already raised                                           YES          .          .        YES          .          .          .
-See hospital-wide revenue and collection figures                                YES        YES          .          .          .          .          .
-Change the price list                                                           YES        YES          .          .          .          .          .
+                                                                                 admin    manager     doctor  superviso  reception      nurse        lab
+                                                                             ---------  ---------  ---------  ---------  ---------  ---------  ---------
+Open a patient's record and search the register                                    YES        YES        YES        YES        YES        YES        YES
+Read consultations, intake summaries and transcripts                               YES        YES        YES        YES        YES        YES        YES
+Read uploaded investigation reports                                                YES        YES        YES        YES        YES        YES        YES
+Read issued prescriptions                                                          YES        YES        YES        YES        YES        YES        YES
+Read the audit trail of who opened and changed what                                YES        YES          .          .          .          .          .
+Sign off a consultation as the treating doctor                                     YES          .        YES          .          .          .          .
+Use the AI copilot: red flags, differentials, suggestions                          YES          .        YES          .          .          .          .
+Order investigations                                                               YES          .        YES          .          .          .          .
+Write and issue a prescription                                                     YES          .        YES          .          .          .          .
+Send a prescription to the patient over WhatsApp                                   YES          .        YES          .          .          .          .
+Create and edit clinical templates                                                 YES          .        YES          .          .          .          .
+Write in the Visit Pad and other clinical documents                                YES          .        YES          .          .          .          .
+Sign a clinical document, or sign a corrected version                              YES          .        YES          .          .          .          .
+Change the sections of a department's or the hospital's pad                        YES          .          .          .          .          .          .
+Record observations and doses, change bed status, move a patient's bed             YES          .        YES        YES        YES        YES          .
+Write and sign the nursing assessment and nursing notes                            YES          .          .          .          .        YES          .
+Book, reschedule and cancel an operation theatre case                              YES          .        YES          .          .          .          .
+Record theatre times: wheel-in, incision, closure, wheel-out                       YES          .        YES          .          .        YES          .
+Register laboratory tests for a patient                                            YES          .        YES        YES        YES        YES        YES
+Enter laboratory results and mark samples collected                                YES          .        YES          .          .          .        YES
+Verify laboratory results, and reopen a verified one                               YES          .        YES          .          .          .          .
+Edit the lab test list, units and reference ranges                                 YES          .        YES          .          .          .          .
+Order, change and stop an inpatient's diet                                         YES          .        YES          .          .        YES          .
+Upload a scanned or external report against a patient                              YES          .        YES        YES        YES        YES        YES
+System administration, including staff accounts                                    YES          .          .          .          .          .          .
+Look up consultants and referring doctors                                          YES        YES        YES        YES        YES        YES        YES
+Edit the consultant register and the registration form                             YES        YES          .          .          .          .          .
+Keep insurance policies and TPA claims; put an approved claim on the bill          YES        YES        YES        YES        YES          .          .
+Register a new patient and issue a UHID                                            YES          .        YES        YES        YES          .          .
+Open a visit and allot a queue token                                               YES          .        YES        YES        YES          .          .
+Raise a bill                                                                       YES          .        YES        YES        YES          .          .
+Read and reprint a bill                                                            YES        YES        YES        YES        YES          .          .
+Take payment and run the cash drawer                                               YES          .        YES        YES        YES          .          .
+See the appointment diary and the day's queue board                                YES        YES        YES        YES        YES        YES        YES
+Book, move and cancel appointments; check patients in                              YES          .        YES        YES        YES          .          .
+Return money to a patient                                                          YES          .          .        YES          .          .          .
+Cancel a bill that was already raised                                              YES          .          .        YES          .          .          .
+See hospital-wide revenue and collection figures                                   YES        YES          .          .          .          .          .
+Change the price list                                                              YES        YES          .          .          .          .          .
+Post vouchers, keep the chart of accounts, run and pay consultant payouts          YES        YES          .          .          .          .          .
 
 ==============================================================================
 NOTES
@@ -436,3 +460,11 @@ NOTES
   * A receptionist may book and cancel an appointment but not cancel a bill.
     Freeing a slot costs the hospital nothing; unpicking a raised invoice is
     an accounting act, which is why it sits with the supervisor.
+
+  * TPA claims are worked at the counter: policies, pre-authorisation, claim
+    status, and putting the approved amount on the bill. Recording what the
+    TPA or insurer actually paid, with TDS and disallowances, is accounts
+    work and needs the finance PIN.
+
+  * A consultant's payout share is set only on the Accounts screen, where the
+    change is audited; the consultant register does not change it.
