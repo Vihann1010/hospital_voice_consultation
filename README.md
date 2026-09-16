@@ -407,6 +407,8 @@ deploy/
 └── scripts/              # Backup, restore and migration scripts
 
 docs/
+├── STAFF_GUIDE.md        # How hospital staff use the system, by role
+├── ENGINEERING_HANDOFF.md # Current state, operations and open work for engineers
 ├── STRUCTURE.md          # Where code lives and where new code goes
 ├── LOGGING.md            # Log format and how to trace a reported problem
 ├── ROLES.txt             # Generated: what each staff role can do

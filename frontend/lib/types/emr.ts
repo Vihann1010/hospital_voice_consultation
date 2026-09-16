@@ -106,6 +106,7 @@ export interface Invoice {
   igst_paise: number;
   total_paise: number;
   paid_paise: number;
+  discount_reason?: string | null;
   issued_at?: string | null;
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
@@ -366,11 +367,22 @@ export interface Quote {
   lines: QuoteLine[];
 }
 
+/** A rate this organisation has agreed for one service, overriding the price list. */
+export interface NegotiatedRate {
+  id: string;
+  service_item_id: string;
+  rate_paise: number;
+  notes?: string | null;
+}
+
 export interface Organisation {
   id: string;
   code: string;
   name: string;
   payer_type: PayerType;
+  contact_person?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
   default_discount_percent: number;
   credit_days: number;
   is_active: boolean;

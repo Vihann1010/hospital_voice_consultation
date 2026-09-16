@@ -153,6 +153,10 @@ class AuditAction(str, enum.Enum):
     # step of the cascade is recorded under its own name rather than all of
     # them sharing a generic "correction".
     RECEIPT_CANCEL = "receipt_cancel"
+    # Money actually given back, and a bill struck. Both were recorded as
+    # "export_document" before, which made a refund impossible to find.
+    REFUND_ISSUE = "refund_issue"
+    INVOICE_CANCEL = "invoice_cancel"
     INVOICE_UNCANCEL = "invoice_uncancel"
     INVOICE_AMEND = "invoice_amend"
     VISIT_CANCEL = "visit_cancel"

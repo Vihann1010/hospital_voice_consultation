@@ -463,7 +463,7 @@ async def refund(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     await audit_record(
-        AuditAction.EXPORT_DOCUMENT,
+        AuditAction.REFUND_ISSUE,
         actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
         entity_type="refund", entity_id=payment.id,
         ip_address=client_ip(request),
@@ -488,7 +488,7 @@ async def cancel_invoice(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     await audit_record(
-        AuditAction.EXPORT_DOCUMENT,
+        AuditAction.INVOICE_CANCEL,
         actor_id=user.id, actor_name=user.full_name, actor_role=user.role.value,
         entity_type="invoice_cancellation", entity_id=invoice.id,
         ip_address=client_ip(request),

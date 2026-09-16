@@ -15,7 +15,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession, get_reception_service, require_permission
+from app.api.deps import (
+    CurrentUser, DbSession, get_reception_service, require_any_permission, require_permission,
+)
 from app.core.permissions import Permission
 from app.core.config import settings
 from app.core.security import (
@@ -331,8 +333,12 @@ async def close_cash_session(
 
 
 # ------------------------------------------------------------------- tariff
+# Read by the counter to bill and by management to price it; either is enough.
+READ_TARIFF = require_any_permission(Permission.PAYMENT_COLLECT, Permission.TARIFF_MANAGE)
+
+
 @router.get("/services", response_model=List[ServiceItemOut],
-            dependencies=[Depends(DESK)])
+            dependencies=[Depends(READ_TARIFF)])
 async def list_services(
     session: DbSession, active_only: bool = Query(default=True)
 ) -> List[ServiceItemOut]:

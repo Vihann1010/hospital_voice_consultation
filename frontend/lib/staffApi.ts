@@ -80,6 +80,7 @@ import type {
   ServiceItem,
   Visit,
   InvoiceList,
+  NegotiatedRate,
   Organisation,
   PatientDiary,
   PaymentModeSpec,
@@ -430,6 +431,18 @@ export const staffApi = {
 
   organisations: (activeOnly = true) =>
     request<Organisation[]>(`/masters/organisations${query({ active_only: activeOnly })}`),
+  saveOrganisation: (payload: Record<string, unknown>, id?: string) =>
+    request<Organisation>(id ? `/masters/organisations/${id}` : "/masters/organisations", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    }),
+  organisationRates: (id: string) =>
+    request<NegotiatedRate[]>(`/masters/organisations/${id}/rates`),
+  saveOrganisationRates: (id: string, rates: { service_item_id: string; rate_paise: number; notes?: string | null }[]) =>
+    request<NegotiatedRate[]>(`/masters/organisations/${id}/rates`, {
+      method: "PUT",
+      body: JSON.stringify(rates),
+    }),
 
   invoices: (params: {
     q?: string;
@@ -673,7 +686,10 @@ export const staffApi = {
       body: JSON.stringify(payload),
     }),
 
-  serviceItems: () => request<ServiceItem[]>("/finance/services"),
+  serviceItems: (activeOnly = true) =>
+    request<ServiceItem[]>(`/finance/services${query({ active_only: activeOnly })}`),
+  saveService: (code: string, payload: Record<string, unknown>) =>
+    request<ServiceItem>(`/finance/services/${code}`, { method: "PUT", body: JSON.stringify(payload) }),
 
   collections: (on?: string) =>
     request<CollectionSummary>(`/finance/collections${query({ on })}`),
@@ -759,6 +775,27 @@ export const staffApi = {
 
   admitPatient: (payload: Record<string, unknown>) =>
     request<Record<string, unknown>>("/ipd/admissions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  saveWard: (payload: Record<string, unknown>) =>
+    request<{ id: string; code: string; name: string }>("/ipd/wards", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  addBed: (payload: Record<string, unknown>) =>
+    request<{ id: string; label: string; status: string }>("/ipd/beds", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setBedStatus: (bedId: string, status: string, notes?: string | null) =>
+    request<{ id: string; status: string }>(`/ipd/beds/${bedId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, notes: notes ?? null }),
+    }),
+  amendInvoice: (invoiceId: string, payload: Record<string, unknown>) =>
+    request<Invoice>(`/reception/invoices/${invoiceId}/amend`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

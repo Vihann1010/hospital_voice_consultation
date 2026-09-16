@@ -101,6 +101,25 @@ def get_pad_service(session: DbSession) -> PadService:
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def require_any_permission(*permissions: Permission):
+    """Authorisation guard for a screen two different jobs reach.
+
+    `require_permission` demands every named permission; this one accepts any,
+    for the few endpoints legitimately read by more than one kind of staff —
+    the price list is read at the counter to bill, and by management to price.
+    """
+
+    async def checker(user: CurrentUser) -> User:
+        if not any(has_permission(user.role, p) for p in permissions):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Requires one of: {', '.join(p.value for p in permissions)}",
+            )
+        return user
+
+    return checker
+
+
 def require_permission(*permissions: Permission):
     """Authorisation guard, e.g. Depends(require_permission(Permission.REFUND_ISSUE)).
 

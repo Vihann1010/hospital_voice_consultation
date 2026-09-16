@@ -1,6 +1,11 @@
 # Satya Hospital AI Platform
 ## Full-stack developer handoff
 
+> **Superseded in part.** This describes the earlier voice-intake product. For the
+> current platform — roles, modules added in Parts 3–5, operations and open work —
+> read [ENGINEERING_HANDOFF.md](ENGINEERING_HANDOFF.md) first. The role table in
+> section 6 below is out of date; the generated [ROLES.txt](ROLES.txt) is authoritative.
+
 **Repository:** `hospital_voice_consultation-main`  
 **Frontend:** Next.js 14, React 18, TypeScript, Tailwind CSS  
 **Backend:** FastAPI, SQLAlchemy 2 async, asyncpg, Alembic  
