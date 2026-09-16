@@ -59,6 +59,10 @@ The reception terminal has: **Counter**, **Patients**, **Appointments**,
 2. In **Visit**, choose the consultant and the visit type.
 3. In **Charges**, add the services. The fee comes from the price list.
    A free follow-up or an organisation's agreed rate is applied automatically and shown on the bill with the reason.
+   Each charge has its own **Rate**, **Qty**, **Discount** and **Remark**:
+   - Change the **Rate** when the doctor has said to charge something else. The line then says "charged at the counter"; leave it alone and the automatic rules keep working.
+   - **Discount** on a line comes off that charge only. The box lower down still discounts the whole bill.
+   - **Remark** is printed on the bill under the charge — say why the rate was changed or why the discount was given, so the patient and the auditor read the same explanation.
 4. In **Payment**, choose the mode and fill in what it asks for:
    - Card: last 4 digits
    - UPI / bank transfer: the reference number

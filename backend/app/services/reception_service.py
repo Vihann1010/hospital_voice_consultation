@@ -344,6 +344,7 @@ class ReceptionService:
                     code=entry.get("code") or (service.code if service else None),
                     hsn_sac_code=service.hsn_sac_code if service else None,
                     service_item_id=str(service.id) if service else None,
+                    remark=(entry.get("remark") or None),
                 )
             )
         return lines, price_explain(decisions)
@@ -373,6 +374,7 @@ class ReceptionService:
                     ),
                     code=line.code,
                     description=line.description,
+                    remark=line.remark,
                     hsn_sac_code=line.hsn_sac_code,
                     quantity=line.quantity,
                     unit_rate_paise=line.unit_rate_paise,

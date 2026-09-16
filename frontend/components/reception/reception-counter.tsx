@@ -21,7 +21,9 @@ import type {
   ServiceItem, VisitType,
 } from "@/lib/types/emr";
 import type { Consultant } from "@/lib/types/appointments";
-import { PAYMENT_MODES, VISIT_TYPES, formatINR, rupeesToPaise } from "@/lib/types/emr";
+import {
+  PAYMENT_MODES, VISIT_TYPES, formatINR, paiseToRupees, rupeesToPaise,
+} from "@/lib/types/emr";
 import {
   PaymentModeFields,
   cleanModeDetails,
@@ -40,9 +42,42 @@ interface BillLine {
   key: string;
   service: ServiceItem;
   quantity: number;
+  /** What is being charged, in rupees, as typed. */
+  rateRupees: string;
+  /**
+   * Whether the clerk changed the rate. Only an edited rate is sent as an
+   * explicit price: an untouched line must stay open to the consultant's free
+   * follow-up and the payer's agreed rate, and sending the tariff figure back
+   * would stamp "price set at the counter" on every line and silence them.
+   */
+  rateEdited: boolean;
+  /** A discount on this line alone, in rupees, as typed. */
+  discountRupees: string;
+  /** Why this charge reads as it does. Printed on the bill. */
+  remark: string;
 }
 
 let lineKey = 0;
+
+/** A fresh line at the tariff rate, with nothing written against it yet. */
+function makeLine(service: ServiceItem): BillLine {
+  return {
+    key: `line-${++lineKey}`,
+    service,
+    quantity: 1,
+    rateRupees: paiseToRupees(service.rate_paise),
+    rateEdited: false,
+    discountRupees: "",
+    remark: "",
+  };
+}
+
+const lineRate = (line: BillLine) =>
+  line.rateEdited ? rupeesToPaise(line.rateRupees || "0") : line.service.rate_paise;
+const lineGross = (line: BillLine) => lineRate(line) * line.quantity;
+/** Never more than the line itself; the server refuses that too. */
+const lineDiscount = (line: BillLine) =>
+  Math.min(rupeesToPaise(line.discountRupees || "0"), lineGross(line));
 
 export function ReceptionCounter() {
   const toast = useToast();
@@ -132,34 +167,55 @@ export function ReceptionCounter() {
       const withoutConsultation = current.filter(
         (line) => line.service.category !== "consultation"
       );
-      return [
-        { key: `line-${++lineKey}`, service: consultation, quantity: 1 },
-        ...withoutConsultation,
-      ];
+      return [makeLine(consultation), ...withoutConsultation];
     });
   }, [services, department, visitType]);
 
-  const discountPaise = rupeesToPaise(discountRupees || "0");
+  // The discount on the bill as a whole, on top of anything taken off a
+  // single line.
+  const billDiscountPaise = rupeesToPaise(discountRupees || "0");
   const grossPaise = useMemo(
-    () => lines.reduce((sum, line) => sum + line.service.rate_paise * line.quantity, 0),
+    () => lines.reduce((sum, line) => sum + lineGross(line), 0),
     [lines]
   );
-  // Tax follows the discounted value, matching the server's arithmetic.
+  const lineDiscountPaise = useMemo(
+    () => lines.reduce((sum, line) => sum + lineDiscount(line), 0),
+    [lines]
+  );
+  const afterLinesPaise = Math.max(grossPaise - lineDiscountPaise, 0);
+  const discountPaise = lineDiscountPaise + Math.min(billDiscountPaise, afterLinesPaise);
+  // Tax follows the discounted value, matching the server's arithmetic: the
+  // line's own discount first, then its share of the bill discount.
   const taxPaise = useMemo(() => {
-    if (grossPaise === 0) return 0;
+    if (afterLinesPaise === 0) return 0;
     return lines.reduce((sum, line) => {
-      const lineGross = line.service.rate_paise * line.quantity;
-      const share = Math.round((discountPaise * lineGross) / grossPaise);
-      const taxable = lineGross - share;
-      return sum + Math.round((taxable * line.service.tax_percent) / 100);
+      const net = lineGross(line) - lineDiscount(line);
+      const share = Math.round((billDiscountPaise * net) / afterLinesPaise);
+      return sum + Math.round(((net - share) * line.service.tax_percent) / 100);
     }, 0);
-  }, [lines, discountPaise, grossPaise]);
+  }, [lines, billDiscountPaise, afterLinesPaise]);
   const totalPaise = Math.max(grossPaise - discountPaise, 0) + taxPaise;
+  /**
+   * The lines as the server wants them. An edited rate is sent explicitly, an
+   * untouched one is left for the pricing rules to decide.
+   */
+  const billItems = useCallback(
+    () =>
+      lines.map((line) => ({
+        service_item_id: line.service.id,
+        quantity: line.quantity,
+        ...(line.rateEdited ? { unit_rate_paise: lineRate(line) } : {}),
+        ...(lineDiscount(line) > 0 ? { discount_paise: lineDiscount(line) } : {}),
+        ...(line.remark.trim() ? { remark: line.remark.trim() } : {}),
+      })),
+    [lines]
+  );
 
   const canSubmit =
     lines.length > 0 &&
     totalPaise >= 0 &&
-    discountPaise <= grossPaise &&
+    grossPaise > 0 &&
+    billDiscountPaise <= afterLinesPaise &&
     (selected !== null || (name.trim() && age && phone.trim().length >= 10));
 
   const reset = useCallback(() => {
@@ -234,11 +290,8 @@ export function ReceptionCounter() {
             consultant_id: consultantId || null,
             doctor_name: chosenConsultant?.full_name ?? null,
             organisation_id: organisationId || null,
-            items: lines.map((line) => ({
-              service_item_id: line.service.id,
-              quantity: line.quantity,
-            })),
-            invoice_discount_paise: discountPaise,
+            items: billItems(),
+            invoice_discount_paise: billDiscountPaise,
           })
         );
       } catch {
@@ -248,9 +301,11 @@ export function ReceptionCounter() {
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [lines, selected, consultantId, chosenConsultant, organisationId, discountPaise]);
+  }, [lines, billItems, selected, consultantId, chosenConsultant, organisationId,
+      billDiscountPaise]);
 
   const canRegister = Boolean(name.trim() && age && phone.trim().length >= 10);
+
 
   /** Issue a UHID and nothing else. */
   async function registerOnly() {
@@ -289,12 +344,10 @@ export function ReceptionCounter() {
         visit_type: visitType,
         doctor_name: chosenConsultant?.full_name ?? "",
         organisation_id: organisationId || null,
-        items: lines.map((line) => ({
-          service_item_id: line.service.id,
-          quantity: line.quantity,
-        })),
-        invoice_discount_paise: discountPaise,
-        discount_reason: discountPaise > 0 ? discountReason || "Counter discount" : null,
+        items: billItems(),
+        invoice_discount_paise: billDiscountPaise,
+        discount_reason:
+          billDiscountPaise > 0 ? discountReason || "Counter discount" : null,
       };
       if (selected) {
         payload.patient_id = selected.id;
@@ -692,40 +745,106 @@ export function ReceptionCounter() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-2">
-              {lines.map((line) => (
-                <div key={line.key} className="flex items-center gap-2 rounded-lg bg-mint/60 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-ink">{line.service.name}</p>
-                    <p className="text-xs text-ink-faint">
-                      {formatINR(line.service.rate_paise)} each
-                    </p>
+              {lines.map((line) => {
+                const gross = lineGross(line);
+                const discount = lineDiscount(line);
+                const typedDiscount = rupeesToPaise(line.discountRupees || "0");
+                const edit = (patch: Partial<BillLine>) =>
+                  setLines((current) =>
+                    current.map((item) =>
+                      item.key === line.key ? { ...item, ...patch } : item
+                    )
+                  );
+                return (
+                  <div key={line.key} className="rounded-lg bg-mint/60 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm text-ink">
+                        {line.service.name}
+                      </p>
+                      <span className="tabular w-24 text-right text-sm font-medium text-ink">
+                        {formatINR(Math.max(gross - discount, 0))}
+                      </span>
+                      <button
+                        onClick={() => setLines((c) => c.filter((i) => i.key !== line.key))}
+                        className="rounded p-1 text-ink-faint hover:text-clay"
+                        aria-label={`Remove ${line.service.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {/* Rate, quantity and a discount on this charge alone. The
+                        rate is editable because the counter is regularly told
+                        to charge something other than the list price, and a
+                        clerk who cannot do it here does it on paper. */}
+                    <div className="mt-2 flex flex-wrap items-end gap-2">
+                      <div>
+                        <label className="text-[11px] text-ink-faint"
+                               htmlFor={`${line.key}-rate`}>
+                          Rate (&#8377;)
+                        </label>
+                        <input
+                          id={`${line.key}-rate`} inputMode="decimal"
+                          value={line.rateRupees}
+                          onChange={(e) =>
+                            edit({ rateRupees: e.target.value, rateEdited: true })
+                          }
+                          className="block w-20 rounded border border-border px-2 py-1 text-right text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-ink-faint"
+                               htmlFor={`${line.key}-qty`}>
+                          Qty
+                        </label>
+                        <input
+                          id={`${line.key}-qty`} type="number" min={1} max={99}
+                          value={line.quantity}
+                          onChange={(e) =>
+                            edit({ quantity: Math.max(1, Number(e.target.value) || 1) })
+                          }
+                          className="block w-14 rounded border border-border px-2 py-1 text-center text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-ink-faint"
+                               htmlFor={`${line.key}-disc`}>
+                          Discount (&#8377;)
+                        </label>
+                        <input
+                          id={`${line.key}-disc`} inputMode="decimal"
+                          value={line.discountRupees} placeholder="0"
+                          onChange={(e) => edit({ discountRupees: e.target.value })}
+                          className="block w-20 rounded border border-border px-2 py-1 text-right text-sm"
+                        />
+                      </div>
+                      <div className="min-w-[8rem] flex-1">
+                        <label className="text-[11px] text-ink-faint"
+                               htmlFor={`${line.key}-remark`}>
+                          Remark
+                        </label>
+                        <input
+                          id={`${line.key}-remark`} value={line.remark} maxLength={255}
+                          onChange={(e) => edit({ remark: e.target.value })}
+                          placeholder="Why this charge, or why the discount"
+                          className="block w-full rounded border border-border px-2 py-1 text-sm"
+                        />
+                      </div>
+                    </div>
+                    {line.rateEdited && lineRate(line) !== line.service.rate_paise && (
+                      <p className="mt-1 text-[11px] text-marigold-deep">
+                        List price {formatINR(line.service.rate_paise)} &mdash; charged at
+                        the counter{line.remark.trim() ? "" : ". Say why in the remark."}
+                      </p>
+                    )}
+                    {typedDiscount > gross && (
+                      <p className="mt-1 text-[11px] text-clay">
+                        The discount is larger than this charge; only{" "}
+                        {formatINR(gross)} can come off it.
+                      </p>
+                    )}
                   </div>
-                  <input
-                    type="number" min={1} max={99} value={line.quantity}
-                    onChange={(e) =>
-                      setLines((current) =>
-                        current.map((item) =>
-                          item.key === line.key
-                            ? { ...item, quantity: Math.max(1, Number(e.target.value) || 1) }
-                            : item
-                        )
-                      )
-                    }
-                    className="w-14 rounded border border-border px-2 py-1 text-center text-sm"
-                    aria-label={`Quantity for ${line.service.name}`}
-                  />
-                  <span className="tabular w-24 text-right text-sm font-medium text-ink">
-                    {formatINR(line.service.rate_paise * line.quantity)}
-                  </span>
-                  <button
-                    onClick={() => setLines((c) => c.filter((i) => i.key !== line.key))}
-                    className="rounded p-1 text-ink-faint hover:text-clay"
-                    aria-label={`Remove ${line.service.name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <select
@@ -734,10 +853,7 @@ export function ReceptionCounter() {
               onChange={(e) => {
                 const service = services.find((item) => item.id === e.target.value);
                 if (service) {
-                  setLines((current) => [
-                    ...current,
-                    { key: `line-${++lineKey}`, service, quantity: 1 },
-                  ]);
+                  setLines((current) => [...current, makeLine(service)]);
                 }
                 e.target.value = "";
               }}
@@ -809,15 +925,17 @@ export function ReceptionCounter() {
             )}
 
             <div className="mt-4 space-y-2">
-              <label className="field-label" htmlFor="rc-disc">Discount (₹)</label>
+              <label className="field-label" htmlFor="rc-disc">
+                Discount on the whole bill (₹)
+              </label>
               <Input id="rc-disc" value={discountRupees} inputMode="decimal"
                      onChange={(e) => setDiscountRupees(e.target.value)} placeholder="0" />
-              {discountPaise > grossPaise && (
+              {billDiscountPaise > afterLinesPaise && (
                 <p className="text-xs text-clay">
-                  The discount is larger than the bill.
+                  The discount is larger than what is left on the bill.
                 </p>
               )}
-              {discountPaise > 0 && (
+              {billDiscountPaise > 0 && (
                 <Input value={discountReason}
                        onChange={(e) => setDiscountReason(e.target.value)}
                        placeholder="Reason for discount" />

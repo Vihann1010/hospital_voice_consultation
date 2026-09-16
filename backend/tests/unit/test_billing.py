@@ -115,6 +115,44 @@ def test_tax_follows_the_discounted_value():
     assert line.tax_paise == 14400
 
 
+def test_a_line_keeps_its_own_remark():
+    """The clerk's note travels with the line it explains, untouched."""
+    invoice = compute_invoice(
+        [
+            LineInput("Dressing", 20000, remark="Second sitting"),
+            LineInput("Consultation", 50000),
+        ]
+    )
+    assert [line.remark for line in invoice.lines] == ["Second sitting", None]
+
+
+def test_a_line_discount_and_a_bill_discount_both_apply():
+    """A discount on one charge comes off before the bill-wide discount.
+
+    The line keeps its own 200, then takes its share of the 100 given on the
+    whole bill, and the parts still sum to what was allowed.
+    """
+    invoice = compute_invoice(
+        [
+            LineInput("Dressing", 50000, discount_paise=20000),
+            LineInput("Consultation", 30000),
+        ],
+        invoice_discount_paise=10000,
+    )
+    assert invoice.gross_paise == 80000
+    assert invoice.discount_paise == 30000
+    assert invoice.taxable_paise == 50000
+    assert invoice.total_paise == 50000
+    assert sum(line.discount_paise for line in invoice.lines) == 30000
+
+
+def test_a_rate_set_at_the_counter_is_what_is_charged():
+    """Reception is sometimes told to charge something other than the list."""
+    invoice = compute_invoice([LineInput("X-ray knee", 35000, quantity=2)])
+    assert invoice.gross_paise == 70000
+    assert invoice.total_paise == 70000
+
+
 def test_mixed_tax_rates_on_one_bill():
     invoice = compute_invoice([
         LineInput("Consultation (exempt)", 50000, tax_percent=0),

@@ -171,31 +171,48 @@ function AmendForm({
   onDone: (label: string) => void;
   onCancel: () => void;
 }) {
-  interface Line { description: string; quantity: string; rate: string }
+  interface Line {
+    description: string;
+    quantity: string;
+    rate: string;
+    discount: string;
+    remark: string;
+  }
+  // A stored line carries its own discount plus its share of any bill-wide
+  // discount, which is not separated in the ledger. Both are therefore shown
+  // against the line and the bill-wide box starts empty: the net is identical,
+  // and the clerk can see which charge the money came off.
   const [lines, setLines] = useState<Line[]>(
     (invoice.lines ?? []).map((line) => ({
       description: line.description,
       quantity: String(line.quantity),
       rate: String(line.unit_rate_paise / 100),
+      discount: line.discount_paise ? String(line.discount_paise / 100) : "",
+      remark: line.remark ?? "",
     }))
   );
-  const [discount, setDiscount] = useState(String(invoice.discount_paise / 100));
+  const [discount, setDiscount] = useState("0");
   const [discountReason, setDiscountReason] = useState(invoice.discount_reason ?? "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const gross = lines.reduce(
-    (sum, line) => sum + rupeesToPaise(line.rate) * (Number(line.quantity) || 0),
+  const lineGross = (line: Line) =>
+    rupeesToPaise(line.rate) * (Number(line.quantity) || 0);
+  const gross = lines.reduce((sum, line) => sum + lineGross(line), 0);
+  const lineDiscounts = lines.reduce(
+    (sum, line) => sum + rupeesToPaise(line.discount || "0"),
     0
   );
-  const net = gross - rupeesToPaise(discount);
+  const net = gross - lineDiscounts - rupeesToPaise(discount);
   const problem =
     lines.length === 0
       ? "A bill needs at least one line."
       : lines.some((line) => !line.description.trim() || rupeesToPaise(line.rate) < 0)
         ? "Every line needs a description and a rate."
-        : net < 0
+        : lines.some((line) => rupeesToPaise(line.discount || "0") > lineGross(line))
+          ? "A discount cannot be larger than the charge it comes off."
+          : net < 0
           ? "The discount is more than the bill."
           : rupeesToPaise(discount) > 0 && !discountReason.trim()
             ? "A discount needs a reason."
@@ -216,6 +233,8 @@ function AmendForm({
           description: line.description.trim(),
           quantity: Number(line.quantity) || 1,
           unit_rate_paise: rupeesToPaise(line.rate),
+          discount_paise: rupeesToPaise(line.discount || "0"),
+          remark: line.remark.trim() || null,
         })),
         invoice_discount_paise: rupeesToPaise(discount),
         discount_reason: discountReason.trim() || null,
@@ -236,35 +255,55 @@ function AmendForm({
       </p>
       <ul className="space-y-1.5">
         {lines.map((line, index) => (
-          <li key={index} className="flex items-center gap-1.5">
-            <Input
-              className="h-8 min-w-0 flex-1 text-xs"
-              value={line.description}
-              placeholder="What is being charged for"
-              onChange={(event) => setLine(index, { description: event.target.value })}
-            />
-            <Input
-              className="h-8 w-14 text-xs"
-              inputMode="numeric"
-              value={line.quantity}
-              aria-label="Quantity"
-              onChange={(event) => setLine(index, { quantity: event.target.value })}
-            />
-            <Input
-              className="h-8 w-24 text-right text-xs"
-              inputMode="decimal"
-              value={line.rate}
-              aria-label="Rate in rupees"
-              onChange={(event) => setLine(index, { rate: event.target.value })}
-            />
-            <button
-              type="button"
-              aria-label="Remove this line"
-              className="rounded p-1 text-ink-faint hover:text-clay"
-              onClick={() => setLines(lines.filter((_, at) => at !== index))}
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
+          <li key={index} className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Input
+                className="h-8 min-w-0 flex-1 text-xs"
+                value={line.description}
+                placeholder="What is being charged for"
+                onChange={(event) => setLine(index, { description: event.target.value })}
+              />
+              <Input
+                className="h-8 w-14 text-xs"
+                inputMode="numeric"
+                value={line.quantity}
+                aria-label="Quantity"
+                onChange={(event) => setLine(index, { quantity: event.target.value })}
+              />
+              <Input
+                className="h-8 w-24 text-right text-xs"
+                inputMode="decimal"
+                value={line.rate}
+                aria-label="Rate in rupees"
+                onChange={(event) => setLine(index, { rate: event.target.value })}
+              />
+              <button
+                type="button"
+                aria-label="Remove this line"
+                className="rounded p-1 text-ink-faint hover:text-clay"
+                onClick={() => setLines(lines.filter((_, at) => at !== index))}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 pr-6">
+              <Input
+                className="h-7 w-24 text-right text-xs"
+                inputMode="decimal"
+                value={line.discount}
+                placeholder="Disc (Rs)"
+                aria-label="Discount on this line in rupees"
+                onChange={(event) => setLine(index, { discount: event.target.value })}
+              />
+              <Input
+                className="h-7 min-w-0 flex-1 text-xs"
+                value={line.remark}
+                maxLength={255}
+                placeholder="Remark for this charge"
+                aria-label="Remark for this charge"
+                onChange={(event) => setLine(index, { remark: event.target.value })}
+              />
+            </div>
           </li>
         ))}
       </ul>
@@ -272,13 +311,18 @@ function AmendForm({
         size="sm"
         variant="ghost"
         className="h-7 text-xs"
-        onClick={() => setLines([...lines, { description: "", quantity: "1", rate: "" }])}
+        onClick={() =>
+          setLines([
+            ...lines,
+            { description: "", quantity: "1", rate: "", discount: "", remark: "" },
+          ])
+        }
       >
         Add a line
       </Button>
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-[11px] text-ink-faint">
-          Discount (Rs)
+          Discount on the whole bill (Rs)
           <Input
             className="mt-0.5 h-8 w-24 text-sm"
             inputMode="decimal"

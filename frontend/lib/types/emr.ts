@@ -66,6 +66,8 @@ export interface InvoiceLine {
   position: number;
   code?: string | null;
   description: string;
+  /** The counter's note against this charge alone. */
+  remark?: string | null;
   quantity: number;
   unit_rate_paise: number;
   discount_paise: number;
@@ -223,6 +225,12 @@ export function rupeesToPaise(input: string | number): number {
   return Math.round(value * 100);
 }
 
+/** Paise as a plain rupee figure for a text box: 75000 -> "750", 75050 -> "750.50". */
+export function paiseToRupees(paise: number): string {
+  if (!paise) return "0";
+  return paise % 100 === 0 ? String(paise / 100) : (paise / 100).toFixed(2);
+}
+
 
 // ------------------------------------------------------------ the wallet
 export type WalletEntryKind =
@@ -351,8 +359,10 @@ export interface PatientDiary {
 export interface QuoteLine {
   description: string;
   code?: string | null;
+  remark?: string | null;
   quantity: number;
   unit_rate_paise: number;
+  discount_paise: number;
   total_paise: number;
 }
 

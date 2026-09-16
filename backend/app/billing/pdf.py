@@ -114,12 +114,18 @@ def render_invoice_pdf(
     for item in invoice.lines:
         description = item.description[:55]
         text(left + 8, y, description, 9)
-        if item.code:
-            text(left + 8, y - 12, item.code, 7.5, MUTED)
+        # The code and the clerk's remark share the second line: the patient
+        # who asks "what is this charge?" should find the answer on the bill
+        # rather than have to ring the counter.
+        below = " · ".join(
+            part for part in (item.code, (item.remark or "")[:70]) if part
+        )
+        if below:
+            text(left + 8, y - 12, below, 7.5, MUTED)
         right(365, y, item.quantity, 9)
         right(445, y, _money(item.unit_rate_paise), 9)
         right(right_x - 8, y, _money(item.total_paise), 9)
-        y -= 25 if item.code else 19
+        y -= 25 if below else 19
         line(y + 7)
 
     # Totals summary uses stored invoice totals exactly.

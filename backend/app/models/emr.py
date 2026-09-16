@@ -274,6 +274,10 @@ class InvoiceLine(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     code: Mapped[Optional[str]] = mapped_column(String(32))
     description: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Why this line reads as it does, in the clerk's words. Printed under the
+    #: description on the bill, so the patient reads the same explanation the
+    #: counter gave them.
+    remark: Mapped[Optional[str]] = mapped_column(String(255))
     hsn_sac_code: Mapped[Optional[str]] = mapped_column(String(16))
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     unit_rate_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

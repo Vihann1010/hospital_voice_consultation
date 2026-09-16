@@ -345,8 +345,10 @@ async def quote(payload: QuoteRequest, service: Service) -> QuoteOut:
             QuoteLineOut(
                 description=line.description,
                 code=line.code,
+                remark=line.remark,
                 quantity=line.quantity,
                 unit_rate_paise=line.unit_rate_paise,
+                discount_paise=line.discount_paise,
                 total_paise=line.total_paise,
             )
             for line in computed.lines

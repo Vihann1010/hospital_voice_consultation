@@ -152,6 +152,9 @@ class InvoiceItemRequest(BaseModel):
     unit_rate_paise: Optional[int] = Field(default=None, ge=0)
     tax_percent: Optional[int] = Field(default=None, ge=0, le=28)
     discount_paise: int = Field(default=0, ge=0)
+    #: A note against this charge alone — why it was added, or why it was
+    #: discounted. Printed on the bill under the description.
+    remark: Optional[str] = Field(default=None, max_length=255)
 
 
 class DiaryEntryOut(BaseModel):
@@ -221,8 +224,10 @@ class QuoteRequest(BaseModel):
 class QuoteLineOut(BaseModel):
     description: str
     code: Optional[str] = None
+    remark: Optional[str] = None
     quantity: int
     unit_rate_paise: int
+    discount_paise: int = 0
     total_paise: int
 
 
@@ -262,6 +267,7 @@ class InvoiceLineOut(BaseModel):
     position: int
     code: Optional[str] = None
     description: str
+    remark: Optional[str] = None
     hsn_sac_code: Optional[str] = None
     quantity: int
     unit_rate_paise: int
