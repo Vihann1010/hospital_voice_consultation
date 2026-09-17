@@ -3,14 +3,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Activity,
   BedDouble,
   CheckCircle2,
+  FileImage,
+  FlaskConical,
   LayoutDashboard,
   LogOut,
   Menu,
+  Scissors,
+  Settings,
+  ShieldCheck,
   Stethoscope,
+  Landmark,
+  UtensilsCrossed,
   Users,
   Wallet,
   X,
@@ -25,22 +34,52 @@ import { Button } from "@/components/ui/button";
 /** Grouped so the front desk's work and the clinician's work are visually
  *  separate — the same sidebar serves both, and mixing them makes each
  *  harder to scan. */
-const NAV = [
+const NAV: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  group?: string;
+  adminOnly?: boolean;
+  /** Shown only to these roles. */
+  roles?: string[];
+}[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/waiting", label: "Waiting patients", icon: Users },
   { href: "/active", label: "Current consultations", icon: Activity },
   { href: "/completed", label: "Completed", icon: CheckCircle2 },
   { href: "/patients", label: "Patient search", icon: Stethoscope },
   { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward" },
-  { href: "/finance", label: "Finance", icon: Wallet, group: "desk" },
+  { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward" },
+  { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward" },
+  { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
+  // The laboratory runs in its own terminal; doctors verify results there.
+  { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward", roles: ["admin", "doctor"] },
+  // Hospital-wide takings: finance:read is held by admin and manager only.
+  { href: "/finance", label: "Finance", icon: Wallet, group: "desk", roles: ["admin", "manager"] },
+  { href: "/finance/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
+  { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
+    roles: ["admin", "manager", "doctor", "supervisor", "reception"] },
+  { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
+  // Consultants, operation list, room charges, diet list, pad layouts and staff
+  // accounts are all opened from the Settings page, filtered there by role.
+  { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "doctor"] },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const items = NAV.filter(
+    (item) =>
+      (!item.adminOnly || user?.role === "admin") &&
+      (!item.roles || (user !== null && user !== undefined && item.roles.includes(user.role)))
+  );
   return (
-    <nav className="flex flex-col gap-1 px-3">
-      {NAV.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    <nav className="thin-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">
+      {items.map((item) => {
+        // The most specific link wins, so "Settings" is not lit on every settings page.
+        const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+        const active = matches(item.href)
+          && !items.some((other) => other.href.length > item.href.length && matches(other.href));
         return (
           <Link
             key={item.href}
@@ -76,16 +115,16 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           that the letterform disappears against it, and putting a stroke on
           the mark would mean altering the hospital's logo. A white panel
           keeps the brand colours exact and the contrast unambiguous. */}
-      <div className="bg-white px-5 py-4">
+      <div className="shrink-0 bg-white px-5 py-4">
         <Logo width={150} priority />
       </div>
-      <p className="px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
+      <p className="shrink-0 px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
         Clinical console
       </p>
 
       <NavLinks onNavigate={onNavigate} />
 
-      <div className="mt-auto border-t border-white/10 p-4">
+      <div className="shrink-0 border-t border-white/10 p-4">
         <div className="flex items-center gap-3 px-1 pb-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-mint">
             {initials(user?.full_name)}

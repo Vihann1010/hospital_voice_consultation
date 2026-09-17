@@ -13,8 +13,8 @@ import { motion } from "framer-motion";
 import {
   Banknote, CreditCard, RefreshCw, TrendingUp, } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { CollectionSummary } from "@/lib/emrTypes";
-import { formatINR } from "@/lib/emrTypes";
+import type { CollectionSummary } from "@/lib/types/emr";
+import { formatINR } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -3,9 +3,23 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout as doLogout } from "@/lib/auth";
-import type { User } from "@/lib/types";
+import type { User } from "@/lib/types/core";
 
 type Role = User["role"];
+
+/**
+ * Where each role belongs when it signs in or reaches a shell it cannot use.
+ *
+ * One map rather than a fallback per layout: with a fallback each, a nurse
+ * sent from the dashboard to reception was sent straight back again, because
+ * neither shell admitted her and each pointed at the other.
+ */
+export function homeFor(role: Role): string {
+  if (role === "nurse") return "/ward";
+  if (role === "lab") return "/lab";
+  if (role === "reception" || role === "supervisor") return "/reception";
+  return "/dashboard";
+}
 
 interface AuthState {
   user: User | null;
@@ -47,7 +61,14 @@ export function AuthProvider({
         // request. This only keeps someone from landing on a shell whose
         // every panel would return 403.
         if (allow && !allow.includes(value.role)) {
-          router.replace(fallbackPath);
+          const home = homeFor(value.role);
+          // The role's own home, unless that is this very shell — then the
+          // layout's fallback, so a misconfigured allow list cannot loop.
+          router.replace(
+            typeof window !== "undefined" && window.location.pathname.startsWith(home)
+              ? fallbackPath
+              : home
+          );
           return;
         }
         setUser(value);

@@ -15,16 +15,20 @@
  * out with an unsigned summary or an unpaid bill.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle, ArrowRight, BedDouble, Check, Droplet, FileText, IndianRupee,
   Loader2, LogOut, Plus, Printer, Search, Stethoscope, UserPlus, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { BedCell, Census, DeterioratingPatient, WardBoard } from "@/lib/ipdTypes";
-import { BED_STATUS_STYLE, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/ipdTypes";
-import { formatINR, rupeesToPaise } from "@/lib/emrTypes";
-import type { Department, Gender } from "@/lib/types";
+import type { BedCell, Census, DeterioratingPatient, WardBoard } from "@/lib/types/ipd";
+import { BED_STATUS_STYLE, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/types/ipd";
+import { formatINR, rupeesToPaise } from "@/lib/types/emr";
+import type { PaymentMode } from "@/lib/types/emr";
+import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
+import { ADVANCE_MODES, TakeAdvance, openWalletReceipt } from "@/components/ipd/take-advance";
+import type { Department, Gender } from "@/lib/types/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -97,6 +101,9 @@ function AdmitSheet({
     return () => clearTimeout(timer);
   }, [query]);
 
+  const [advanceMode, setAdvanceMode] = useState<PaymentMode>("cash");
+  const [advanceDetails, setAdvanceDetails] = useState<Record<string, string>>({});
+
   const ready =
     (chosen !== null || (name.trim() && age && phone.trim().length >= 10)) &&
     doctor.trim().length > 0;
@@ -118,7 +125,7 @@ function AdmitSheet({
         });
         patientId = created.id;
       }
-      await staffApi.admitPatient({
+      const admitted = await staffApi.admitPatient({
         patient_id: patientId,
         bed_id: bed.id,
         department,
@@ -126,6 +133,8 @@ function AdmitSheet({
         provisional_diagnosis: diagnosis.trim() || null,
         reason_for_admission: reason.trim() || null,
         advance_paid_paise: rupeesToPaise(advance || "0"),
+        advance_mode: advanceMode,
+        advance_mode_details: Object.keys(advanceDetails).length ? advanceDetails : null,
         attendant_name: attendantName.trim() || null,
         attendant_phone: attendantPhone.trim() || null,
         allergies: allergies
@@ -134,6 +143,12 @@ function AdmitSheet({
           .filter(Boolean),
       });
       toast.success("Admitted", `${chosen?.name ?? name} to ${bed.label}`);
+      // The advance is a receipted collection; the family takes the receipt.
+      const receiptId = admitted.advance_receipt_entry_id as string | null | undefined;
+      if (receiptId) {
+        toast.success("Advance receipted", String(admitted.advance_receipt_number ?? ""));
+        void openWalletReceipt(receiptId);
+      }
       onDone();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not admit.";
@@ -279,9 +294,17 @@ function AdmitSheet({
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
-          <label className="field-label" htmlFor="ad-adv">Advance (₹)</label>
-          <Input id="ad-adv" value={advance} inputMode="decimal" placeholder="0"
-                 onChange={(e) => setAdvance(e.target.value)} />
+          <label className="field-label" htmlFor="ad-adv">Advance (₹), receipted</label>
+          <div className="flex gap-2">
+            <Input id="ad-adv" value={advance} inputMode="decimal" placeholder="0"
+                   onChange={(e) => setAdvance(e.target.value)} />
+            <select aria-label="Advance paid by" value={advanceMode} className="field-input w-28"
+                    onChange={(e) => { setAdvanceMode(e.target.value as PaymentMode); setAdvanceDetails({}); }}>
+              {ADVANCE_MODES.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="field-label" htmlFor="ad-att">Attendant</label>
@@ -294,6 +317,10 @@ function AdmitSheet({
                  onChange={(e) => setAttendantPhone(e.target.value)} />
         </div>
       </div>
+
+      {rupeesToPaise(advance || "0") > 0 && (
+        <PaymentModeFields mode={advanceMode} values={advanceDetails} onChange={setAdvanceDetails} />
+      )}
 
       {error && (
         <p role="alert" className="rounded-md bg-clay/10 px-3 py-2 text-xs text-clay">
@@ -431,9 +458,26 @@ function BedSheet({
             {occupant.ip_number} · {ward.name} {bed.label} · Day{" "}
             {dayOfStay(occupant.admitted_at)} · {occupant.doctor}
           </p>
+          {occupant.on_leave && (
+            <p className="mt-1 text-sm font-medium text-marigold-deep">
+              On leave{occupant.expected_return_on ? ` · expected back ${occupant.expected_return_on}` : ""}
+            </p>
+          )}
+          <p className="mt-1 text-sm text-ink-muted">
+            Diet: {occupant.diet ? <span className="font-medium text-ink">{occupant.diet}</span>
+              : <span className="font-medium text-clay">none ordered</span>}
+          </p>
           {occupant.diagnosis && (
             <p className="mt-1 text-sm text-ink">{occupant.diagnosis}</p>
           )}
+          {/* Notes, observations and the discharge summary live on the case
+              sheet. This panel stays the quick bedside view. */}
+          <Link
+            href={`/ward/admissions/${occupant.admission_id}`}
+            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-pine hover:underline"
+          >
+            Open case sheet <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
         <button onClick={onClose} aria-label="Close"
                 className="rounded p-1 text-ink-faint hover:text-clay">
@@ -478,7 +522,7 @@ function BedSheet({
                 </span>
               </div>
               <div className="flex justify-between text-xs text-ink-muted">
-                <span>Advance</span>
+                <span>Advance held</span>
                 <span className="tabular">{formatINR(bill.advance_paid_paise)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium">
@@ -489,6 +533,11 @@ function BedSheet({
               </div>
             </div>
           )}
+
+          <TakeAdvance
+            admissionId={occupant.admission_id}
+            onDone={() => void staffApi.runningBill(occupant.admission_id).then(setBill).catch(() => undefined)}
+          />
 
           <div className="space-y-2 rounded-xl border border-border p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
@@ -748,6 +797,9 @@ export function WardPanel() {
                           <p className="mt-0.5 truncate text-[10px] text-ink-faint">
                             {bed.occupant.diagnosis || bed.occupant.ip_number}
                           </p>
+                          {bed.occupant.on_leave && (
+                            <p className="mt-0.5 text-[10px] font-semibold text-marigold-deep">On leave</p>
+                          )}
                         </div>
                       ) : (
                         <div className="mt-1 flex flex-1 flex-col items-center justify-center">

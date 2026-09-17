@@ -26,7 +26,7 @@ every boundary case is testable without a hospital.
 """
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -84,6 +84,7 @@ def compute_bed_days(
     charging_hour: int = 8,
     discharge_cutoff_hour: int = 12,
     up_to: Optional[datetime] = None,
+    absences: Sequence[Tuple[datetime, Optional[datetime]]] = (),
 ) -> List[BedDayCharge]:
     """Every bed-day owed for a stay.
 
@@ -131,6 +132,12 @@ def compute_bed_days(
             census = admitted_at
         if discharged_at is not None and census > discharged_at:
             census = discharged_at
+
+        # Away on leave with the bed given up: no bed was held for the patient,
+        # so the day is not owed — not even to the bed they come back to.
+        if any(begin <= census and (end is None or census < end) for begin, end in absences):
+            current += timedelta(days=1)
+            continue
 
         held = occupancy_at(occupancies, census)
         if held is None:

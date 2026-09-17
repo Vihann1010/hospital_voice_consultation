@@ -99,9 +99,19 @@ class ConversationAIService:
     ) -> AsyncIterator[str]:
         """Yield spoken utterance chunks; sets `self.last_plan` when finished."""
         self.last_plan: Optional[ConversationTurnPlan] = None
+        window = memory.chat_window()
+        # A conversation ending on the assistant's own turn is refused outright
+        # by Gemini ("Requests ending with a model turn are not supported"),
+        # which silenced the intake. Turn order is fixed at the source; this
+        # keeps any other path from reaching the model in that shape.
+        if window and window[-1]["role"] == "assistant":
+            window.append({
+                "role": "user",
+                "content": "(The patient has not said anything further. Continue the interview.)",
+            })
         messages = [
             {"role": "system", "content": _persona(memory)},
-            *memory.chat_window(),
+            *window,
             {"role": "system", "content": _turn_directive(memory)},
         ]
         if not memory.turns:

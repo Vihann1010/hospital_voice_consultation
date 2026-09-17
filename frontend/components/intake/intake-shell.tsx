@@ -15,9 +15,9 @@ export function IntakeShell({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-mint">
+    <div className="h-dvh overflow-hidden bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-[1680px] items-center gap-3 px-4 py-3 sm:px-6">
           <div className="rounded bg-white">
             <Logo className="h-8 w-auto" />
           </div>
@@ -40,7 +40,9 @@ export function IntakeShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
+      <main className="h-[calc(100dvh-65px)] overflow-y-auto px-4 py-6">
+        <div className="mx-auto max-w-[1680px]">{children}</div>
+      </main>
     </div>
   );
 }

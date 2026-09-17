@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { PatientHistory } from "@/lib/types";
+import type { PatientHistory } from "@/lib/types/core";
 import { DEPARTMENT_LABEL, formatDateTime, initials, timeAgo } from "@/lib/format";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RiskBadge, StatusBadge } from "@/components/dashboard/badges";
@@ -20,6 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { PatientForms } from "@/components/pad/patient-forms";
+import { PatientFiles } from "@/components/patient/patient-files";
+import { LabResultsPanel } from "@/components/lab/lab-results-panel";
 
 export default function PatientDetailPage() {
   const params = useParams<{ id: string }>();
@@ -105,6 +108,18 @@ export default function PatientDetailPage() {
         <MedicinesCard medicines={summary.current_medicines} />
         <ConditionsCard conditions={summary.conditions} />
         <SurgeriesCard surgeries={summary.previous_surgeries} />
+      </div>
+
+      <div className="mt-6">
+        <PatientForms patientId={params.id} />
+      </div>
+
+      <div className="mt-6">
+        <PatientFiles patientId={params.id} />
+      </div>
+
+      <div className="mt-6">
+        <LabResultsPanel patientId={params.id} />
       </div>
 
       <Card className="mt-6">

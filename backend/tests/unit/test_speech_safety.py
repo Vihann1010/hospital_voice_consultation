@@ -8,6 +8,7 @@ import json
 import pytest
 
 from app.ai.echo import is_echo
+from app.ai.sarvam_stt import is_hindi_english_text
 from app.ai.streaming_json import UtteranceStreamExtractor
 
 pytestmark = pytest.mark.unit
@@ -72,3 +73,11 @@ def test_cross_language_echo_defeats_text_matching():
     assistant_said = "ठीक है, आपके टखने में कल रात से दर्द हो रहा है"
     recognition_returned = "Recognize a little anything and alcoholism."
     assert not is_echo(recognition_returned, assistant_said)
+
+
+def test_stt_allows_hindi_english_mixed_text():
+    assert is_hindi_english_text("मुझे knee में pain है")
+
+
+def test_stt_rejects_non_hindi_english_scripts():
+    assert not is_hindi_english_text("મને દુખાવો છે")

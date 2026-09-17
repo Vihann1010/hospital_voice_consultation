@@ -11,11 +11,13 @@
  * the family in the corridor — and it should never cost a click.
  */
 import { useCallback, useEffect, useState } from "react";
-import { BedDouble, LogOut, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { staffApi } from "@/lib/staffApi";
-import type { Census } from "@/lib/ipdTypes";
+import type { Census } from "@/lib/types/ipd";
 import { cn } from "@/lib/utils";
 
 const CENSUS_REFRESH_MS = 30000;
@@ -46,6 +48,7 @@ function Figure({
 
 export function WardShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
   const [census, setCensus] = useState<Census | null>(null);
 
   const load = useCallback(async () => {
@@ -64,7 +67,7 @@ export function WardShell({ children }: { children: React.ReactNode }) {
   }, [load]);
 
   return (
-    <div className="min-h-screen bg-mint">
+    <div className="h-dvh overflow-hidden bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white print-hidden">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <div className="rounded bg-white">
@@ -76,6 +79,29 @@ export function WardShell({ children }: { children: React.ReactNode }) {
             </p>
             <p className="text-[11px] text-ink-muted">Admissions &amp; inpatients</p>
           </div>
+
+          <nav aria-label="Ward terminal" className="flex items-center gap-1">
+            {[
+              { href: "/ward", label: "Beds", icon: BedDouble,
+                active: pathname === "/ward" || pathname.startsWith("/ward/admissions") },
+              { href: "/ward/theatre", label: "Theatre", icon: Scissors,
+                active: pathname.startsWith("/ward/theatre") },
+              { href: "/ward/diet", label: "Diet", icon: UtensilsCrossed,
+                active: pathname.startsWith("/ward/diet") },
+              { href: "/lab", label: "Lab", icon: FlaskConical, active: false },
+            ].map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                  link.active ? "bg-pine text-mint" : "text-ink-muted hover:bg-mint hover:text-pine"
+                )}
+              >
+                <link.icon className="h-3.5 w-3.5" /> {link.label}
+              </Link>
+            ))}
+          </nav>
 
           {census && (
             <div className="flex items-center gap-5 rounded-xl bg-mint px-4 py-2">
@@ -111,7 +137,7 @@ export function WardShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">{children}</main>
+      <main className="h-[calc(100dvh-65px)] overflow-y-auto px-4 py-6 sm:px-6">{children}</main>
     </div>
   );
 }

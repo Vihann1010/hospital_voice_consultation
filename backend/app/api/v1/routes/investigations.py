@@ -5,12 +5,14 @@ from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentUser, get_investigation_service, require_roles
+from app.api.deps import CurrentUser, get_investigation_service, require_permission
+from app.core.permissions import Permission
 from app.core.config import settings
 from app.investigations import catalog
 from app.investigations.extraction import extraction_capabilities
 from app.models.enums import (
     Department,
+    DocumentKind,
     InvestigationCategory,
     InvestigationPriority,
     UserRole,
@@ -37,8 +39,8 @@ from app.services.investigation_service import InvestigationError, Investigation
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
 Service = Annotated[InvestigationService, Depends(get_investigation_service)]
-STAFF = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
-CLINICIAN = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+READ_REPORTS = require_permission(Permission.REPORT_READ)
+CLINICIAN = require_permission(Permission.ORDER_CREATE)
 
 
 def _to_investigation_out(item) -> InvestigationOut:
@@ -68,7 +70,7 @@ def _template_out(template) -> TemplateOut:
 
 
 # ------------------------------------------------------------------ catalog
-@router.get("/catalog", response_model=CatalogOut, dependencies=[Depends(STAFF)])
+@router.get("/catalog", response_model=CatalogOut, dependencies=[Depends(READ_REPORTS)])
 async def get_catalog(
     q: Optional[str] = Query(default=None, max_length=120),
     category: Optional[InvestigationCategory] = Query(default=None),
@@ -108,7 +110,7 @@ async def get_catalog(
     )
 
 
-@router.get("/workspace", response_model=WorkspaceOut, dependencies=[Depends(STAFF)])
+@router.get("/workspace", response_model=WorkspaceOut, dependencies=[Depends(READ_REPORTS)])
 async def get_workspace(service: Service, user: CurrentUser) -> WorkspaceOut:
     """Favourites, recently used and templates for the signed-in clinician."""
     data = await service.workspace(user_id=user.id, department=user.department)
@@ -120,7 +122,7 @@ async def get_workspace(service: Service, user: CurrentUser) -> WorkspaceOut:
     )
 
 
-@router.post("/favorites", response_model=List[str], dependencies=[Depends(STAFF)])
+@router.post("/favorites", response_model=List[str], dependencies=[Depends(READ_REPORTS)])
 async def toggle_favorite(
     payload: FavoriteRequest, service: Service, user: CurrentUser
 ) -> List[str]:
@@ -187,7 +189,7 @@ async def create_order(
     return OrderOut.model_validate(order)
 
 
-@router.get("/orders", response_model=OrderListOut, dependencies=[Depends(STAFF)])
+@router.get("/orders", response_model=OrderListOut, dependencies=[Depends(READ_REPORTS)])
 async def list_orders(
     service: Service,
     patient_id: Optional[uuid.UUID] = Query(default=None),
@@ -205,7 +207,7 @@ async def list_orders(
     )
 
 
-@router.get("/orders/{order_id}", response_model=OrderOut, dependencies=[Depends(STAFF)])
+@router.get("/orders/{order_id}", response_model=OrderOut, dependencies=[Depends(READ_REPORTS)])
 async def get_order(order_id: uuid.UUID, service: Service) -> OrderOut:
     order = await service.get_order(order_id)
     if order is None:
@@ -233,9 +235,15 @@ def _report_list_item(report) -> ReportListItemOut:
         title=report.title,
         original_filename=report.original_filename,
         content_type=report.content_type,
+        document_kind=report.document_kind,
         status=report.status,
         abnormal_count=int(analysis.get("abnormal_count") or 0),
         critical_count=int(analysis.get("critical_count") or 0),
+        clarity=analysis.get("clarity"),
+        needs_manual_check=bool(
+            analysis.get("needs_manual_check")
+            or (analysis.get("prescription") or {}).get("needs_manual_check")
+        ),
         headline=summary.get("headline"),
         uploaded_by_name=report.uploaded_by_name,
         created_at=report.created_at,
@@ -243,7 +251,7 @@ def _report_list_item(report) -> ReportListItemOut:
 
 
 @router.post("/reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(STAFF)])
+             dependencies=[Depends(READ_REPORTS)])
 async def upload_report(
     service: Service,
     user: CurrentUser,
@@ -254,6 +262,11 @@ async def upload_report(
     replaces_id: Optional[uuid.UUID] = Form(default=None),
     revision_note: Optional[str] = Form(default=None),
     title: Optional[str] = Form(default=None),
+    document_kind: Optional[DocumentKind] = Form(
+        default=None,
+        description="What this document is. Checked against the text itself; "
+                    "when the two disagree nothing is interpreted.",
+    ),
 ) -> ReportOut:
     """Upload a report. Text is extracted, values are compared against reference
     ranges arithmetically, and a narrative summary is generated."""
@@ -288,13 +301,14 @@ async def upload_report(
             uploaded_by_id=user.id,
             uploaded_by_name=user.full_name,
             department=user.department or Department.ORTHOPEDICS,
+            document_kind=document_kind,
         )
     except InvestigationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return ReportOut.model_validate(report)
 
 
-@router.get("/reports", response_model=ReportListOut, dependencies=[Depends(STAFF)])
+@router.get("/reports", response_model=ReportListOut, dependencies=[Depends(READ_REPORTS)])
 async def list_reports(
     service: Service,
     patient_id: Optional[uuid.UUID] = Query(default=None),
@@ -315,7 +329,7 @@ async def list_reports(
     )
 
 
-@router.get("/reports/{report_id}", response_model=ReportOut, dependencies=[Depends(STAFF)])
+@router.get("/reports/{report_id}", response_model=ReportOut, dependencies=[Depends(READ_REPORTS)])
 async def get_report(report_id: uuid.UUID, service: Service) -> ReportOut:
     report = await service.get_report(report_id)
     if report is None:
@@ -324,7 +338,7 @@ async def get_report(report_id: uuid.UUID, service: Service) -> ReportOut:
 
 
 @router.get("/reports/{report_id}/versions", response_model=ReportVersionHistoryOut,
-            dependencies=[Depends(STAFF)])
+            dependencies=[Depends(READ_REPORTS)])
 async def report_versions(report_id: uuid.UUID, service: Service) -> ReportVersionHistoryOut:
     """Every version ever uploaded for this report, newest first."""
     report, versions = await service.version_history(report_id)
@@ -337,7 +351,7 @@ async def report_versions(report_id: uuid.UUID, service: Service) -> ReportVersi
     )
 
 
-@router.get("/reports/{report_id}/file", dependencies=[Depends(STAFF)])
+@router.get("/reports/{report_id}/file", dependencies=[Depends(READ_REPORTS)])
 async def download_report(report_id: uuid.UUID, service: Service) -> FileResponse:
     report = await service.get_report(report_id)
     if report is None:

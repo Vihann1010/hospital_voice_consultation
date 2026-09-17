@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { getToken } from "@/lib/auth";
-import type { Delivery, DeliveryStatus, Prescription } from "@/lib/prescriptionTypes";
-import { DELIVERY_LABEL } from "@/lib/prescriptionTypes";
+import type { Delivery, DeliveryStatus, Prescription } from "@/lib/types/prescriptions";
+import { DELIVERY_LABEL } from "@/lib/types/prescriptions";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { PrescriptionComposer } from "@/components/prescriptions/prescription-composer";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -74,10 +74,12 @@ function DeliveryRow({ delivery, onRetry }: { delivery: Delivery; onRetry: () =>
 export function PrescriptionsTab({
   patientId,
   consultationId,
+  department,
   prefill,
 }: {
   patientId: string;
   consultationId: string;
+  department?: string;
   prefill?: { diagnosis?: string | null; chiefComplaint?: string | null; investigations?: string[] };
 }) {
   const toast = useToast();
@@ -318,6 +320,7 @@ export function PrescriptionsTab({
         onOpenChange={setComposerOpen}
         patientId={patientId}
         consultationId={consultationId}
+          department={department}
         prefill={prefill}
         onCreated={() => void load()}
       />

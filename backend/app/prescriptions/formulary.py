@@ -34,6 +34,15 @@ class Medicine:
 
 M = Medicine
 
+
+@dataclass(frozen=True)
+class MedicineTemplate:
+  disease_name: str
+  keywords: List[str]
+  medicine_codes: List[str]
+  department: Department
+  note: str = "Doctor review required before issuing."
+
 FORMULARY: List[Medicine] = [
     # ---------------------------- Analgesics / NSAIDs ----------------------
     M("PARA", "Paracetamol", ["paracetamol"], "Tablet", ["500 mg", "650 mg"], "SOS", "3 days",
@@ -186,6 +195,39 @@ FORMULARY: List[Medicine] = [
 ]
 
 FORMULARY_BY_CODE: Dict[str, Medicine] = {item.code: item for item in FORMULARY}
+
+MEDICINE_TEMPLATES: List[MedicineTemplate] = [
+  MedicineTemplate(
+    "Olecranon fracture with tendon injury",
+    ["olecranon", "elbow fracture", "fracture elbow", "tendon injury"],
+    ["PARA", "PAN", "CALCIMAX"], Department.ORTHOPEDICS,
+  ),
+  MedicineTemplate(
+    "Acute musculoskeletal pain",
+    ["musculoskeletal pain", "joint pain", "sprain", "strain"],
+    ["PARA", "PAN"], Department.ORTHOPEDICS,
+  ),
+  MedicineTemplate(
+    "Neuropathic pain",
+    ["neuropathic pain", "nerve pain", "radicular pain"],
+    ["PARA", "PREGABALIN"], Department.ORTHOPEDICS,
+  ),
+  MedicineTemplate(
+    "Dysmenorrhea",
+    ["dysmenorrhea", "period pain", "menstrual pain", "cramps"],
+    ["MEFTAL_SPAS", "PAN"], Department.GYNECOLOGY,
+  ),
+  MedicineTemplate(
+    "Heavy menstrual bleeding",
+    ["heavy menstrual bleeding", "heavy periods", "menorrhagia"],
+    ["TRANEXAMIC", "MEFTAL_SPAS"], Department.GYNECOLOGY,
+  ),
+  MedicineTemplate(
+    "Polycystic ovary syndrome",
+    ["polycystic ovary", "pcos", "pcod"],
+    ["METFORMIN", "MYOINOSITOL"], Department.GYNECOLOGY,
+  ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +401,41 @@ def search(
         scored.append((score, item.name, item))
     scored.sort(key=lambda row: (row[0], row[1]))
     return [row[2] for row in scored[:limit]]
+
+
+def search_templates(
+    query: Optional[str] = None,
+    *,
+    department: Optional[Department] = None,
+    limit: int = 20,
+) -> List[MedicineTemplate]:
+    """Find doctor-reviewed medicine templates by disease name or keyword."""
+    pool = [
+      template for template in MEDICINE_TEMPLATES
+      if department is None or template.department == department
+    ]
+    if not query or not query.strip():
+      return pool[:limit]
+    terms = " ".join(query.lower().split())
+    query_words = set(terms.split())
+    ranked = []
+    for template in pool:
+        haystack = " ".join([template.disease_name.lower(), *template.keywords])
+        if terms == template.disease_name.lower():
+            score = 0
+        elif template.disease_name.lower().startswith(terms):
+            score = 1
+        elif terms in haystack:
+            score = 2
+        elif any(keyword.lower() in query_words for keyword in template.keywords):
+            score = 3
+        elif any(keyword.lower() in terms for keyword in template.keywords):
+            score = 4
+        else:
+            continue
+        ranked.append((score, template.disease_name, template))
+    ranked.sort(key=lambda row: (row[0], row[1]))
+    return [row[2] for row in ranked[:limit]]
 
 
 def get(code: str) -> Optional[Medicine]:

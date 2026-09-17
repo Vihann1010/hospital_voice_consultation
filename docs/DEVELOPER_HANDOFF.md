@@ -1,6 +1,11 @@
 # Satya Hospital AI Platform
 ## Full-stack developer handoff
 
+> **Superseded in part.** This describes the earlier voice-intake product. For the
+> current platform — roles, modules added in Parts 3–5, operations and open work —
+> read [ENGINEERING_HANDOFF.md](ENGINEERING_HANDOFF.md) first. The role table in
+> section 6 below is out of date; the generated [ROLES.txt](ROLES.txt) is authoritative.
+
 **Repository:** `hospital_voice_consultation-main`  
 **Frontend:** Next.js 14, React 18, TypeScript, Tailwind CSS  
 **Backend:** FastAPI, SQLAlchemy 2 async, asyncpg, Alembic  
@@ -124,8 +129,8 @@ Shutdown stops readiness, drains workers/sessions, closes providers, and dispose
 - `frontend/components/`: feature components grouped by domain.
 - `frontend/lib/api.ts`: public API base URL and patient consultation start contract.
 - `frontend/lib/staffApi.ts`: authenticated staff API client.
-- `frontend/lib/useConsultation.ts`: patient WebSocket, microphone recording, PCM playback, transcript state, and session lifecycle.
-- `frontend/lib/useDictation.ts`: doctor dictation WebSocket lifecycle.
+- `frontend/lib/hooks/useConsultation.ts`: patient WebSocket, microphone recording, PCM playback, transcript state, and session lifecycle.
+- `frontend/lib/hooks/useDictation.ts`: doctor dictation WebSocket lifecycle.
 - `frontend/lib/audio/`: AudioWorklet recorder and PCM player.
 - `frontend/middleware.ts`: cookie-based route guard. This is UX protection only; backend authorization is authoritative.
 
@@ -261,7 +266,7 @@ These are the highest-value items for the incoming developer:
 3. [API.md](API.md) for route/auth contracts.
 4. `backend/app/main.py`, `backend/app/core/config.py`, and `backend/app/api/v1/router.py` for runtime wiring.
 5. `backend/app/api/v1/routes/reception.py` and `consultations.py` for the primary handoff workflow.
-6. `frontend/lib/useConsultation.ts` and `frontend/lib/api.ts` for the browser voice contract.
+6. `frontend/lib/hooks/useConsultation.ts` and `frontend/lib/api.ts` for the browser voice contract.
 7. [EMR.md](EMR.md), [DEPLOYMENT.md](DEPLOYMENT.md), and [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) before operational or clinical changes.
 
 ## Disclaimer

@@ -5,6 +5,8 @@
 @layer base {
   :root {
     color-scheme: light;
+    --font-display: "Bricolage Grotesque Variable", Georgia, serif;
+    --font-body: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
     --radius: 0.75rem;
 
     /* Semantic tokens mapped onto the Satya palette (HSL triplets) */
@@ -36,6 +38,7 @@
   body {
     @apply bg-mint text-ink antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow: hidden;
   }
 
   /* Numeric columns in clinical tables must align */

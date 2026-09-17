@@ -379,37 +379,44 @@ Repository Structure
 
 backend/
 ├── app/
-│   ├── core/             # Config, security, cache, audit, metrics
+│   ├── core/             # Config, logging, security, permissions, audit, middleware
 │   ├── db/               # Async database engine and sessions
 │   ├── models/           # SQLAlchemy models
+│   ├── schemas/          # Shared request/response models
 │   ├── repositories/     # Data access layer
-│   ├── services/         # Core business services
-│   ├── ai/               # AI gateway and clinical pipeline
-│   ├── investigations/   # Catalog, ranges, OCR and report parsing
-│   ├── prescriptions/    # Formulary, dictation, safety and PDF
-│   ├── messaging/        # WhatsApp, Twilio and console delivery
+│   ├── services/         # Business operations, one per area
 │   ├── api/              # Versioned API routes and RBAC
+│   ├── reports/          # Report definitions and runner
+│   ├── <domain>/         # Pure rules per area: accounts, billing, diet, insurance,
+│   │                     #   investigations, ipd, lab, mrd, pads, prescriptions, theatre
+│   ├── ai/               # AI gateway and clinical pipeline
+│   ├── messaging/        # WhatsApp, Twilio and console delivery
+│   ├── printing/         # Shared PDF layout
 │   └── ws/               # Patient and doctor WebSockets
 ├── alembic/              # Database migrations
 ├── tests/                # Unit and integration tests
-└── scripts/              # Demo data and utility scripts
+└── scripts/              # Seeders, imports and document generators
 
 frontend/
-├── app/
-│   ├── (patient)/        # Patient intake and live consultation
-│   └── (dashboard)/      # Doctor dashboard
-├── components/           # UI and clinical components
-└── lib/                  # API clients, audio and types
+├── app/                  # Routes by terminal: (dashboard), (reception), (ward), (lab), (patient)
+├── components/<area>/    # Screens per area; components/ui/ shared primitives
+└── lib/                  # staffApi.ts client, types/<area>.ts, hooks/, audio/
 
 deploy/
 ├── nginx/                # Reverse proxy and TLS
 └── scripts/              # Backup, restore and migration scripts
 
 docs/
+├── STAFF_GUIDE.md        # How hospital staff use the system, by role
+├── ENGINEERING_HANDOFF.md # Current state, operations and open work for engineers
+├── STRUCTURE.md          # Where code lives and where new code goes
+├── LOGGING.md            # Log format and how to trace a reported problem
+├── ROLES.txt             # Generated: what each staff role can do
 ├── API.md
 ├── DEPLOYMENT.md
 ├── EMR.md
-└── PRODUCTION_CHECKLIST.md
+├── PRODUCTION_CHECKLIST.md
+└── CHANGES.md            # Change history
 
 
 
@@ -440,6 +447,14 @@ Documentation
 Document
 
 Description
+
+docs/STRUCTURE.md
+
+Project layout, layers, and where new code goes
+
+docs/LOGGING.md
+
+What is logged and how to trace a problem by request id
 
 docs/EMR.md
 

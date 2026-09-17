@@ -19,6 +19,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
+from app.investigations.classification import DOSE_PATTERN
 from app.investigations.reference_ranges import (
     QUALITATIVE_EXPECTED,
     UNIT_CONVERSIONS,
@@ -37,6 +38,18 @@ _VALUE_RE = re.compile(rf"(?P<op>[<>]=?)?\s*(?P<num>{_NUM})")
 _RANGE_RE = re.compile(
     rf"(?P<low>{_NUM})\s*(?:-|–|—|to|TO|To)\s*(?P<high>{_NUM})"
 )
+# A printed date reads as a range to the pattern above: "02-09-2026" is a
+# perfectly good "2 to 9". Left unguarded, the header line
+# "Patient: Advait  Age: 18/M  Date: 02-09-2026" is parsed as an analyte
+# called "Patient Advait Age" measuring 18 against a range of 2-9, and
+# flagged HIGH. One nonsense red flag discredits every real one beside it.
+_DATE_RE = re.compile(
+    # The separator must be the SAME on both sides. Allowing them to
+    # differ let "13.0 - 17.0" match as 13 . 0 - 17, which blanked a real
+    # haemoglobin range and silently stopped a low value being flagged.
+    r"\b\d{1,4}(?P<sep>[-/.])\d{1,2}(?P=sep)\d{2,4}\b"
+)
+
 _UPTO_RE = re.compile(rf"(?:up\s*to|upto|<|less than|below)\s*(?P<high>{_NUM})", re.IGNORECASE)
 _ATLEAST_RE = re.compile(rf"(?:>|greater than|above|more than)\s*(?P<low>{_NUM})", re.IGNORECASE)
 
@@ -49,7 +62,9 @@ QUALITATIVE_WORDS = {
 
 # Lines that are page furniture, not results.
 _NOISE_RE = re.compile(
-    r"^(page\s*\d|patient\s*name|ref(erred)?\s*by|reg(istration)?\s*no|lab\s*no|"
+    r"^(page\s*\d|patient\s*(name|id)?\b|name\s*[:.]|ref(erred)?\s*by|"
+    r"reg(istration)?\s*no|lab\s*no|uhid|d\.?o\.?b|date\s*[:.]|sex\s*[:.]|"
+    r"age\s*[:.]|consultant|"
     r"sample\s*(collected|received)|report(ed)?\s*(on|date)|age\s*/?\s*sex|"
     r"printed\s*on|authorized|verified|end\s*of\s*report|address|phone|"
     r"^-+$|^_+$|^=+$|^\s*$)",
@@ -111,6 +126,11 @@ class ParsedReport:
     results: List[EvaluatedResult] = field(default_factory=list)
     narrative_lines: List[str] = field(default_factory=list)
     parse_rate: float = 0.0
+    # Lines that carried a number but could not be trusted as a measurement.
+    # Kept and shown rather than dropped in silence: a doctor who can see
+    # that four lines were not understood knows to open the original, where
+    # a doctor shown a tidy table of nine rows does not.
+    uninterpreted_lines: List[str] = field(default_factory=list)
 
     @property
     def abnormal(self) -> List[EvaluatedResult]:
@@ -191,12 +211,32 @@ def parse_report_text(text: str) -> List[ParsedResult]:
 
         # Reference interval printed on the report (search the tail only, so the
         # measured value itself is never mistaken for a range bound).
-        range_match = _RANGE_RE.search(rest)
+        # Dates are blanked before the range is looked for, rather than the
+        # match being rejected afterwards: a line can carry both a real range
+        # and a date, and only the date should be ignored.
+        rest_for_range = _DATE_RE.sub(lambda m: " " * len(m.group(0)), rest)
+        # Indian dose notation is the other thing that reads as an interval.
+        # "PAN 40 MG 1-0-1" is one tablet in the morning and one at night,
+        # and was parsed as pantoprazole measuring 40 against a range of
+        # 1.0 to 0.0 — then flagged HIGH, on a prescription.
+        rest_for_range = DOSE_PATTERN.sub(
+            lambda m: " " * len(m.group(0)), rest_for_range
+        )
+
+        range_match = _RANGE_RE.search(rest_for_range)
         measurement_zone = rest
         if range_match:
-            result.printed_low = _to_float(range_match.group("low"))
-            result.printed_high = _to_float(range_match.group("high"))
-            measurement_zone = rest[: range_match.start()]
+            low = _to_float(range_match.group("low"))
+            high = _to_float(range_match.group("high"))
+            # An interval whose top is not above its bottom is not an
+            # interval. "1.0 - 0.0" reached the doctor's screen as a range
+            # that every possible value exceeds; whatever those digits were,
+            # they were not a reference range, so they are discarded rather
+            # than used to flag anything.
+            if low is not None and high is not None and high > low:
+                result.printed_low = low
+                result.printed_high = high
+                measurement_zone = rest[: range_match.start()]
         else:
             upto = _UPTO_RE.search(rest)
             atleast = _ATLEAST_RE.search(rest)
@@ -306,9 +346,7 @@ def evaluate(
         low, high, source = item.printed_low, item.printed_high, "none"
         if low is not None or high is not None:
             source = "report"
-            reference_for_critical = reference
         else:
-            reference_for_critical = reference
             if reference is not None:
                 unit_printed = normalize_unit(item.unit)
                 unit_reference = normalize_unit(reference.unit)
@@ -346,9 +384,25 @@ def evaluate(
         elif low is not None:
             result.reference_text = f"above {low}"
 
+        # Critical thresholds are absolute numbers, so they may only be
+        # applied when we know they are in the same units as the value. When
+        # the report printed its own range we have not reconciled anything:
+        # the range is the laboratory's, the thresholds are ours, and a
+        # platelet count of 145000 /cmm was called critically high against a
+        # ceiling of 10.0 lakh/cumm. Comparing against the printed range is
+        # still right; only the critical layer is withheld.
+        critical_reference = None
+        if reference is not None:
+            if source == "builtin":
+                critical_reference = reference
+            elif source == "report":
+                unit_printed = normalize_unit(item.unit)
+                unit_reference = normalize_unit(reference.unit)
+                if unit_printed and unit_printed == unit_reference:
+                    critical_reference = reference
+
         flag, deviation = _flag_numeric(
-            item.value_numeric, low, high,
-            reference_for_critical if source == "builtin" or reference_for_critical else None,
+            item.value_numeric, low, high, critical_reference,
         )
         result.flag = flag
         result.deviation_note = deviation
@@ -357,12 +411,37 @@ def evaluate(
     return evaluated
 
 
+def is_trustworthy(result: EvaluatedResult) -> bool:
+    """May this row be shown to a doctor as a measured value?
+
+    Only on one of two grounds: the test is one we recognise, so we know what
+    it is and what it should be; or the report printed its own reference
+    interval beside it, so the comparison is the laboratory's and not ours.
+
+    Everything else is a line with a number on it. On a genuine lab report
+    that is the registration number and the page footer. On a prescription
+    read by mistake it is the entire document, which is how "Regd No. 24294"
+    and "min 812 Meg" came to sit in a table headed Results.
+    """
+    if result.analyte_key:
+        return True
+    return result.reference_source == "report" and (
+        result.reference_low is not None or result.reference_high is not None
+    )
+
+
 def analyze_text(
     text: str, *, sex: Optional[Gender] = None, age: Optional[int] = None
 ) -> ParsedReport:
     """Full deterministic pass over one report's text."""
     parsed = parse_report_text(text)
-    results = evaluate(parsed, sex=sex, age=age)
+    evaluated = evaluate(parsed, sex=sex, age=age)
+
+    results = [item for item in evaluated if is_trustworthy(item)]
+    uninterpreted = [
+        item.raw_line for item in evaluated
+        if not is_trustworthy(item) and item.raw_line
+    ]
     recognised = sum(1 for r in results if r.analyte_key)
     narrative = [
         line.strip()
@@ -374,4 +453,5 @@ def analyze_text(
         results=results,
         narrative_lines=narrative,
         parse_rate=round(recognised / len(results), 2) if results else 0.0,
+        uninterpreted_lines=uninterpreted[:40],
     )

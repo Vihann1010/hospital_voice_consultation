@@ -17,6 +17,9 @@ import re
 from datetime import date
 from typing import Optional
 
+from app.core.financial_year import label_for
+from app.core.clock import local_today
+
 # Excluded from UHIDs on purpose:
 #   I, 1, J  — indistinguishable when handwritten
 #   O, 0, Q  — likewise
@@ -35,11 +38,10 @@ def financial_year(on: Optional[date] = None) -> str:
 
     A bill raised on 31 March and one raised on 1 April belong to different
     years, and the numbering restarts. Getting this wrong misfiles a whole
-    day's revenue.
+    day's revenue — so the rule lives in one module and this defers to it
+    rather than restating it.
     """
-    today = on or date.today()
-    start = today.year if today.month >= 4 else today.year - 1
-    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
+    return label_for(on)
 
 
 def build_uhid(sequence: int, on: Optional[date] = None) -> str:
@@ -48,7 +50,7 @@ def build_uhid(sequence: int, on: Optional[date] = None) -> str:
     The year prefix makes the registration era obvious at a glance; the
     encoded suffix keeps it short enough to say over a counter.
     """
-    today = on or date.today()
+    today = on or local_today()
     year = today.year % 100
 
     base = len(UHID_ALPHABET)

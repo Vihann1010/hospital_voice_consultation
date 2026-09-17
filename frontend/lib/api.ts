@@ -1,4 +1,30 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const CONFIGURED_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/**
+ * The API address as the browser should use it.
+ *
+ * The build bakes in "localhost:8000", which is right on the server itself and
+ * wrong everywhere else: a phone that opened this page from the QR code at
+ * http://192.168.x.x:3000 would send its upload to its own localhost. When the
+ * configured address is localhost but the page was reached some other way,
+ * the API is assumed to be on the same machine the page came from.
+ */
+function resolveApiUrl(): string {
+  if (typeof window === "undefined") return CONFIGURED_API_URL;
+  try {
+    const configured = new URL(CONFIGURED_API_URL);
+    const local = ["localhost", "127.0.0.1"];
+    if (local.includes(configured.hostname) && !local.includes(window.location.hostname)) {
+      configured.hostname = window.location.hostname;
+      return configured.toString().replace(/\/$/, "");
+    }
+  } catch {
+    /* fall through to the configured value */
+  }
+  return CONFIGURED_API_URL;
+}
+
+export const API_URL = resolveApiUrl();
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? API_URL.replace(/^http/, "ws");
 

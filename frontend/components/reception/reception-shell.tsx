@@ -13,11 +13,22 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, LogOut, RefreshCw, Users } from "lucide-react";
+import { FlaskConical } from "lucide-react";
+import {
+  BarChart3,
+  CalendarClock,
+  CalendarDays,
+  LogOut,
+  NotebookText,
+  ReceiptText,
+  RefreshCw,
+  Users,
+} from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
+import { CashCounter } from "@/components/finance/cash-counter";
 import { staffApi } from "@/lib/staffApi";
-import type { Visit } from "@/lib/emrTypes";
+import type { Visit } from "@/lib/types/emr";
 import { formatFullDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -66,7 +77,7 @@ function TodaysQueue() {
         </button>
       </div>
 
-      <div className="max-h-[calc(100vh-220px)] overflow-y-auto">
+      <div className="max-h-[calc(100vh-420px)] overflow-y-auto">
         {error && <p className="px-4 py-3 text-xs text-clay">{error}</p>}
 
         {visits === null && !error && (
@@ -93,7 +104,7 @@ function TodaysQueue() {
                 {visit.token_number ?? "—"}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-ink">{visit.visit_number}</p>
+                <p className="truncate text-sm text-ink">{visit.patient_name}</p>
                 <p className="truncate text-[11px] capitalize text-ink-faint">
                   {visit.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
                   {" · "}
@@ -128,7 +139,7 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-mint">
+    <div className="h-dvh overflow-hidden bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <div className="rounded bg-white">
@@ -146,6 +157,36 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
                 {today}
               </span>
             )}
+
+            <Link href="/lab">
+              <Button variant="ghost" size="sm">
+                <FlaskConical /> Lab
+              </Button>
+            </Link>
+
+            <Link href="/reception/reports">
+              <Button variant="ghost" size="sm">
+                <BarChart3 /> Reports
+              </Button>
+            </Link>
+
+            <Link href="/reception/diary">
+              <Button variant="ghost" size="sm">
+                <NotebookText /> Diary
+              </Button>
+            </Link>
+
+            <Link href="/reception/bills">
+              <Button variant="ghost" size="sm">
+                <ReceiptText /> Bills
+              </Button>
+            </Link>
+
+            <Link href="/reception/appointments">
+              <Button variant="ghost" size="sm">
+                <CalendarClock /> Appointments
+              </Button>
+            </Link>
 
             <Link href="/reception/patients">
               <Button variant="ghost" size="sm">
@@ -168,11 +209,13 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-        <div className="grid gap-5 xl:grid-cols-[1fr_280px]">
+      <main className="h-[calc(100dvh-65px)] overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
           <div>{children}</div>
-          <div className="xl:sticky xl:top-20 xl:self-start">
+          <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
             <TodaysQueue />
+            {/* The cashier's own drawer, kept small and out of the way of billing. */}
+            <CashCounter compact />
           </div>
         </div>
       </main>

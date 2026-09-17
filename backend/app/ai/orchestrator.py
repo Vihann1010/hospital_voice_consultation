@@ -79,6 +79,11 @@ class VoiceSession:
         self._current_utterance = ""
         self._speech_started_at = 0.0
         self._speech_ended_at = 0.0
+        # When the patient's speaker will actually finish playing what has
+        # been sent. Audio goes out faster than it plays, so "still sending"
+        # and "still audible" are different moments, and only the second one
+        # decides whether the patient talked over the assistant.
+        self._playback_ends_at = 0.0
         self._stopped = False
         self._queue_lock = asyncio.Lock()
         self._turns_since_record = 0
@@ -186,10 +191,11 @@ class VoiceSession:
                         {"type": "emergency_detected", "flags": self.memory.deterministic_flags}
                     )
 
-                if self._speaking.is_set():
+                if self._speaking.is_set() and self._audible():
                     # Genuine speech during playback is a barge-in — but not in
                     # the first moments, where a late echo of the assistant's
-                    # opening words is the likelier explanation.
+                    # opening words is the likelier explanation. Speech after
+                    # the audio has finished playing is simply an answer.
                     elapsed = time.monotonic() - self._speech_started_at
                     if elapsed >= settings.BARGE_IN_GRACE_S:
                         await self._cancel_speaking(reason="patient_spoke")
@@ -227,6 +233,13 @@ class VoiceSession:
         if not text or self._stopped or self.memory is None:
             return
 
+        # Stop the reply in flight BEFORE recording what the patient said.
+        # The other way round, the cut-off reply was appended after the
+        # patient's words, the conversation ended on the assistant's turn, and
+        # the model refused to answer it — the assistant fell silent.
+        if self._speak_task is not None and not self._speak_task.done():
+            await self._cancel_speaking(reason="new_utterance")
+
         await self.record_turn(role=TurnRole.PATIENT, content=text)
         self.memory.add_patient_turn(text)
 
@@ -234,8 +247,6 @@ class VoiceSession:
         # voice never waits on analysis (its slot updates inform the *next* turn).
         self._spawn_ingest(text)
 
-        if self._speak_task is not None and not self._speak_task.done():
-            await self._cancel_speaking(reason="new_utterance")
         self._speak_task = asyncio.create_task(self._speak_reply())
 
     def _spawn_ingest(self, text: str) -> None:
@@ -277,8 +288,14 @@ class VoiceSession:
             await self.send_json({"type": "assistant_start"})
             await tts.connect()
 
+            bytes_per_second = 2 * settings.SARVAM_TTS_SAMPLE_RATE  # PCM16 mono
+
             async def forward_audio() -> None:
                 async for chunk in tts.audio_chunks():
+                    # The client starts playing on arrival and plays in real
+                    # time, queueing behind whatever is still playing.
+                    starts = max(self._playback_ends_at, time.monotonic())
+                    self._playback_ends_at = starts + len(chunk) / bytes_per_second
                     await self.send_audio(chunk)
 
             forward_task = asyncio.create_task(forward_audio())
@@ -312,7 +329,10 @@ class VoiceSession:
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(forward_task, timeout=20.0)
         except asyncio.CancelledError:
-            interrupted = True
+            # A reply cancelled after the patient had already heard all of it
+            # was not interrupted; one cancelled while still playing, or
+            # before any of it was heard, was.
+            interrupted = not spoken_text or self._audible()
             raise
         except Exception:
             logger.exception("speak_reply_failed")
@@ -326,7 +346,9 @@ class VoiceSession:
                     await forward_task
             await tts.close()
             self._speaking.clear()
-            self._speech_ended_at = time.monotonic()
+            # Echo can arrive for as long as the audio is still playing, which
+            # may be after the server has finished sending it.
+            self._speech_ended_at = max(time.monotonic(), self._playback_ends_at)
             await self._finish_assistant_turn(spoken_text, interrupted)
 
     async def _finish_assistant_turn(self, text: str, interrupted: bool) -> None:
@@ -353,6 +375,10 @@ class VoiceSession:
                         "coverage": self.memory.coverage(),
                     }
                 )
+
+    def _audible(self) -> bool:
+        """Can the patient still hear the assistant right now?"""
+        return time.monotonic() < self._playback_ends_at
 
     async def _cancel_speaking(self, *, reason: str) -> None:
         task = self._speak_task

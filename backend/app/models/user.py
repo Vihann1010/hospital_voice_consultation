@@ -16,7 +16,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
-        default=UserRole.STAFF,
+        default=UserRole.RECEPTION,
     )
     department: Mapped[Optional[Department]] = mapped_column(
         Enum(Department, name="department", values_callable=lambda e: [m.value for m in e]),

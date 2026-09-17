@@ -9,23 +9,23 @@
  * the same person ends up in the database twice, with their history split
  * across both copies.
  *
- * Starting a session hands the tablet to the patient, so the operator's
+ * Starting a session opens the consultation workspace for the operator, so the
  * confirmation step matters: tapping the wrong row would put someone else's
  * name on this consultation.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
+import { ArrowRight, Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { ConsultationListItem, Department } from "@/lib/types";
+import type { ConsultationDetail, ConsultationListItem, Department } from "@/lib/types/core";
 import { formatDate } from "@/lib/format";
-import type { QueuedPatient } from "@/lib/emrTypes";
+import type { QueuedPatient } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { LiveIntakeWorkspace } from "@/components/intake/live-intake-workspace";
 
 const REFRESH_MS = 15000;
 
@@ -41,7 +41,6 @@ function waitedFor(registeredAt: string): string {
 }
 
 export function IntakeQueue() {
-  const router = useRouter();
   const toast = useToast();
 
   const [queue, setQueue] = useState<QueuedPatient[] | null>(null);
@@ -49,6 +48,12 @@ export function IntakeQueue() {
   const [department, setDepartment] = useState<Department | "all">("all");
   const [confirming, setConfirming] = useState<QueuedPatient | null>(null);
   const [starting, setStarting] = useState(false);
+  const [activeSession, setActiveSession] = useState<{
+    patient: QueuedPatient;
+    consultationId: string;
+    token: string | null;
+    consultation?: ConsultationDetail | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -89,7 +94,12 @@ export function IntakeQueue() {
         `consult:${session.consultation_id}`,
         session.session_token
       );
-      router.push(`/consultation/${session.consultation_id}`);
+      setActiveSession({
+        patient: entry,
+        consultationId: session.consultation_id,
+        token: session.session_token,
+      });
+      setConfirming(null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Could not start the consultation.";
@@ -99,6 +109,62 @@ export function IntakeQueue() {
     } finally {
       setStarting(false);
     }
+  }
+
+  async function openCompleted(entry: ConsultationListItem) {
+    try {
+      const detail = await staffApi.consultation(entry.id);
+      setActiveSession({
+        consultationId: entry.id,
+        token: null,
+        consultation: detail,
+        patient: {
+          visit_id: entry.id,
+          visit_number: entry.id,
+          token_number: null,
+          department: entry.department,
+          doctor_name: "",
+          visit_type: "new",
+          registered_at: entry.started_at,
+          patient: {
+            id: entry.patient?.id ?? "",
+            uhid: null,
+            name: entry.patient?.name ?? "Registered patient",
+            age: entry.patient?.age ?? 0,
+            gender: entry.patient?.gender ?? "other",
+            phone_number: entry.patient?.phone_number ?? "",
+          },
+        },
+      });
+    } catch (err) {
+      toast.error(
+        "Could not open consultation",
+        err instanceof Error ? err.message : "Please try again."
+      );
+    }
+  }
+
+  if (activeSession) {
+    return (
+      <LiveIntakeWorkspace
+        patient={activeSession.patient}
+        consultationId={activeSession.consultationId}
+        token={activeSession.token}
+        consultation={activeSession.consultation}
+        onRestartSession={(session) => {
+          setActiveSession((current) => current ? {
+            ...current,
+            consultationId: session.consultation_id,
+            token: session.session_token,
+            consultation: null,
+          } : current);
+        }}
+        onBack={() => {
+          setActiveSession(null);
+          void load();
+        }}
+      />
+    );
   }
 
   return (
@@ -212,21 +278,31 @@ export function IntakeQueue() {
         ) : (
           <ul className="space-y-2.5">
             {completed.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-4 rounded-xl border border-pine/10 bg-white p-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mint text-sm font-semibold text-pine">
-                  {entry.patient?.name.slice(0, 1).toUpperCase() ?? "?"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-display text-base font-semibold text-pine">
-                    {entry.patient?.name ?? "Registered patient"}
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => void openCompleted(entry)}
+                  className="group flex w-full items-center gap-4 rounded-xl border border-pine/10 bg-white p-4 text-left transition hover:border-pine/30 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-pine/30"
+                  aria-label={`View completed consultation for ${entry.patient?.name ?? "registered patient"}`}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mint text-sm font-semibold text-pine">
+                    {entry.patient?.name.slice(0, 1).toUpperCase() ?? "?"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-base font-semibold text-pine">
+                      {entry.patient?.name ?? "Registered patient"}
+                    </p>
+                    <p className="truncate text-sm text-ink-muted">
+                      {entry.patient?.phone_number ?? ""} · {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                    </p>
+                  </div>
+                  <p className="hidden text-right text-xs text-ink-faint sm:block">
+                    Completed {formatDate(entry.ended_at ?? entry.started_at)}
                   </p>
-                  <p className="truncate text-sm text-ink-muted">
-                    {entry.patient?.phone_number ?? ""} · {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
-                  </p>
-                </div>
-                <p className="hidden text-right text-xs text-ink-faint sm:block">
-                  Completed {formatDate(entry.ended_at ?? entry.started_at)}
-                </p>
+                  <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-pine">
+                    View details <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -254,8 +330,8 @@ export function IntakeQueue() {
               {confirming.patient.uhid}
             </p>
             <p className="mt-3 rounded-lg bg-mint px-3 py-2 text-xs text-ink-muted">
-              Hand the tablet to the patient once this starts. The assistant will
-              greet them and ask what brought them in.
+              The assistant will greet the patient while you record the clinical
+              context, vitals, and live transcript on this screen.
             </p>
 
             <div className="mt-5 flex gap-2">

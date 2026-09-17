@@ -12,7 +12,7 @@ import {
 import { staffApi } from "@/lib/staffApi";
 import type {
   Catalog, Investigation, InvestigationPriority, Panel, Workspace,
-} from "@/lib/investigationTypes";
+} from "@/lib/types/investigations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";

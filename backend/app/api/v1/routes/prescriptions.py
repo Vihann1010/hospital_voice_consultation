@@ -3,11 +3,14 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 
-from app.api.deps import CurrentUser, get_prescription_service, require_roles
+from app.api.deps import CurrentUser, get_prescription_service, require_permission
+from app.core.permissions import Permission
 from app.core.audit import client_ip, record as audit_record
 from app.messaging.factory import get_provider
-from app.models.enums import AuditAction, Department, UserRole
+from app.models.consultant import Consultant
+from app.models.enums import AuditAction, Department
 from app.prescriptions import formulary
 from app.prescriptions.pdf import pdf_capabilities
 from app.prescriptions.safety import blocking_alerts, run_all
@@ -29,8 +32,8 @@ from app.services.prescription_service import PrescriptionError, PrescriptionSer
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 
 Service = Annotated[PrescriptionService, Depends(get_prescription_service)]
-STAFF = require_roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF)
-CLINICIAN = require_roles(UserRole.ADMIN, UserRole.DOCTOR)
+READ_PRESCRIPTIONS = require_permission(Permission.PRESCRIPTION_READ)
+CLINICIAN = require_permission(Permission.PRESCRIPTION_CREATE)
 
 
 def _medicine_out(item) -> MedicineOut:
@@ -42,7 +45,7 @@ def _medicine_out(item) -> MedicineOut:
     )
 
 
-@router.get("/formulary", response_model=FormularyOut, dependencies=[Depends(STAFF)])
+@router.get("/formulary", response_model=FormularyOut, dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def search_formulary(
     q: Optional[str] = Query(default=None, max_length=120),
     department: Optional[Department] = Query(default=None),
@@ -53,7 +56,33 @@ async def search_formulary(
     return FormularyOut(items=[_medicine_out(item) for item in results], total=len(results))
 
 
-@router.get("/capabilities", dependencies=[Depends(STAFF)])
+@router.get("/templates", dependencies=[Depends(CLINICIAN)])
+async def search_medicine_templates(
+    q: Optional[str] = Query(default=None, max_length=200),
+    department: Optional[Department] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> dict:
+    """Doctor-reviewed medicine templates searchable by disease name."""
+    templates = formulary.search_templates(q, department=department, limit=limit)
+    return {
+        "items": [
+            {
+                "disease_name": template.disease_name,
+                "department": template.department.value,
+                "note": template.note,
+                "medicines": [
+                    _medicine_out(formulary.get(code)).model_dump()
+                    for code in template.medicine_codes
+                    if formulary.get(code) is not None
+                ],
+            }
+            for template in templates
+        ],
+        "total": len(templates),
+    }
+
+
+@router.get("/capabilities", dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def capabilities() -> dict:
     """What this node can do — PDF, QR and which messaging provider is live."""
     return {**pdf_capabilities(), "messaging_provider": get_provider().name}
@@ -98,11 +127,73 @@ async def prescription_prefill(
     return await service.prefill_from_consultation(consultation_id)
 
 
+@router.post("/assist", dependencies=[Depends(CLINICIAN)])
+async def prescription_assist(
+    payload: dict,
+    service: Service,
+) -> dict:
+    """Suggest editable medicines using the doctor's diagnosis plus intake context."""
+    consultation_id = payload.get("consultation_id")
+    diagnosis = str(payload.get("diagnosis") or "").strip()
+    if not diagnosis:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enter the clinical diagnosis first")
+    try:
+        consultation_uuid = uuid.UUID(str(consultation_id)) if consultation_id else None
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid consultation id") from exc
+
+    context = await service.prefill_from_consultation(consultation_uuid) if consultation_uuid else {}
+    try:
+        department = Department(payload.get("department")) if payload.get("department") else None
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid department") from exc
+    templates = formulary.search_templates(diagnosis, department=department, limit=3)
+    medicines = []
+    for template in templates:
+        for code in template.medicine_codes:
+            medicine = formulary.get(code)
+            if medicine is not None and medicine.code not in {item["formulary_code"] for item in medicines}:
+                medicines.append({
+                    "name": medicine.name,
+                    "formulary_code": medicine.code,
+                    "generic": ", ".join(medicine.ingredients),
+                    "form": medicine.form,
+                    "strength": medicine.strengths[0] if len(medicine.strengths) == 1 else None,
+                    "frequency_text": medicine.default_frequency,
+                    "duration": medicine.default_duration,
+                    "timing": medicine.default_timing,
+                    "source": "template",
+                })
+    return {
+        "diagnosis": diagnosis,
+        "medicines": medicines,
+        "templates": [template.disease_name for template in templates],
+        "intake_context": {
+            "chief_complaint": context.get("chief_complaint"),
+            "clinical_findings": context.get("clinical_findings"),
+            "investigations": context.get("investigations", []),
+            "allergies": context.get("allergies", []),
+            "current_medicines": context.get("current_medicines", []),
+        },
+        "note": "Template suggestions are editable and must be reviewed by the doctor.",
+    }
+
+
 @router.post("", response_model=PrescriptionOut, status_code=status.HTTP_201_CREATED,
              dependencies=[Depends(CLINICIAN)])
 async def create_prescription(
     payload: PrescriptionCreateRequest, service: Service, user: CurrentUser
 ) -> PrescriptionOut:
+    # The qualification and registration number printed under the signature
+    # come from the consultant register, not the login: a prescription without
+    # a medical registration number is not a valid one, and User has never
+    # carried those fields.
+    signer = (
+        await service.session.execute(
+            select(Consultant).where(Consultant.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+
     try:
         prescription = await service.create(
             patient_id=payload.patient_id,
@@ -110,8 +201,8 @@ async def create_prescription(
             department=user.department or Department.ORTHOPEDICS,
             doctor_id=user.id,
             doctor_name=user.full_name,
-            doctor_qualification=getattr(user, "qualification", None),
-            doctor_registration=getattr(user, "registration_number", None),
+            doctor_qualification=signer.qualification if signer else None,
+            doctor_registration=signer.registration_number if signer else None,
             medicines=[medicine.model_dump() for medicine in payload.medicines],
             diagnosis=payload.diagnosis,
             cause=payload.cause,
@@ -138,7 +229,7 @@ async def create_prescription(
     return PrescriptionOut.model_validate(prescription)
 
 
-@router.get("", response_model=PrescriptionListOut, dependencies=[Depends(STAFF)])
+@router.get("", response_model=PrescriptionListOut, dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def list_prescriptions(
     service: Service,
     patient_id: Optional[uuid.UUID] = Query(default=None),
@@ -153,7 +244,7 @@ async def list_prescriptions(
     )
 
 
-@router.get("/{prescription_id}", response_model=PrescriptionOut, dependencies=[Depends(STAFF)])
+@router.get("/{prescription_id}", response_model=PrescriptionOut, dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def get_prescription(prescription_id: uuid.UUID, service: Service) -> PrescriptionOut:
     prescription = await service.get(prescription_id)
     if prescription is None:
@@ -161,7 +252,7 @@ async def get_prescription(prescription_id: uuid.UUID, service: Service) -> Pres
     return PrescriptionOut.model_validate(prescription)
 
 
-@router.get("/{prescription_id}/pdf", dependencies=[Depends(STAFF)])
+@router.get("/{prescription_id}/pdf", dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def download_pdf(prescription_id: uuid.UUID, service: Service) -> FileResponse:
     found = await service.pdf_bytes(prescription_id)
     if found is None:
@@ -210,7 +301,7 @@ async def send_whatsapp(
 
 
 @router.get("/{prescription_id}/deliveries", response_model=List[DeliveryOut],
-            dependencies=[Depends(STAFF)])
+            dependencies=[Depends(READ_PRESCRIPTIONS)])
 async def delivery_history(prescription_id: uuid.UUID, service: Service) -> List[DeliveryOut]:
     deliveries = await service.deliveries.for_prescription(prescription_id)
     return [DeliveryOut.model_validate(delivery) for delivery in deliveries]

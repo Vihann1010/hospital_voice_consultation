@@ -28,11 +28,8 @@ from app.ipd.early_warning import Vitals, score_news2
 from app.models.emr import ServiceItem
 from app.models.enums import (
     AdmissionStatus,
-<<<<<<< HEAD
     InvoiceStatus,
     PayerType,
-=======
->>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
     AdmissionType,
     BedStatus,
     ChargeCategory,
@@ -53,12 +50,18 @@ from app.models.ipd import (
     Ward,
 )
 from app.models.patient import Patient
+from app.models.admission_leave import AdmissionLeave
+from app.core.clock import local_today
 
 logger = get_logger(__name__)
 
 
 class IPDError(Exception):
     pass
+
+
+#: A new admission within this many days of the last discharge is a re-admission.
+READMISSION_WINDOW_DAYS = 30
 
 
 def _now() -> datetime:
@@ -79,7 +82,7 @@ class IPDService:
         """
         from app.models.emr import DocumentCounter
 
-        period = f"{date.today().year}"
+        period = f"{local_today().year}"
         result = await self.session.execute(
             select(DocumentCounter)
             .where(DocumentCounter.scope == "ip", DocumentCounter.period == period)
@@ -105,7 +108,7 @@ class IPDService:
 
         counter.last_value += 1
         await self.session.flush()
-        return f"IP{date.today().year % 100:02d}-{counter.last_value:05d}"
+        return f"IP{local_today().year % 100:02d}-{counter.last_value:05d}"
 
     # ----------------------------------------------------------------- beds
     async def ward_board(
@@ -144,6 +147,34 @@ class IPDService:
             }
             for occupancy, admission, patient in occupied.all()
         }
+
+        away = {
+            row[0]: row[1]
+            for row in (await self.session.execute(
+                select(AdmissionLeave.admission_id, AdmissionLeave.expected_return_on)
+                .where(AdmissionLeave.returned_at.is_(None))
+            )).all()
+        }
+        for occupant in by_bed.values():
+            key = uuid.UUID(occupant["admission_id"])
+            occupant["on_leave"] = key in away
+            occupant["expected_return_on"] = away[key].isoformat() if away.get(key) else None
+
+        # The diet in effect now, so the ward board answers "what is bed 4 on?"
+        from app.models.diet import DietOrder
+
+        moment = datetime.now(timezone.utc)
+        diets = {
+            row.admission_id: row.mode_name
+            for row in (await self.session.execute(
+                select(DietOrder).where(
+                    DietOrder.starts_at <= moment,
+                    (DietOrder.ends_at.is_(None)) | (DietOrder.ends_at > moment),
+                )
+            )).scalars()
+        }
+        for occupant in by_bed.values():
+            occupant["diet"] = diets.get(uuid.UUID(occupant["admission_id"]))
 
         board: List[Dict[str, Any]] = []
         for ward in wards:
@@ -223,6 +254,8 @@ class IPDService:
         attendant_phone: Optional[str] = None,
         attendant_relation: Optional[str] = None,
         advance_paid_paise: int = 0,
+        advance_mode: str = "cash",
+        advance_mode_details: Optional[Dict[str, Any]] = None,
         visit_id: Optional[uuid.UUID] = None,
         admitted_by_name: str = "",
         allergies: Optional[List[str]] = None,
@@ -247,6 +280,21 @@ class IPDService:
                 "Discharge that admission first, or use a bed transfer."
             )
 
+        previous = (
+            await self.session.execute(
+                select(Admission).where(
+                    Admission.patient_id == patient_id,
+                    Admission.status == AdmissionStatus.DISCHARGED,
+                    Admission.discharged_at.is_not(None),
+                ).order_by(Admission.discharged_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+        since = None
+        if previous is not None:
+            from app.core.clock import to_local
+
+            since = (local_today() - to_local(previous.discharged_at).date()).days
+
         bed = await self._claim_bed(bed_id)
         ward = await self.session.get(Ward, bed.ward_id)
         if ward is None:
@@ -266,14 +314,29 @@ class IPDService:
             expected_stay_days=expected_stay_days,
             provisional_diagnosis=provisional_diagnosis,
             reason_for_admission=reason_for_admission,
-            allergies=allergies or [],
+            # Allergies do not change between stays; an empty list on a returning
+            # patient is more likely an omission than a cure.
+            allergies=allergies or (list(previous.allergies or []) if previous is not None else []),
+            readmission_of_id=previous.id if previous is not None and since is not None
+            and since <= READMISSION_WINDOW_DAYS else None,
+            days_since_last_discharge=since if since is not None and since <= READMISSION_WINDOW_DAYS else None,
             attendant_name=attendant_name,
             attendant_phone=attendant_phone,
             attendant_relation=attendant_relation,
-            advance_paid_paise=advance_paid_paise,
+            # Holds only advances recorded before they were receipted. A new
+            # advance is taken below as a deposit with a receipt.
+            advance_paid_paise=0,
         )
         self.session.add(admission)
         await self.session.flush()
+        if advance_paid_paise > 0:
+            entry = await self._receipt_advance(
+                admission, amount_paise=advance_paid_paise, mode=advance_mode,
+                mode_details=advance_mode_details, received_by_name=admitted_by_name,
+            )
+            # Carried back to the route so the receipt can be printed at once.
+            admission.advance_receipt_number = entry.receipt_number
+            admission.advance_receipt_entry_id = entry.id
 
         self.session.add(
             BedOccupancy(
@@ -435,11 +498,21 @@ class IPDService:
         bed_days = compute_bed_days(
             occupancies,
             admitted_at=admission.admitted_at,
+            absences=await self._absences(admission.id),
             discharged_at=admission.discharged_at,
             charging_hour=charging_hour,
             discharge_cutoff_hour=discharge_cutoff_hour,
             up_to=up_to,
         )
+
+        # Days before the go-live date are never posted automatically: an
+        # admission entered before the hospital started charging here must not
+        # be back-billed for every day since it was admitted.
+        from app.core.config import settings
+
+        if settings.BED_CHARGE_POST_FROM:
+            post_from = date.fromisoformat(settings.BED_CHARGE_POST_FROM)
+            bed_days = [day for day in bed_days if day.on >= post_from]
 
         already = await self._existing_charge_keys(admission_id)
         posted: List[AdmissionCharge] = []
@@ -549,7 +622,7 @@ class IPDService:
         charge = AdmissionCharge(
             admission_id=admission_id,
             category=category,
-            charged_on=charged_on or date.today(),
+            charged_on=charged_on or local_today(),
             description=description or (service.name if service else ""),
             source_reference=source_reference or str(uuid.uuid4())[:8],
             service_item_id=service.id if service else None,
@@ -585,16 +658,85 @@ class IPDService:
             for category, count, total in rows
         }
         total = sum(item["total_paise"] for item in by_category.values())
+        advance = await self.advance_position(admission)
 
         return {
             "admission_id": str(admission_id),
             "ip_number": admission.ip_number,
             "by_category": by_category,
             "total_paise": total,
-            "advance_paid_paise": admission.advance_paid_paise,
-            "balance_paise": total - admission.advance_paid_paise,
+            # What is held against this stay: receipted advances still in the
+            # wallet, plus any advance recorded before receipts existed.
+            "advance_paid_paise": advance["credit_paise"],
+            "advance_received_paise": advance["received_paise"],
+            "advance_held_paise": advance["available_paise"],
+            "advance_unreceipted_paise": advance["unreceipted_paise"],
+            "balance_paise": total - advance["credit_paise"],
             "days_so_far": by_category.get("bed", {}).get("count", 0),
         }
+
+    # ------------------------------------------------------------- advances
+    async def advance_position(self, admission: Admission) -> Dict[str, int]:
+        """What is held against a stay.
+
+        Receipted advances are wallet deposits tagged to the admission. What is
+        still available is capped by the wallet's balance: credit the family
+        has since spent or taken back is not there to set against the bill.
+        `unreceipted_paise` is an advance typed on the admission form before
+        advances were receipted; it is reported, never invented into a receipt.
+        """
+        from app.models.emr import PatientWallet, WalletEntry
+        from app.models.enums import WalletEntryKind
+
+        received = int((await self.session.execute(
+            select(func.coalesce(func.sum(WalletEntry.amount_paise), 0)).where(
+                WalletEntry.admission_id == admission.id, WalletEntry.kind == WalletEntryKind.DEPOSIT
+            )
+        )).scalar_one() or 0)
+        wallet = (await self.session.execute(
+            select(PatientWallet.balance_paise).where(PatientWallet.patient_id == admission.patient_id)
+        )).scalar_one_or_none() or 0
+        available = min(received, wallet)
+        legacy = admission.advance_paid_paise or 0
+        return {"received_paise": received, "available_paise": available, "unreceipted_paise": legacy,
+                "wallet_balance_paise": wallet, "credit_paise": available + legacy}
+
+    async def _receipt_advance(
+        self, admission: Admission, *, amount_paise: int, mode: str,
+        mode_details: Optional[Dict[str, Any]], received_by_name: str,
+    ):
+        from app.models.enums import PaymentMode
+        from app.services.reception_service import ReceptionError, ReceptionService
+
+        try:
+            chosen = PaymentMode(mode)
+        except ValueError as exc:
+            raise IPDError(f"{mode} is not a payment mode.") from exc
+        try:
+            return await ReceptionService(self.session).wallet_deposit(
+                patient_id=admission.patient_id, amount_paise=amount_paise, mode=chosen,
+                mode_details=mode_details, reason=f"Advance for admission {admission.ip_number}",
+                received_by_name=received_by_name, admission_id=admission.id,
+            )
+        except ReceptionError as exc:
+            raise IPDError(str(exc)) from exc
+
+    async def take_advance(
+        self, admission_id: uuid.UUID, *, amount_paise: int, mode: str,
+        mode_details: Optional[Dict[str, Any]], received_by_name: str,
+    ):
+        """A further advance during the stay, receipted like the first."""
+        admission = await self.session.get(Admission, admission_id)
+        if admission is None:
+            raise IPDError("Admission not found.")
+        if admission.status not in (AdmissionStatus.ADMITTED, AdmissionStatus.DISCHARGE_INITIATED):
+            raise IPDError("An advance can only be taken while the patient is admitted.")
+        if admission.final_invoice_id is not None:
+            raise IPDError("The final bill is already raised. Take payment against that bill instead.")
+        return await self._receipt_advance(
+            admission, amount_paise=amount_paise, mode=mode, mode_details=mode_details,
+            received_by_name=received_by_name,
+        )
 
     # --------------------------------------------------------------- vitals
     async def record_vitals(
@@ -723,6 +865,11 @@ class IPDService:
                     [AdmissionStatus.ADMITTED, AdmissionStatus.DISCHARGE_INITIATED]
                 ),
                 VitalsRecord.news2_score >= threshold,
+                # A patient at home on leave is not a ward emergency; their last
+                # observation is from before they left.
+                Admission.id.notin_(
+                    select(AdmissionLeave.admission_id).where(AdmissionLeave.returned_at.is_(None))
+                ),
             )
             .order_by(VitalsRecord.news2_score.desc())
         )
@@ -755,7 +902,6 @@ class IPDService:
             )
         return out
 
-<<<<<<< HEAD
     # ------------------------------------------------------- final billing
     async def finalise_billing(
         self,
@@ -876,6 +1022,24 @@ class IPDService:
                 else InvoiceStatus.PARTIALLY_PAID
             )
 
+        # Receipted advances wait in the patient's wallet and settle the bill
+        # from there, as a wallet payment with its own receipt line. The money
+        # was counted in the drawer on the day it was taken, so settling from
+        # the wallet adds nothing to today's collection. Credit the patient
+        # holds from elsewhere is theirs too, and is applied the same way.
+        applied_from_wallet = 0
+        remaining = invoice.total_paise - invoice.paid_paise
+        held = await reception.wallet_balance(admission.patient_id)
+        if remaining > 0 and held > 0:
+            applied_from_wallet = min(remaining, held)
+            try:
+                await reception.pay_from_wallet(
+                    invoice_id=invoice.id, amount_paise=applied_from_wallet,
+                    received_by_name=created_by_name,
+                )
+            except ReceptionError as exc:
+                raise IPDError(str(exc)) from exc
+
         await self.session.flush()
         fresh = await reception.get_invoice(invoice.id)
         logger.info(
@@ -887,11 +1051,148 @@ class IPDService:
         return fresh, {
             "ip_number": admission.ip_number,
             "advance_paid_paise": admission.advance_paid_paise,
+            "applied_from_wallet_paise": applied_from_wallet,
             "balance_paise": fresh.total_paise - fresh.paid_paise,
         }
 
-=======
->>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
+    # ---------------------------------------------------------------- leave
+    async def open_leave(self, admission_id: uuid.UUID) -> Optional[AdmissionLeave]:
+        return (
+            await self.session.execute(
+                select(AdmissionLeave).where(
+                    AdmissionLeave.admission_id == admission_id, AdmissionLeave.returned_at.is_(None)
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+
+    async def leaves(self, admission_id: uuid.UUID) -> List[AdmissionLeave]:
+        return list((await self.session.execute(
+            select(AdmissionLeave).where(AdmissionLeave.admission_id == admission_id)
+            .order_by(AdmissionLeave.started_at)
+        )).scalars())
+
+    async def _absences(self, admission_id: uuid.UUID) -> List[Tuple[datetime, Optional[datetime]]]:
+        """Leave taken with the bed released: days that are not charged."""
+        return [(leave.started_at, leave.returned_at) for leave in await self.leaves(admission_id)
+                if not leave.bed_retained]
+
+    async def readmission_summary(self, admission: Admission) -> Optional[Dict[str, Any]]:
+        if admission.readmission_of_id is None:
+            return None
+        earlier = await self.session.get(Admission, admission.readmission_of_id)
+        if earlier is None:
+            return None
+        return {
+            "id": str(earlier.id), "ip_number": earlier.ip_number,
+            "discharged_at": earlier.discharged_at.isoformat() if earlier.discharged_at else None,
+            "final_diagnosis": earlier.final_diagnosis or earlier.provisional_diagnosis,
+            "days_since": admission.days_since_last_discharge,
+        }
+
+    async def start_leave(
+        self,
+        admission_id: uuid.UUID,
+        *,
+        reason: str,
+        expected_return_on: Optional[date],
+        bed_retained: bool,
+        started_by_name: str,
+    ) -> AdmissionLeave:
+        """Send an admitted patient home on leave. They stay admitted."""
+        admission = await self._admission_with_occupancies(admission_id)
+        if admission is None:
+            raise IPDError("Admission not found.")
+        if admission.status is not AdmissionStatus.ADMITTED:
+            raise IPDError(
+                "Only a patient who is admitted can go on leave. A patient written up for "
+                "discharge should be discharged."
+            )
+        current = await self.open_leave(admission_id)
+        if current is not None:
+            raise IPDError(f"This patient has been on leave since {current.started_at:%d %b %Y}.")
+        reason = (reason or "").strip()
+        if len(reason) < 3:
+            raise IPDError("Say why the patient is going on leave.")
+        if expected_return_on is not None and expected_return_on < local_today():
+            raise IPDError("The expected return date is in the past.")
+
+        now = _now()
+        # Charges owed up to now are posted first, on the stay as it was.
+        await self.accrue_bed_charges(admission_id, posted_by_name=started_by_name or "system")
+
+        leave = AdmissionLeave(admission_id=admission_id, started_at=now, expected_return_on=expected_return_on,
+                               reason=reason[:1000], bed_retained=bed_retained, started_by_name=started_by_name)
+        if not bed_retained:
+            held = next((o for o in admission.occupancies if o.ended_at is None), None)
+            if held is not None:
+                held.ended_at = now
+                held.transfer_reason = "Went on leave; bed released"
+                leave.released_bed_label, leave.released_ward_name = held.bed_label, held.ward_name
+                bed = await self.session.get(Bed, held.bed_id)
+                if bed is not None:
+                    bed.status = BedStatus.CLEANING
+        self.session.add(leave)
+        await self.session.flush()
+        logger.info("leave_started", extra={"ip_number": admission.ip_number, "bed_retained": bed_retained})
+        return leave
+
+    async def end_leave(
+        self,
+        admission_id: uuid.UUID,
+        *,
+        bed_id: Optional[uuid.UUID] = None,
+        note: Optional[str] = None,
+        returned_by_name: str = "",
+    ) -> Tuple[AdmissionLeave, int]:
+        """The patient is back. Returns the leave and how many missed doses were recorded."""
+        admission = await self._admission_with_occupancies(admission_id)
+        if admission is None:
+            raise IPDError("Admission not found.")
+        leave = await self.open_leave(admission_id)
+        if leave is None:
+            raise IPDError("This patient is not on leave.")
+        now = _now()
+        if not leave.bed_retained:
+            if bed_id is None:
+                raise IPDError(
+                    "The bed was released when the patient went on leave. Choose a bed for their return."
+                )
+            bed = await self._claim_bed(bed_id)
+            ward = await self.session.get(Ward, bed.ward_id)
+            if ward is None:
+                raise IPDError("The ward for this bed no longer exists.")
+            self.session.add(BedOccupancy(
+                admission_id=admission.id, bed_id=bed.id, bed_label=bed.label, ward_name=ward.name,
+                daily_rate_paise=bed.rate_override_paise or ward.daily_rate_paise, started_at=now,
+                transfer_reason="Returned from leave", moved_by_name=returned_by_name,
+            ))
+        elif bed_id is not None:
+            raise IPDError("The patient's bed was kept for them. Move them afterwards with a bed transfer.")
+
+        leave.returned_at = now
+        leave.returned_by_name = returned_by_name
+        leave.return_note = (note or "").strip() or None
+
+        # Doses that fell due while the patient was away were not given here.
+        # Recorded as such, rather than left to show as overdue for ever.
+        missed = (await self.session.execute(
+            select(MedicationAdministration)
+            .join(MedicationOrder, MedicationOrder.id == MedicationAdministration.order_id)
+            .where(
+                MedicationOrder.admission_id == admission_id,
+                MedicationAdministration.was_given.is_(None),
+                MedicationAdministration.due_at >= leave.started_at,
+                MedicationAdministration.due_at < now,
+            )
+        )).scalars().all()
+        for dose in missed:
+            dose.was_given = False
+            dose.omission_reason = "Patient on leave"
+            dose.given_by_name = returned_by_name
+        await self.session.flush()
+        logger.info("leave_ended", extra={"ip_number": admission.ip_number, "missed_doses": len(missed)})
+        return leave, len(missed)
+
     # ------------------------------------------------------------ discharge
     async def initiate_discharge(
         self, admission_id: uuid.UUID, *, final_diagnosis: Optional[str] = None
@@ -931,7 +1232,32 @@ class IPDService:
         if admission.status is AdmissionStatus.DISCHARGED:
             raise IPDError("This patient has already been discharged.")
 
+        # A patient going home, or to another hospital, leaves with a signed
+        # discharge summary. Leaving against advice, absconding and death are
+        # not held up by paperwork that cannot be written first.
+        if discharge_type in (DischargeType.ROUTINE, DischargeType.TRANSFERRED_OUT):
+            from app.models.enums import PadStatus
+            from app.models.pad import PadDocument
+
+            signed = await self.session.execute(
+                select(PadDocument.id).where(
+                    PadDocument.admission_id == admission_id,
+                    PadDocument.document_type == "ipd_discharge_summary",
+                    PadDocument.status == PadStatus.SIGNED,
+                ).limit(1)
+            )
+            if signed.scalar_one_or_none() is None:
+                raise IPDError(
+                    "Sign the discharge summary before discharging this patient. "
+                    "It is on the Discharge tab of the case sheet."
+                )
+
         now = _now()
+        leave = await self.open_leave(admission_id)
+        if leave is not None:
+            leave.returned_at = now
+            leave.returned_by_name = discharged_by_name
+            leave.return_note = f"Discharged while on leave ({discharge_type.value.replace('_', ' ')})"
         admission.discharged_at = now
         admission.status = AdmissionStatus.DISCHARGED
         admission.discharge_type = discharge_type
@@ -1027,7 +1353,7 @@ class IPDService:
                 )
             )
         )
-        today = on or date.today()
+        today = on or local_today()
         admissions_today = await self.session.execute(
             select(func.count())
             .select_from(Admission)

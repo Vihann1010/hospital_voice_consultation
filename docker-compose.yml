@@ -25,6 +25,12 @@ services:
     volumes:
       # Consultation recordings must outlive the container.
       - satya_media:/data/media
+      # Development only: run the working tree instead of the copy baked into
+      # the image, so a code change costs a restart rather than a rebuild.
+      # docker-compose.prod.yml has no such mount and always runs the image.
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic:/app/alembic:ro
+      - ./backend/scripts:/app/scripts:ro
     ports:
       - "8000:8000"
     depends_on:

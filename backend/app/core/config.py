@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    # json: one object per line, for log shipping. pretty: readable lines, for local debugging.
+    LOG_FORMAT: str = "json"
+    # One line per HTTP request: method, path, status, duration and who made it.
+    LOG_REQUESTS: bool = True
     CORS_ORIGINS: str = "http://localhost:3000"
 
     # --- Database ----------------------------------------------------------
@@ -34,6 +38,9 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8          # staff sessions
+    # A QR code on a screen in a shared room can be photographed by whoever
+    # is next in the queue, so the token behind it is deliberately brief.
+    UPLOAD_TOKEN_EXPIRE_MINUTES: int = 15
     CONSULTATION_TOKEN_EXPIRE_MINUTES: int = 120        # patient voice sessions
     FINANCE_PIN: str = "4827"
 
@@ -48,8 +55,9 @@ class Settings(BaseSettings):
     # --- Sarvam AI (speech) -------------------------------------------------
     SARVAM_API_KEY: str = ""
     SARVAM_STT_WS_URL: str = "wss://api.sarvam.ai/speech-to-text/ws"
-    SARVAM_STT_MODEL: str = "saarika:v2.5"
-    SARVAM_STT_LANGUAGE: str = "unknown"                # auto-detect
+    SARVAM_STT_MODEL: str = "saaras:v3"
+    SARVAM_STT_LANGUAGE: str = "hi-IN"
+    SARVAM_STT_MODE: str = "codemix"
     SARVAM_TTS_WS_URL: str = "wss://api.sarvam.ai/text-to-speech/ws"
     SARVAM_TTS_MODEL: str = "bulbul:v2"
     SARVAM_TTS_SPEAKER: str = "anushka"
@@ -148,6 +156,14 @@ class Settings(BaseSettings):
     OCR_MAX_PAGES: int = 12
     MAX_REPORT_UPLOAD_MB: int = 25
 
+    # --- Hospital -----------------------------------------------------------
+    # The wall clock the hospital runs on. Timestamps are stored in UTC, but
+    # "today" and "nine o'clock" have to mean what they mean in Kanpur: with
+    # the server on UTC, a visit registered at 05:00 IST would otherwise be
+    # dated to the previous day, and a 09:00 appointment slot would be
+    # offered for the middle of the night.
+    HOSPITAL_TIMEZONE: str = "Asia/Kolkata"
+
     # --- Prescriptions ---------------------------------------------------------
     HOSPITAL_NAME: str = "Satya Trauma & Maternity Center"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
@@ -188,6 +204,24 @@ class Settings(BaseSettings):
     METRICS_ENABLED: bool = True
     REQUEST_ID_HEADER: str = "X-Request-ID"
     SHUTDOWN_GRACE_S: float = 20.0
+
+    # Room charges are posted each morning after the census hour (08:00),
+    # when the day's bed is decided. See app/ipd/room_charges.py.
+    BED_CHARGE_WORKER_ENABLED: bool = True
+    BED_CHARGE_RUN_AT: str = "08:30"
+    BED_CHARGE_CHECK_S: float = 300.0
+    # The go-live date (YYYY-MM-DD). Bed and nursing days before it are never
+    # posted, so an admission already in a bed is not back-billed.
+    BED_CHARGE_POST_FROM: str = ""
+
+    # The books follow the counter: new and changed bills, receipts and
+    # advances are posted this often. See app/accounts/worker.py.
+    BOOKS_POSTING_ENABLED: bool = True
+    BOOKS_POSTING_INTERVAL_S: float = 600.0
+
+    # The kitchen sheet serves each meal against the diet order in effect at
+    # that meal's time, in hospital time. Label=HH:MM, in the order served.
+    DIET_MEAL_TIMES: str = "Breakfast=08:00,Lunch=13:00,Dinner=20:00"
 
     # --- Session management ---------------------------------------------------
     SESSION_IDLE_TTL_S: int = 1800

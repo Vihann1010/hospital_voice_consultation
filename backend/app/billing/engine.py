@@ -33,11 +33,14 @@ class LineInput:
     code: Optional[str] = None
     hsn_sac_code: Optional[str] = None
     service_item_id: Optional[str] = None
+    #: Carried through untouched; it explains the line, it does not price it.
+    remark: Optional[str] = None
 
 
 @dataclass
 class ComputedLine:
     description: str
+    remark: Optional[str]
     code: Optional[str]
     hsn_sac_code: Optional[str]
     service_item_id: Optional[str]
@@ -142,6 +145,7 @@ def compute_invoice(
         computed.lines.append(
             ComputedLine(
                 description=line.description,
+                remark=line.remark,
                 code=line.code,
                 hsn_sac_code=line.hsn_sac_code,
                 service_item_id=line.service_item_id,

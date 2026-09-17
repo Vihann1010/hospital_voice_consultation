@@ -2,19 +2,23 @@
 import uuid
 from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import bind_user
+from app.core.permissions import Permission, has_permission
 from app.core.security import TOKEN_TYPE_ACCESS, decode_token
 from app.db.session import get_db
-from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.services.appointment_service import AppointmentService
 from app.services.auth_service import AuthService
 from app.services.consultation_service import ConsultationService
+from app.services.diary_service import DiaryService
 from app.services.copilot_service import CopilotService
 from app.services.investigation_service import InvestigationService
+from app.services.pad_service import PadService
 from app.services.prescription_service import PrescriptionService
 from app.services.ipd_service import IPDService
 from app.services.reception_service import ReceptionService
@@ -27,6 +31,14 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 def get_auth_service(session: DbSession) -> AuthService:
     return AuthService(session)
+
+
+def get_appointment_service(session: DbSession) -> AppointmentService:
+    return AppointmentService(session)
+
+
+def get_diary_service(session: DbSession) -> DiaryService:
+    return DiaryService(session)
 
 
 def get_consultation_service(session: DbSession) -> ConsultationService:
@@ -58,6 +70,7 @@ def get_ipd_service(session: DbSession) -> IPDService:
 
 
 async def get_current_user(
+    request: Request,
     session: DbSession,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> User:
@@ -73,20 +86,58 @@ async def get_current_user(
     user = await UserRepository(session).get(user_id)
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
+    # Who made this request: on request.state for the request log line, and in
+    # the log context so every line a service writes names the user.
+    request.state.user_id = str(user.id)
+    request.state.user_role = user.role.value
+    bind_user(user.id, user.role.value)
     return user
+
+
+def get_pad_service(session: DbSession) -> PadService:
+    return PadService(session)
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-def require_roles(*roles: UserRole):
-    """RBAC guard, e.g. Depends(require_roles(UserRole.ADMIN, UserRole.DOCTOR))."""
+def require_any_permission(*permissions: Permission):
+    """Authorisation guard for a screen two different jobs reach.
+
+    `require_permission` demands every named permission; this one accepts any,
+    for the few endpoints legitimately read by more than one kind of staff —
+    the price list is read at the counter to bill, and by management to price.
+    """
 
     async def checker(user: CurrentUser) -> User:
-        if user.role not in roles:
+        if not any(has_permission(user.role, p) for p in permissions):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                f"Requires one of roles: {', '.join(r.value for r in roles)}",
+                f"Requires one of: {', '.join(p.value for p in permissions)}",
+            )
+        return user
+
+    return checker
+
+
+def require_permission(*permissions: Permission):
+    """Authorisation guard, e.g. Depends(require_permission(Permission.REFUND_ISSUE)).
+
+    Routes name the permission they need, never the roles that happen to hold
+    it. The catalogue in app.core.permissions is the only place the mapping
+    lives, and it is the same thing /auth/me/permissions reports to the front
+    end — so the buttons a user is shown and the calls the API will accept
+    cannot drift apart, and adding a role does not mean revisiting every route.
+
+    All named permissions are required, not any of them.
+    """
+
+    async def checker(user: CurrentUser) -> User:
+        missing = [p for p in permissions if not has_permission(user.role, p)]
+        if missing:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Requires permission: {', '.join(p.value for p in missing)}",
             )
         return user
 

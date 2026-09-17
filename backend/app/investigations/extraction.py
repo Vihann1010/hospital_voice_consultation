@@ -11,7 +11,9 @@ reports that OCR is unavailable instead of crashing. `extraction_capabilities()`
 lets the API tell the front end what this node can actually do.
 """
 import io
+import re
 import shutil
+import unicodedata
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -78,6 +80,61 @@ class ExtractionResult:
     @property
     def ok(self) -> bool:
         return bool(self.text.strip())
+
+    @property
+    def legible(self) -> bool:
+        """Did this actually come back as readable text?
+
+        Handwriting is the case that matters. Tesseract does not decline to
+        read a handwritten prescription; it returns a page of plausible-
+        looking rubbish, and everything downstream treats that as content.
+        """
+        return is_legible(self.text)
+
+
+# Tuned to be reluctant. Wrongly hiding a real report is worse than showing a
+# doubtful one with a caveat, so a page is only called illegible when several
+# signals agree.
+_MIN_LEGIBLE_CHARS = 40
+
+
+def is_legible(text: str) -> bool:
+    """A rough judgement on whether OCR output is words or noise."""
+    stripped = (text or "").strip()
+    if len(stripped) < _MIN_LEGIBLE_CHARS:
+        return False
+
+    # Letters, combining marks and digits are all content. Marks matter:
+    # Devanagari vowels are matras attached to the consonant, and `isalpha`
+    # rejects them, which scored readable Hindi below the bar.
+    useful = sum(
+        1 for ch in stripped
+        if unicodedata.category(ch)[0] in ("L", "M", "N")
+    )
+    # Noise from a handwritten page is mostly punctuation and stray strokes.
+    if useful / len(stripped) < 0.55:
+        return False
+
+    # Real words are long enough to be words and contain vowels. Tesseract
+    # hallucinating over pen strokes produces short consonant clusters —
+    # "PosK", "SSC", "PRG" — which clear a naive letters-only test easily.
+    # This is the check that separates a scribbled prescription from a
+    # printed one.
+    latin = [
+        token for token in re.split(r"[^A-Za-z]+", stripped)
+        if len(token) >= 4 and any(vowel in token.lower() for vowel in "aeiou")
+    ]
+
+    # The vowel rule is a Latin-alphabet rule, and applying it to Devanagari
+    # rejects every Hindi report — matras are attached to the consonant, so
+    # a readable word contains no [aeiou] at all. Non-Latin letter runs are
+    # therefore counted on their own terms. Scribble produces neither.
+    other_script = [
+        token for token in re.split(r"[\sA-Za-z0-9]+", stripped)
+        if len(token) >= 3 and any(ch.isalpha() for ch in token)
+    ]
+
+    return len(latin) + len(other_script) >= 6
 
 
 # Below this many characters, a PDF page is treated as a scan rather than text.
@@ -176,19 +233,36 @@ def extract_from_image(data: bytes) -> ExtractionResult:
         return ExtractionResult("", "none", warning=f"Could not read the image: {exc}")
 
 
+# Control characters that a PDF text layer can carry and Postgres will not
+# store. A single NUL byte in an otherwise perfect report aborted the whole
+# upload with "invalid byte sequence for encoding UTF8", losing the file. Tabs
+# and newlines are kept: they are the column separators this parser relies on.
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def scrub(text: str) -> str:
+    """Make extracted text safe to store, without changing what it says."""
+    return _CONTROL_CHARS.sub(" ", text or "")
+
+
 def extract(data: bytes, content_type: str, filename: str = "") -> ExtractionResult:
     lowered = (content_type or "").lower()
     name = (filename or "").lower()
+
     if "pdf" in lowered or name.endswith(".pdf"):
-        return extract_from_pdf(data)
-    if lowered.startswith("image/") or name.endswith(
+        result = extract_from_pdf(data)
+    elif lowered.startswith("image/") or name.endswith(
         (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp")
     ):
-        return extract_from_image(data)
-    # Plain text uploads are accepted as-is.
-    if lowered.startswith("text/") or name.endswith((".txt", ".csv")):
-        try:
-            return ExtractionResult(data.decode("utf-8", errors="replace"), "plain_text", 1)
-        except Exception:  # noqa: BLE001
-            pass
-    return ExtractionResult("", "none", warning=f"Unsupported file type: {content_type or name}")
+        result = extract_from_image(data)
+    elif lowered.startswith("text/") or name.endswith((".txt", ".csv")):
+        # Plain text uploads are accepted as-is.
+        result = ExtractionResult(data.decode("utf-8", errors="replace"), "plain_text", 1)
+    else:
+        return ExtractionResult(
+            "", "none", warning=f"Unsupported file type: {content_type or name}"
+        )
+
+    # Scrubbed once, here, so nothing downstream has to remember to.
+    result.text = scrub(result.text)
+    return result

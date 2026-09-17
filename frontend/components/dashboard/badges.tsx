@@ -4,7 +4,7 @@ import { AlertTriangle, Check, CircleDot, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { titleCase } from "@/lib/format";
-import type { ConsultationStatus, RiskLevel, TriagePriority } from "@/lib/types";
+import type { ConsultationStatus, RiskLevel, TriagePriority } from "@/lib/types/core";
 
 export function StatusBadge({
   status,
