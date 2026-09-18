@@ -14,7 +14,8 @@ email-validator==2.2.0
 tenacity==9.0.0
 pypdf==5.1.0
 pillow==11.0.0
-pytesseract==0.3.13
+paddlepaddle==3.2.2
+paddleocr==3.7.0
 pdf2image==1.17.0
 reportlab==5.0.1
 # Shapes Devanagari for ReportLab: without it Hindi prints with vowel signs

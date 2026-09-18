@@ -3,16 +3,24 @@
 Strategy, in order:
   PDF  -> read the embedded text layer (fast, exact). If the page yields too
           little text it is a scan, so rasterise and OCR it.
-  Image-> preprocess (greyscale, autocontrast, upscale small scans) and OCR.
+  Image-> OCR directly with PaddleOCR.
+
+PaddleOCR replaced Tesseract here: Tesseract had no model of table structure,
+so a bordered lab-report table (ruled cells around each row) came back as
+scrambled or missing values, and small print regularly dropped decimal
+points ("27.2" read as "272" — a wrong lab value, not a typo). PaddleOCR's
+detector finds text regions independent of ruling lines, which fixed both.
 
 Every optional dependency is imported defensively and probed at runtime. A
-deployment without Tesseract still accepts uploads and stores files; it simply
-reports that OCR is unavailable instead of crashing. `extraction_capabilities()`
-lets the API tell the front end what this node can actually do.
+deployment without PaddleOCR still accepts uploads and stores files; it
+simply reports that OCR is unavailable instead of crashing.
+`extraction_capabilities()` lets the API tell the front end what this node
+can actually do.
 """
 import io
 import re
 import shutil
+import tempfile
 import unicodedata
 from dataclasses import dataclass
 from typing import List, Optional
@@ -31,19 +39,18 @@ except ImportError:  # pragma: no cover - depends on deployment image
     _HAS_PYPDF = False
 
 try:
-    from PIL import Image, ImageOps  # type: ignore
+    from PIL import Image  # type: ignore
     _HAS_PIL = True
 except ImportError:  # pragma: no cover
     Image = None  # type: ignore
-    ImageOps = None  # type: ignore
     _HAS_PIL = False
 
 try:
-    import pytesseract  # type: ignore
-    _HAS_PYTESSERACT = True
+    from paddleocr import PaddleOCR  # type: ignore
+    _HAS_PADDLEOCR = True
 except ImportError:  # pragma: no cover
-    pytesseract = None  # type: ignore
-    _HAS_PYTESSERACT = False
+    PaddleOCR = None  # type: ignore
+    _HAS_PADDLEOCR = False
 
 try:
     from pdf2image import convert_from_bytes  # type: ignore
@@ -53,8 +60,34 @@ except ImportError:  # pragma: no cover
     _HAS_PDF2IMAGE = False
 
 
-def tesseract_available() -> bool:
-    return _HAS_PYTESSERACT and _HAS_PIL and shutil.which("tesseract") is not None
+def _paddle_lang(languages: str) -> str:
+    """Map the Tesseract-style setting (e.g. "eng+hin") to a PaddleOCR model.
+
+    PaddleOCR loads one recognition model per language, unlike Tesseract's
+    "+"-joined multi-language mode, so this picks the best single model.
+    """
+    return "hi" if "hin" in languages else "en"
+
+
+# Loading the models takes a couple of seconds, so the engine is built once
+# and reused. The Dockerfile also warms this at build time so the first
+# upload in production isn't the one paying for the cold start.
+_engine: Optional["PaddleOCR"] = None
+
+
+def _get_ocr_engine() -> Optional["PaddleOCR"]:
+    global _engine
+    if not _HAS_PADDLEOCR:
+        return None
+    if _engine is None:
+        _engine = PaddleOCR(
+            use_textline_orientation=True, lang=_paddle_lang(settings.OCR_LANGUAGES)
+        )
+    return _engine
+
+
+def ocr_available() -> bool:
+    return _HAS_PADDLEOCR and _HAS_PIL
 
 
 def poppler_available() -> bool:
@@ -64,8 +97,8 @@ def poppler_available() -> bool:
 def extraction_capabilities() -> dict:
     return {
         "pdf_text": _HAS_PYPDF,
-        "ocr_images": tesseract_available(),
-        "ocr_scanned_pdf": tesseract_available() and poppler_available(),
+        "ocr_images": ocr_available(),
+        "ocr_scanned_pdf": ocr_available() and poppler_available(),
         "languages": settings.OCR_LANGUAGES,
     }
 
@@ -141,20 +174,64 @@ def is_legible(text: str) -> bool:
 _MIN_CHARS_PER_PAGE = 120
 
 
-def _ocr_image(image) -> str:
-    """OCR one PIL image with light preprocessing."""
-    prepared = ImageOps.grayscale(image)
-    prepared = ImageOps.autocontrast(prepared)
-    # Tesseract struggles below ~300 DPI; upscale small scans.
-    if prepared.width < 1400:
-        ratio = 1400 / float(prepared.width)
-        prepared = prepared.resize(
-            (1400, max(1, int(prepared.height * ratio))), Image.LANCZOS
-        )
-    # PSM 6: assume a uniform block of text, which suits tabular lab reports.
-    return pytesseract.image_to_string(
-        prepared, lang=settings.OCR_LANGUAGES, config="--psm 6"
+def _reconstruct_rows(texts: List[str], boxes) -> str:
+    """Turn PaddleOCR's per-box results back into table rows.
+
+    PaddleOCR detects and recognises each word/phrase as an independent box;
+    it does not group boxes on the same printed row the way Tesseract's line
+    segmentation does. `parsing.py` depends on a row being one line ("name
+    value unit range"), so without this every result is split across three
+    or four separate lines and the deterministic parser finds nothing to
+    read. Boxes are clustered by vertical overlap into rows, then ordered
+    left to right within each row — the same layout Tesseract used to hand
+    the parser, just derived from PaddleOCR's box coordinates instead.
+    """
+    if boxes is None or len(boxes) == 0:
+        return "\n".join(texts)
+
+    items = sorted(
+        ((float(y1), float(y2), float(x1), text) for (x1, y1, x2, y2), text in zip(boxes, texts)),
+        key=lambda item: (item[0] + item[1]) / 2,
     )
+
+    rows: List[List[tuple]] = []
+    row_y_range: Optional[tuple] = None
+    for y1, y2, x1, text in items:
+        y_center = (y1 + y2) / 2
+        if rows and row_y_range and not (row_y_range[0] <= y_center <= row_y_range[1]):
+            row_y_range = None
+        if row_y_range is None:
+            rows.append([])
+            row_y_range = (y1, y2)
+        else:
+            row_y_range = (min(row_y_range[0], y1), max(row_y_range[1], y2))
+        rows[-1].append((x1, text))
+
+    lines = []
+    for row in rows:
+        row.sort(key=lambda item: item[0])
+        lines.append("   ".join(text for _, text in row))
+    return "\n".join(lines)
+
+
+def _ocr_image(image) -> str:
+    """OCR one PIL image.
+
+    PaddleOCR's `predict()` takes a file path (or ndarray); a PIL image is
+    written to a temp file rather than converted to an array to avoid
+    RGB/BGR channel-order bugs. No manual preprocessing here — PaddleOCR's
+    own detector/recognizer already expects natural, un-degraded images, and
+    hand-tuned greyscale/contrast/sharpen steps that helped Tesseract made no
+    measurable difference (or hurt) with this engine.
+    """
+    engine = _get_ocr_engine()
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        image.convert("RGB").save(tmp.name)
+        results = engine.predict(tmp.name)
+    pages: List[str] = []
+    for page in results:
+        pages.append(_reconstruct_rows(page.get("rec_texts") or [], page.get("rec_boxes")))
+    return "\n".join(pages)
 
 
 def extract_from_pdf(data: bytes) -> ExtractionResult:
@@ -182,7 +259,7 @@ def extract_from_pdf(data: bytes) -> ExtractionResult:
         return ExtractionResult(text_layer, "pdf_text", page_count)
 
     # Sparse text layer: this is a scan.
-    if not (tesseract_available() and poppler_available()):
+    if not (ocr_available() and poppler_available()):
         warning = (
             "This PDF appears to be a scan and OCR is not available on this server. "
             "The file is stored, but no text could be read from it."
@@ -218,7 +295,7 @@ def extract_from_pdf(data: bytes) -> ExtractionResult:
 
 
 def extract_from_image(data: bytes) -> ExtractionResult:
-    if not tesseract_available():
+    if not ocr_available():
         return ExtractionResult(
             "", "none",
             warning="OCR is not available on this server, so the image text could not be read.",

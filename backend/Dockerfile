@@ -22,12 +22,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Runtime system packages only:
 #   curl          container healthcheck
-#   tesseract     OCR for scanned reports (with the Hindi pack)
+#   libgl1/libglib2.0-0  OpenCV runtime deps PaddleOCR needs to import cv2
 #   poppler-utils rasterises scanned PDFs so they can be OCR'd
 #   libpq5        PostgreSQL client library for psycopg2 (migrations)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl tesseract-ocr tesseract-ocr-hin poppler-utils libpq5 tini \
+        curl libgl1 libglib2.0-0 poppler-utils libpq5 tini \
         # Devanagari glyphs for prescription PDFs. Without these, Hindi
         # instructions print as black boxes.
         fonts-freefont-ttf fonts-indic \
@@ -50,6 +50,11 @@ RUN useradd --create-home --uid 1000 appuser \
                 /data/media/signatures \
     && chown -R appuser:appuser /data/media /app
 USER appuser
+
+# Pre-download the OCR models into the image so the first report upload in
+# production doesn't stall on a cold model fetch (or fail outright on a
+# host with no outbound internet).
+RUN python -c "from app.investigations.extraction import _get_ocr_engine; _get_ocr_engine()"
 
 EXPOSE 8000
 

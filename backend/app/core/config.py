@@ -151,7 +151,7 @@ class Settings(BaseSettings):
     MEDIA_ROOT: str = "/data/media"
 
     # --- Report extraction / OCR ----------------------------------------------
-    OCR_LANGUAGES: str = "eng"          # e.g. "eng+hin" once the hin pack is installed
+    OCR_LANGUAGES: str = "eng"          # "eng" or "hin" (PaddleOCR loads one model per language)
     OCR_DPI: int = 300
     OCR_MAX_PAGES: int = 12
     MAX_REPORT_UPLOAD_MB: int = 25
