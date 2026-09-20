@@ -53,6 +53,8 @@ const NAV: {
   { href: "/completed", label: "Completed", icon: CheckCircle2 },
   { href: "/patients", label: "Patient search", icon: Stethoscope },
   { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward", module: "ipd" },
+  // Labelled from the site's vocabulary below: "Theatre" in a hospital,
+  // "Procedures" in a clinic whose list is fifteen-minute scopes.
   { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward", module: "theatre" },
   { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward", module: "diet" },
   { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
@@ -73,7 +75,7 @@ const NAV: {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const { has } = useModules();
+  const { has, words } = useModules();
   const items = NAV.filter(
     (item) =>
       (!item.adminOnly || user?.role === "admin") &&
@@ -105,7 +107,9 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
               />
             )}
             <item.icon className="relative h-4 w-4 shrink-0" />
-            <span className="relative">{item.label}</span>
+            <span className="relative">
+              {item.href === "/theatre" ? words.board : item.label}
+            </span>
           </Link>
         );
       })}

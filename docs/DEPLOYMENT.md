@@ -123,6 +123,11 @@ review would be missing exactly when it is most needed.
 APPROVED_FORMULARY=orthopedics,gynecology,gastroenterology
 ```
 
+`THEATRE_VOCABULARY` is `theatre` (the default) or `procedures`. It changes
+only the words on screen — "Theatre" becomes "Procedures", the operation list
+becomes the procedure list — for a clinic whose list is fifteen-minute scopes
+rather than operations. The module, the records and the rules are identical.
+
 Two behaviours worth knowing. A module whose parent is off is dropped and the
 startup log says so, so `diet` without `ipd` is not a half-working kitchen
 sheet. And a name that is not a module stops the boot rather than quietly

@@ -30,6 +30,7 @@ const SCREENS: {
   { href: "/settings/theatre", title: "Operation list", icon: ClipboardList, roles: ["admin", "manager"],
     module: "theatre",
     detail: "Operations, their prices, and the theatre rooms." },
+
   { href: "/settings/room-charges", title: "Room charges", icon: Receipt, roles: ["admin", "manager"],
     module: "room_charges",
     detail: "The morning room-charge run and its history." },
@@ -44,7 +45,7 @@ const SCREENS: {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { has } = useModules();
+  const { has, words } = useModules();
   const shown = SCREENS.filter(
     (screen) =>
       screen.roles.includes(user?.role ?? "") && (!screen.module || has(screen.module))
@@ -63,7 +64,9 @@ export default function SettingsPage() {
                 <CardContent className="flex gap-3 p-4">
                   <Icon className="mt-0.5 h-5 w-5 shrink-0 text-pine" />
                   <div>
-                    <p className="font-medium text-ink">{title}</p>
+                    <p className="font-medium text-ink">
+                      {href === "/settings/theatre" ? words.setup : title}
+                    </p>
                     <p className="text-sm text-ink-muted">{detail}</p>
                   </div>
                 </CardContent>

@@ -30,25 +30,55 @@ export type ModuleName = (typeof MODULES)[number];
 
 const CACHE_KEY = "satya_modules";
 
+/** What this site calls the theatre module. A hospital operates in a theatre;
+ *  a clinic doing fifteen-minute scopes does procedures in a suite, and calling
+ *  that screen "Theatre" sends staff looking for an operating list they do not
+ *  have. Only the words differ — the records and the rules are identical. */
+export type TheatreVocabulary = "theatre" | "procedures";
+
+export const THEATRE_WORDS: Record<TheatreVocabulary, {
+  board: string; setup: string; room: string; caseWord: string;
+}> = {
+  theatre: {
+    board: "Theatre",
+    setup: "Operation list",
+    room: "Theatres",
+    caseWord: "operation",
+  },
+  procedures: {
+    board: "Procedures",
+    setup: "Procedure list",
+    room: "Procedure rooms",
+    caseWord: "procedure",
+  },
+};
+
 interface ModuleState {
   /** Null until the first answer arrives — not "none". */
   enabled: ModuleName[] | null;
   hospitalName: string | null;
   /** False while unknown, so nothing is offered that may not exist. */
   has: (module: ModuleName) => boolean;
+  /** The site's words for the theatre module; "theatre" until told otherwise. */
+  words: (typeof THEATRE_WORDS)[TheatreVocabulary];
 }
 
 const ModuleContext = createContext<ModuleState>({
   enabled: null,
   hospitalName: null,
   has: () => false,
+  words: THEATRE_WORDS.theatre,
 });
 
 export function useModules() {
   return useContext(ModuleContext);
 }
 
-function readCache(): { modules: ModuleName[]; hospital_name: string } | null {
+function readCache(): {
+  modules: ModuleName[];
+  hospital_name: string;
+  theatre_vocabulary?: TheatreVocabulary;
+} | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -64,6 +94,9 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   const [hospitalName, setHospitalName] = useState<string | null>(
     cached?.hospital_name ?? null
   );
+  const [vocabulary, setVocabulary] = useState<TheatreVocabulary>(
+    cached?.theatre_vocabulary ?? "theatre"
+  );
 
   useEffect(() => {
     let active = true;
@@ -73,6 +106,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         if (!active || !data) return;
         setEnabled(data.modules ?? []);
         setHospitalName(data.hospital_name ?? null);
+        setVocabulary(data.theatre_vocabulary === "procedures" ? "procedures" : "theatre");
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
         } catch {
@@ -94,6 +128,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         enabled,
         hospitalName,
         has: (module) => enabled !== null && enabled.includes(module),
+        words: THEATRE_WORDS[vocabulary],
       }}
     >
       {children}

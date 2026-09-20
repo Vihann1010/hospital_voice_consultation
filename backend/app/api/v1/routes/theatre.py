@@ -86,7 +86,10 @@ async def _surgery(session, surgery: Surgery) -> Dict[str, Any]:
             "age": patient.age, "gender": patient.gender.value,
         } if patient else None,
         "admission_id": surgery.admission_id,
+        "visit_id": surgery.visit_id,
         "ip_number": admission.ip_number if admission else None,
+        # A day case: no bed, and the bill goes to the visit.
+        "day_case": surgery.admission_id is None,
         "allergies": (admission.allergies or []) if admission else [],
         "department": surgery.department.value,
         "operation_id": surgery.operation_id,
@@ -105,6 +108,7 @@ async def _surgery(session, surgery: Surgery) -> Dict[str, Any]:
         "priority": surgery.priority,
         **times,
         "durations": rules.durations(times),
+        "charge_reference": surgery.charge_reference,
         "cancel_reason": surgery.cancel_reason,
         "notes": surgery.notes,
         "booked_by_name": surgery.booked_by_name,

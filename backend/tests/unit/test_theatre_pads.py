@@ -11,9 +11,13 @@ pytestmark = pytest.mark.unit
 THEATRE = [key for key, spec in REGISTRY.items() if spec.scope == "surgery"]
 
 
-def test_the_four_theatre_notes_exist():
+def test_the_theatre_notes_exist():
     assert set(THEATRE) == {
         "ot_pre_op_checklist", "ot_pre_anaesthetic", "ot_operation_note", "ot_post_op_orders",
+        # A day-case clinic runs the same theatre with a checklist that asks
+        # about an escort rather than a marked site, and a report shaped like
+        # an endoscopy rather than an operation.
+        "ot_day_procedure_checklist", "ot_endoscopy_report",
     }
 
 
@@ -24,6 +28,8 @@ def test_every_theatre_layout_is_valid(key):
 
 def test_the_pre_op_checklist_is_the_nurses_and_the_rest_are_doctors():
     assert REGISTRY["ot_pre_op_checklist"].authority == "nursing"
+    assert REGISTRY["ot_day_procedure_checklist"].authority == "nursing"
+    assert REGISTRY["ot_endoscopy_report"].authority == "doctor"
     for key in ("ot_pre_anaesthetic", "ot_operation_note", "ot_post_op_orders"):
         assert REGISTRY[key].authority == "doctor"
 

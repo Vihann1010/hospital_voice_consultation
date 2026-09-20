@@ -31,9 +31,13 @@ class OperationIn(BaseModel):
 class SurgeryBookIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    #: May be left out when booking for an admission: the admission names the patient.
+    #: May be left out when booking for an admission or a visit: either names
+    #: the patient.
     patient_id: Optional[uuid.UUID] = None
     admission_id: Optional[uuid.UUID] = None
+    #: A day case is booked against the visit, which is what the counter bills.
+    #: One or the other, never both.
+    visit_id: Optional[uuid.UUID] = None
     department: Optional[Department] = None
     operation_id: Optional[uuid.UUID] = None
     operation_name: Optional[str] = Field(default=None, max_length=255)

@@ -189,6 +189,13 @@ class Settings(BaseSettings):
     # departments the platform was built with were reviewed before release.
     APPROVED_FORMULARY: str = "orthopedics,gynecology"
 
+    # What this site calls the theatre module on screen. A hospital operates in
+    # a theatre; a clinic where the list is fifteen-minute gastroscopies does
+    # procedures in a suite, and calling that screen "Theatre" sends staff
+    # looking for an operating list they do not have. The module, the records
+    # and the rules are identical — only the words change.
+    THEATRE_VOCABULARY: str = "theatre"     # theatre | procedures
+
     # --- Prescriptions ---------------------------------------------------------
     HOSPITAL_NAME: str = "Satya Trauma & Maternity Center"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
@@ -269,6 +276,14 @@ class Settings(BaseSettings):
                 + ", ".join(d.value for d in Department)
             ) from None
         return v.strip().lower()
+
+    @field_validator("THEATRE_VOCABULARY")
+    @classmethod
+    def _vocabulary_must_be_known(cls, v: str) -> str:
+        value = v.strip().lower()
+        if value not in ("theatre", "procedures"):
+            raise ValueError("THEATRE_VOCABULARY must be 'theatre' or 'procedures'.")
+        return value
 
     @field_validator("APPROVED_FORMULARY")
     @classmethod

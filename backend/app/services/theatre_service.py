@@ -3,11 +3,15 @@
 The rules about time order, room clashes and case states are in
 `app/theatre/rules.py`. What this service adds is the hospital around them:
 
-* **An elective case is not wheeled in until the pre-op checklist is signed.**
-  The checklist is where consent, site marking and fasting are confirmed, and
-  a theatre that can start a case without it will. An emergency is marked as
-  one and goes ahead; that is a decision someone makes on the booking, not a
-  box skipped at the theatre door.
+* **An elective case is not wheeled in until a pre-procedure checklist is
+  signed.** The checklist is where consent and fasting are confirmed, and a
+  theatre that can start a case without it will. Either checklist counts: the
+  surgical one, which marks the operation site, or the day-procedure one, which
+  asks instead about sedation and who is taking the patient home — a gastroscopy
+  has no site to mark, and a required box that cannot truthfully be ticked
+  teaches a ward that the checks are paperwork. An emergency is marked as one
+  and goes ahead; that is a decision someone makes on the booking, not a box
+  skipped at the theatre door.
 * **A room that is already booked is refused**, unless the person booking
   says they mean it — two lists sharing a room is sometimes deliberate.
 * **A completed case on an admission is billed once**, from the operation
@@ -25,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import day_bounds, local_today, to_local
 from app.core.logging import get_logger
 from app.models.consultant import Consultant
-from app.models.emr import DocumentCounter
+from app.models.emr import DocumentCounter, Visit
 from app.models.enums import (
     AdmissionStatus,
     ChargeCategory,
@@ -41,7 +45,12 @@ from app.theatre import rules
 
 logger = get_logger(__name__)
 
+# Either checklist admits a patient to theatre. The surgical one marks the
+# operation site; the day-procedure one asks who is taking the patient home.
+# Both confirm identity, consent and fasting, which is what the door is for.
 PRE_OP_CHECKLIST = "ot_pre_op_checklist"
+DAY_PROCEDURE_CHECKLIST = "ot_day_procedure_checklist"
+PRE_PROCEDURE_CHECKLISTS = (PRE_OP_CHECKLIST, DAY_PROCEDURE_CHECKLIST)
 
 
 class TheatreError(Exception):
@@ -212,12 +221,27 @@ class TheatreService:
             admission = await self.session.get(Admission, data["admission_id"])
             if admission is None:
                 raise TheatreError("Admission not found.", status_code=404)
-        patient_id = data.get("patient_id") or (admission.patient_id if admission else None)
+        visit: Optional[Visit] = None
+        if data.get("visit_id"):
+            visit = await self.session.get(Visit, data["visit_id"])
+            if visit is None:
+                raise TheatreError("Visit not found.", status_code=404)
+        patient_id = (
+            data.get("patient_id")
+            or (admission.patient_id if admission else None)
+            or (visit.patient_id if visit else None)
+        )
         if patient_id is None:
             raise TheatreError("Choose the patient.")
         patient = await self.session.get(Patient, patient_id)
         if patient is None:
             raise TheatreError("Patient not found.", status_code=404)
+        if visit is not None and visit.patient_id != patient.id:
+            raise TheatreError("That visit belongs to another patient.")
+        if admission is not None and visit is not None:
+            raise TheatreError(
+                "A case is billed to an admission or to a visit, not to both."
+            )
         if admission is not None:
             if admission.patient_id != patient.id:
                 raise TheatreError("That admission belongs to another patient.")
@@ -269,6 +293,7 @@ class TheatreService:
         department = (
             data.get("department")
             or (admission.department if admission else None)
+            or (visit.department if visit else None)
             or (operation.department if operation else None)
             or (consultant.department if consultant else None)
         )
@@ -284,6 +309,7 @@ class TheatreService:
             ot_number=await self._next_ot_number(),
             patient_id=patient.id,
             admission_id=admission.id if admission else None,
+            visit_id=visit.id if visit else None,
             department=department,
             operation_id=operation.id if operation else None,
             operation_name=name[:255],
@@ -385,15 +411,15 @@ class TheatreService:
                     await self.session.execute(
                         select(PadDocument.id).where(
                             PadDocument.surgery_id == surgery.id,
-                            PadDocument.document_type == PRE_OP_CHECKLIST,
+                            PadDocument.document_type.in_(PRE_PROCEDURE_CHECKLISTS),
                             PadDocument.status == PadStatus.SIGNED,
                         ).limit(1)
                     )
                 ).scalar_one_or_none()
                 if signed is None:
                     raise TheatreError(
-                        "Sign the pre-op checklist before wheeling the patient in. If this is an "
-                        "emergency, mark the case as an emergency first.",
+                        "Sign the pre-procedure checklist before wheeling the patient in. If "
+                        "this is an emergency, mark the case as an emergency first.",
                         status_code=409,
                     )
         elif milestone == "wheel_out_at":
@@ -426,17 +452,30 @@ class TheatreService:
         return {"surgery": surgery, "charge_note": charge_note}
 
     async def _charge(self, surgery: Surgery, user: User) -> Optional[str]:
-        """Bill a completed case to its admission, once."""
-        if surgery.admission_id is None:
-            return "This case has no admission, so no theatre charge was posted. Bill it at the counter."
+        """Bill a completed case once: to its admission, or to its visit.
+
+        A day case has no admission and used to end here with "bill it at the
+        counter", which in a clinic where every case is a day case means every
+        procedure depends on somebody remembering. The visit is what the
+        counter bills against, so the charge goes there — raised, not paid, so
+        the patient still settles it at the counter like any other bill.
+        """
         if surgery.charge_reference:
             return None
+        if surgery.admission_id is None and surgery.visit_id is None:
+            return (
+                "This case is not linked to an admission or a visit, so no charge was "
+                "raised. Bill it at the counter."
+            )
         operation = await self.session.get(Operation, surgery.operation_id) if surgery.operation_id else None
         if operation is None or not operation.service_code:
             return (
                 "This operation has no price-list code, so no theatre charge was posted. Add it "
                 "to the bill by hand, or give the operation a code on the operation list."
             )
+
+        if surgery.admission_id is None:
+            return await self._charge_visit(surgery, operation, user)
 
         from app.services.ipd_service import IPDError, IPDService
 
@@ -454,6 +493,37 @@ class TheatreService:
             return f"The theatre charge was not posted: {exc}"
         surgery.charge_reference = surgery.ot_number
         return None
+
+    async def _charge_visit(
+        self, surgery: Surgery, operation: Operation, user: User
+    ) -> Optional[str]:
+        """Raise the day-case bill on the patient's visit.
+
+        Issued, not paid: the counter takes the money, applies any discount and
+        gives the receipt, exactly as for a consultation. Raising it here only
+        means the procedure cannot be forgotten between the suite and the desk.
+        """
+        from app.services.reception_service import ReceptionError, ReceptionService
+
+        description = f"{surgery.operation_name} — {surgery.ot_number}"
+        try:
+            async with self.session.begin_nested():
+                invoice = await ReceptionService(self.session).create_invoice(
+                    visit_id=surgery.visit_id,
+                    patient_id=surgery.patient_id,
+                    items=[{"code": operation.service_code, "description": description}],
+                    consultant_id=surgery.surgeon_consultant_id,
+                    doctor_name=surgery.surgeon_name,
+                    created_by_name=user.full_name,
+                    issue=True,
+                )
+        except ReceptionError as exc:
+            return f"The procedure bill was not raised: {exc}. Bill it at the counter."
+        surgery.charge_reference = invoice.invoice_number
+        return (
+            f"Bill {invoice.invoice_number} raised for this procedure. "
+            "The patient pays it at the counter."
+        )
 
     # ============================================================== reading
     async def list(

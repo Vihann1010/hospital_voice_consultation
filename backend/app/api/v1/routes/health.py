@@ -152,6 +152,7 @@ async def client_config() -> Dict[str, Any]:
         # doctor searching a near-empty formulary deserves to be told why
         # rather than concluding the system is broken.
         "formulary_pending_signoff": [d.value for d in unapproved_departments()],
+        "theatre_vocabulary": settings.THEATRE_VOCABULARY,
     }
 
 

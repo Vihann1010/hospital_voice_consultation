@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import local_today
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.consultation import Consultation
 from app.models.enums import Department, PadStatus
@@ -1164,6 +1165,14 @@ class PadService:
         document.signed_by_name = user.full_name
         document.signed_at = _now()
 
+        # A biopsy taken at endoscopy goes to an outside laboratory, and its
+        # report comes back days later. Raising the order here is what gives it
+        # somewhere to land: without it the specimen leaves the building with
+        # nothing in the system expecting it, and the report arrives as loose
+        # paper against a patient nobody is waiting on.
+        if document.document_type == "ot_endoscopy_report":
+            await self._raise_histopathology_order(document, user)
+
         # The signed discharge summary is where the final diagnosis is decided,
         # so the admission takes it from there rather than from a box someone
         # filled in earlier on the ward board.
@@ -1185,6 +1194,48 @@ class PadService:
             },
         )
         return document
+
+    async def _raise_histopathology_order(self, document: PadDocument, user: User) -> None:
+        """Order the histopathology for a biopsy recorded on a signed endoscopy report."""
+        specimen = ((document.values or {}).get("specimen") or {}).get("fields") or {}
+        if not specimen.get("biopsy_taken"):
+            return
+
+        from app.models.enums import InvestigationPriority
+        from app.models.theatre import Surgery
+        from app.services.investigation_service import InvestigationError, InvestigationService
+
+        surgery = (
+            await self.session.get(Surgery, document.surgery_id)
+            if document.surgery_id else None
+        )
+        site = (specimen.get("site") or "").strip()
+        notes = f"Endoscopic biopsy{f' — {site}' if site else ''}"
+        if surgery is not None:
+            notes = f"{notes} ({surgery.operation_name}, {surgery.ot_number})"
+        try:
+            async with self.session.begin_nested():
+                await InvestigationService(self.session).create_order(
+                    patient_id=document.patient_id,
+                    consultation_id=None,
+                    department=(
+                        surgery.department if surgery is not None
+                        else settings.default_department
+                    ),
+                    codes=["GI_HISTOPATH"],
+                    priority=InvestigationPriority.ROUTINE,
+                    clinical_notes=notes,
+                    provisional_diagnosis=None,
+                    doctor_id=user.id,
+                    doctor_name=user.full_name,
+                )
+        except InvestigationError as exc:
+            # Never block the signing of a clinical document over a follow-on
+            # order; the report is the record, the order is the convenience.
+            logger.warning(
+                "histopathology_order_not_raised",
+                extra={"document_id": str(document.id), "reason": str(exc)},
+            )
 
     async def amend(self, document_id: uuid.UUID, *, reason: str, user: User) -> PadDocument:
         """Start a corrected version of a signed document."""

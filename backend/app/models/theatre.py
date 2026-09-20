@@ -1,7 +1,7 @@
 """The operation theatre: rooms, the operation list, and each surgery.
 
-A surgery is booked against a patient — usually an admission, sometimes a day
-case with none — and then moves through theatre: wheeled in, anaesthetised,
+A surgery is booked against a patient — an admission for an inpatient, a visit
+for a day case — and then moves through theatre: wheeled in, anaesthetised,
 operated on, closed, wheeled out. The four times between those are the legal
 record of the case and the source of the surgical register, so they are stored
 as columns, not buried in a note.
@@ -78,6 +78,13 @@ class Surgery(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("admissions.id", ondelete="SET NULL"), index=True
+    )
+    # A day case has no admission. The visit is what the counter bills against,
+    # so this is where the charge for a scope goes; both are nullable because
+    # an inpatient case has an admission and no visit, and an emergency booked
+    # before registration has neither yet.
+    visit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("visits.id", ondelete="SET NULL"), index=True
     )
     department: Mapped[Department] = mapped_column(
         SAEnum(Department, name="department", values_callable=_VALUES, create_type=False),

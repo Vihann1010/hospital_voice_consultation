@@ -382,6 +382,134 @@ _PRE_ANAESTHETIC: List[Dict[str, Any]] = [
     },
 ]
 
+_DAY_PROCEDURE_CHECKLIST: List[Dict[str, Any]] = [
+    # The surgical checklist asks for the operation site to be marked, and marks
+    # it required. A gastroscopy has no site to mark, so the only way through it
+    # is to tick a box that is not true — which is how a ward learns that the
+    # checks are paperwork. This is the same checklist with the questions that
+    # actually decide whether a day case can go ahead: consent, fasting, what
+    # the patient stopped taking, and who is taking them home afterwards.
+    {"key": "procedure", "title": "Procedure as booked", "kind": "text",
+     "prefill_from": "procedure"},
+    {
+        "key": "checks",
+        "title": "Checks",
+        "kind": "fields",
+        "fields": [
+            {"key": "identity_confirmed", "label": "Identity confirmed with the patient",
+             "type": "checkbox", "required": True},
+            {"key": "consent_signed", "label": "Consent form signed", "type": "checkbox",
+             "required": True},
+            {"key": "fasting_confirmed", "label": "Fasting confirmed with the patient",
+             "type": "checkbox", "required": True},
+            # Sedation is why this one matters: a patient who came here alone
+            # cannot be sent home alone, and that is found out at the door or
+            # not at all.
+            {"key": "escort_present", "label": "Escort present to take the patient home",
+             "type": "checkbox"},
+            {"key": "sedation_consent", "label": "Sedation explained and consented",
+             "type": "checkbox"},
+        ],
+    },
+    {
+        "key": "fasting",
+        "title": "Fasting",
+        "kind": "fields",
+        "fields": [
+            {"key": "last_solids", "label": "Last solids at", "type": "text"},
+            {"key": "last_fluids", "label": "Last clear fluids at", "type": "text"},
+        ],
+    },
+    {
+        "key": "medicines_held",
+        "title": "Medicines held or adjusted",
+        "kind": "fields",
+        "fields": [
+            {"key": "anticoagulant", "label": "Blood thinner", "type": "select",
+             "options": ["None", "Stopped as advised", "Still taking — tell the endoscopist"]},
+            {"key": "diabetes", "label": "Diabetes medicines", "type": "select",
+             "options": ["None", "Withheld this morning", "Taken — tell the endoscopist"]},
+            {"key": "notes", "label": "Notes", "type": "text"},
+        ],
+    },
+    {
+        "key": "preparation",
+        "title": "Preparation",
+        "kind": "fields",
+        "fields": [
+            {"key": "bowel_prep", "label": "Bowel preparation (lower GI only)", "type": "select",
+             "options": ["Not applicable", "Adequate", "Inadequate — tell the endoscopist"]},
+            {"key": "done", "label": "Done", "type": "multiselect",
+             "options": ["Dentures removed", "Jewellery removed", "Bladder emptied",
+                         "IV line in place", "Consent copy filed"]},
+        ],
+    },
+    {"key": "allergies", "title": "Allergies", "kind": "list", "catalogue_category": "allergy",
+     "prefill_from": "allergies", "placeholder": "Add an allergy"},
+    _vitals(title="Vitals before the procedure"),
+    {"key": "notes", "title": "Notes", "kind": "text"},
+]
+
+_ENDOSCOPY_REPORT: List[Dict[str, Any]] = [
+    {"key": "procedure", "title": "Procedure", "kind": "text", "prefill_from": "procedure"},
+    {"key": "indication", "title": "Indication", "kind": "list",
+     "catalogue_category": "diagnosis", "prefill_from": "diagnosis"},
+    {
+        "key": "conduct",
+        "title": "How it was done",
+        "kind": "fields",
+        "fields": [
+            {"key": "sedation", "label": "Sedation", "type": "select",
+             "options": ["None", "Topical throat spray", "Conscious sedation", "Deep sedation",
+                         "General anaesthesia"]},
+            {"key": "extent", "label": "Extent reached", "type": "text",
+             "placeholder": "Second part of duodenum / caecum / terminal ileum"},
+            {"key": "tolerance", "label": "Patient tolerance", "type": "select",
+             "options": ["Well tolerated", "Fair", "Poor — procedure curtailed"]},
+            {"key": "complications", "label": "Complications", "type": "text",
+             "placeholder": "None, or say what happened"},
+        ],
+    },
+    {"key": "findings", "title": "Findings", "kind": "text",
+     "placeholder": "By region, in the order examined"},
+    # Endoscopy images are attached to the patient's record as clinical
+    # photographs (app/services/patient_file_service.py), which already handles
+    # upload, access and withdrawal. What belongs on the report is the count,
+    # so a reader knows whether to go looking for them.
+    {"key": "images", "title": "Images", "kind": "fields",
+     "fields": [
+         {"key": "taken", "label": "Images taken", "type": "number"},
+         {"key": "filed", "label": "Filed to the patient's record", "type": "checkbox"},
+     ]},
+    {
+        "key": "specimen",
+        "title": "Specimen",
+        "kind": "fields",
+        "fields": [
+            # Ticking this raises the histopathology order on signing, so the
+            # outside laboratory's report comes back against this patient
+            # instead of arriving as loose paper weeks later.
+            {"key": "biopsy_taken", "label": "Biopsy taken and sent for histopathology",
+             "type": "checkbox"},
+            {"key": "site", "label": "Site and number of pieces", "type": "text"},
+            {"key": "rapid_urease", "label": "Rapid urease test", "type": "select",
+             "options": ["Not done", "Positive", "Negative"]},
+        ],
+    },
+    {"key": "diagnosis", "title": "Endoscopic diagnosis", "kind": "list",
+     "catalogue_category": "diagnosis"},
+    {"key": "advice", "title": "Advice", "kind": "text"},
+    {
+        "key": "review",
+        "title": "Review",
+        "kind": "fields",
+        "fields": [
+            {"key": "date", "label": "Review on", "type": "date"},
+            {"key": "notes", "label": "Notes", "type": "text"},
+        ],
+    },
+]
+
 _OPERATION_NOTE: List[Dict[str, Any]] = [
     {"key": "procedure", "title": "Procedure", "kind": "text", "prefill_from": "procedure"},
     {"key": "team", "title": "Team", "kind": "text", "prefill_from": "team"},
@@ -477,6 +605,14 @@ REGISTRY: Dict[str, DocumentType] = {
                      sections=_OPERATION_NOTE),
         DocumentType("ot_post_op_orders", "Post-operative orders", "surgery", "doctor",
                      sections=_POST_OP_ORDERS),
+        # Day procedures. A clinic that scopes patients and sends them home the
+        # same hour runs the same theatre, with a checklist that asks about an
+        # escort rather than a marked site, and a report shaped like an
+        # endoscopy rather than an operation.
+        DocumentType("ot_day_procedure_checklist", "Day-procedure checklist", "surgery",
+                     "nursing", sections=_DAY_PROCEDURE_CHECKLIST),
+        DocumentType("ot_endoscopy_report", "Endoscopy report", "surgery", "doctor",
+                     sections=_ENDOSCOPY_REPORT),
         # Certificates and consent forms. Doctors write and sign them; see
         # app/pads/forms.py for their wording and the checks before signing.
         DocumentType("cert_medical_leave", "Medical certificate", "patient", "doctor", many=True,
@@ -514,6 +650,12 @@ DOCUMENT_TYPES: Dict[str, str] = {key: spec.label for key, spec in REGISTRY.item
 PROTECTED_SECTIONS: Dict[str, Dict[str, List[str]]] = {
     "ipd_discharge_summary": {"final_diagnosis": []},
     "ot_pre_op_checklist": {"checks": ["identity_confirmed", "consent_signed", "site_marked"]},
+    "ot_day_procedure_checklist": {
+        "checks": ["identity_confirmed", "consent_signed", "fasting_confirmed"],
+    },
+    # Signing with the biopsy box ticked raises the histopathology order, so
+    # the key may move on a layout but not disappear.
+    "ot_endoscopy_report": {"specimen": ["biopsy_taken"]},
 }
 
 
