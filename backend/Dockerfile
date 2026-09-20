@@ -5,7 +5,7 @@ FROM python:3.12-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -14,6 +14,10 @@ RUN pip wheel --wheel-dir /wheels -r requirements.txt
 
 
 FROM python:3.12-slim AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
