@@ -63,6 +63,45 @@ chmod 600 .env
 
 `.env` is git-ignored and CI fails if it is ever committed.
 
+### Which modules this site runs
+
+`ENABLED_MODULES` decides which optional parts of the platform exist here. The
+default is `all`, so an existing hospital that sets nothing keeps everything it
+has. A site that lists modules gets only those: the rest are **not registered on
+the API at all** and answer 404, and the screens that would reach them are gone
+from the sidebar and the Settings page.
+
+| Module | What it covers |
+|---|---|
+| `ipd` | Admissions, wards, beds, nursing charts, discharge |
+| `laboratory` | In-house lab: sample collection, result entry, verification |
+| `diet` | Diet orders and the kitchen sheet — needs `ipd` |
+| `room_charges` | The nightly bed-charge run — needs `ipd` |
+| `theatre` | Operations and procedures, rooms, consent, notes |
+| `insurance` | Insurers, TPAs, employers and their claims |
+
+Registration, billing, consultations, prescriptions, ordering investigations,
+patient uploads and the Visit Pad are not switchable. A clinic without them is
+not this product.
+
+```ini
+# A hospital: everything (the default)
+ENABLED_MODULES=all
+
+# A day clinic with procedures but no beds, no bench and no panel work
+ENABLED_MODULES=theatre
+```
+
+`DEFAULT_DEPARTMENT` belongs with this: it is where a clinician's prescriptions
+and investigation orders are filed when their account names no department. It
+defaults to `orthopedics`, which is what the code did before it was a setting;
+a single-speciality clinic should name its own.
+
+Two behaviours worth knowing. A module whose parent is off is dropped and the
+startup log says so, so `diet` without `ipd` is not a half-working kitchen
+sheet. And a name that is not a module stops the boot rather than quietly
+disabling a ward — a typo in this line must not be discovered by a nurse.
+
 ---
 
 ## 3. TLS certificates

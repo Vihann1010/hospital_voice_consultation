@@ -363,9 +363,12 @@ class InvestigationService:
         report_id: uuid.UUID,
         *,
         patient: Optional[Patient] = None,
-        department: Department = Department.ORTHOPEDICS,
+        department: Optional[Department] = None,
     ) -> Optional[InvestigationReport]:
         """Extract, evaluate and summarise. Safe to re-run."""
+        # Unstated, this is the installation's own department — not whichever
+        # one the hospital happened to open with.
+        department = department or settings.default_department
         report = await self.reports.get(report_id)
         if report is None:
             return None

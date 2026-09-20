@@ -7,13 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession, get_ipd_service, require_permission
+from app.api.deps import (
+    CurrentUser,
+    DbSession,
+    get_ipd_service,
+    require_module,
+    require_permission,
+)
 from app.core.permissions import Permission, has_permission
 from app.core.audit import client_ip, record as audit_record
 from app.core.logging import get_logger
 from app.models.enums import (
     AuditAction, ChargeCategory, Department, MedicationStatus, NoteType, UserRole,
 )
+from app.modules import Module
 from app.models.ipd import (
     Admission, Bed, BedOccupancy, ClinicalNote, MedicationAdministration,
     MedicationOrder, Ward,
@@ -811,7 +818,8 @@ def _run_out(run) -> Dict[str, Any]:
     }
 
 
-@router.get("/room-charges/runs", dependencies=[Depends(WARD_READ)])
+@router.get("/room-charges/runs",
+            dependencies=[Depends(WARD_READ), Depends(require_module(Module.ROOM_CHARGES))])
 async def room_charge_runs(service: Service, limit: int = Query(default=14, ge=1, le=90)) -> Dict[str, Any]:
     """The recent morning room-charge runs, newest first."""
     from app.core.config import settings
@@ -827,7 +835,8 @@ async def room_charge_runs(service: Service, limit: int = Query(default=14, ge=1
             "runs": [_run_out(run) for run in runs]}
 
 
-@router.post("/room-charges/run", dependencies=[Depends(CHARGES_ADMIN)])
+@router.post("/room-charges/run",
+             dependencies=[Depends(CHARGES_ADMIN), Depends(require_module(Module.ROOM_CHARGES))])
 async def run_room_charges_now(user: CurrentUser, request: Request) -> Dict[str, Any]:
     """Post room charges now. Safe to repeat: days already charged are skipped."""
     from app.ipd.room_charges import run_room_charges

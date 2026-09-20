@@ -27,6 +27,7 @@ from app.core.metrics import metrics
 from app.investigations.extraction import extraction_capabilities
 from app.messaging.factory import get_provider
 from app.models.enums import UserRole
+from app.modules import Module
 from app.prescriptions.pdf import pdf_capabilities
 
 router = APIRouter(tags=["health"])
@@ -106,6 +107,12 @@ async def health(session: DbSession, response: Response) -> Dict[str, Any]:
             "cache": {"ok": cache_ok, "backend": cache.name,
                       "distributed": cache.distributed},
         },
+        "modules": {
+            "enabled": sorted(m.value for m in settings.enabled_modules),
+            "disabled": sorted(
+                m.value for m in Module if m not in settings.enabled_modules
+            ),
+        },
         "capabilities": {
             **pdf_capabilities(),
             **extraction_capabilities(),
@@ -118,6 +125,27 @@ async def health(session: DbSession, response: Response) -> Dict[str, Any]:
             "ai_response_cache": response_cache.stats(),
             "llm_usage": cost_tracker.snapshot(),
         },
+    }
+
+
+@router.get("/config")
+async def client_config() -> Dict[str, Any]:
+    """What the front end needs before anyone signs in.
+
+    Chiefly the module list: the sidebar and the Settings hub must not offer a
+    ward board to a clinic that has no ward. Read from the same setting the
+    router registers from, so a screen cannot be shown for an endpoint that
+    does not exist.
+
+    Deliberately unauthenticated and deliberately dull — the hospital's name,
+    which is printed on every prescription, and which optional modules are
+    switched on. Nothing here is a secret, and requiring a token would mean the
+    login screen could not render the hospital it belongs to.
+    """
+    return {
+        "hospital_name": settings.HOSPITAL_NAME,
+        "hospital_city": settings.HOSPITAL_CITY,
+        "modules": sorted(m.value for m in settings.enabled_modules),
     }
 
 

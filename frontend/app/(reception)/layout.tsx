@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/components/dashboard/auth-provider";
+import { ModulesProvider } from "@/components/dashboard/modules-provider";
 import { ReceptionShell } from "@/components/reception/reception-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -18,15 +19,17 @@ import { ShortcutHints } from "@/components/keyboard/shortcut-hints";
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider allow={["admin", "doctor", "supervisor", "reception"]} fallbackPath="/dashboard">
-      <ToastProvider>
-        <TooltipProvider delayDuration={200}>
-          <KeyboardProvider>
-            <GlobalShortcuts variant="reception" />
-            <ReceptionShell>{children}</ReceptionShell>
-            <ShortcutHints />
-          </KeyboardProvider>
-        </TooltipProvider>
-      </ToastProvider>
+      <ModulesProvider>
+        <ToastProvider>
+          <TooltipProvider delayDuration={200}>
+            <KeyboardProvider>
+              <GlobalShortcuts variant="reception" />
+              <ReceptionShell>{children}</ReceptionShell>
+              <ShortcutHints />
+            </KeyboardProvider>
+          </TooltipProvider>
+        </ToastProvider>
+      </ModulesProvider>
     </AuthProvider>
   );
 }

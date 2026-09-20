@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/components/dashboard/auth-provider";
+import { ModulesProvider } from "@/components/dashboard/modules-provider";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -14,22 +15,24 @@ import { ShortcutHints } from "@/components/keyboard/shortcut-hints";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider allow={["admin", "manager", "doctor"]} fallbackPath="/reception">
-      <ToastProvider>
-        <TooltipProvider delayDuration={200}>
-          <KeyboardProvider>
-            <GlobalShortcuts variant="clinical" />
-            <div className="h-dvh overflow-hidden bg-mint">
-              <Sidebar />
-              <div className="h-full overflow-hidden lg:pl-60">
-                <main className="h-full overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-                  <div className="mx-auto max-w-[1400px]">{children}</div>
-                </main>
+      <ModulesProvider>
+        <ToastProvider>
+          <TooltipProvider delayDuration={200}>
+            <KeyboardProvider>
+              <GlobalShortcuts variant="clinical" />
+              <div className="h-dvh overflow-hidden bg-mint">
+                <Sidebar />
+                <div className="h-full overflow-hidden lg:pl-60">
+                  <main className="h-full overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+                    <div className="mx-auto max-w-[1400px]">{children}</div>
+                  </main>
+                </div>
               </div>
-            </div>
-            <ShortcutHints />
-          </KeyboardProvider>
-        </TooltipProvider>
-      </ToastProvider>
+              <ShortcutHints />
+            </KeyboardProvider>
+          </TooltipProvider>
+        </ToastProvider>
+      </ModulesProvider>
     </AuthProvider>
   );
 }

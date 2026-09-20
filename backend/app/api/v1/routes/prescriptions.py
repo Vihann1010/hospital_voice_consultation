@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, get_prescription_service, require_permission
+from app.core.config import settings
 from app.core.permissions import Permission
 from app.core.audit import client_ip, record as audit_record
 from app.messaging.factory import get_provider
@@ -198,7 +199,7 @@ async def create_prescription(
         prescription = await service.create(
             patient_id=payload.patient_id,
             consultation_id=payload.consultation_id,
-            department=user.department or Department.ORTHOPEDICS,
+            department=user.department or settings.default_department,
             doctor_id=user.id,
             doctor_name=user.full_name,
             doctor_qualification=signer.qualification if signer else None,

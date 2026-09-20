@@ -8,23 +8,33 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules, type ModuleName } from "@/components/dashboard/modules-provider";
 import { Card, CardContent } from "@/components/ui/card";
 
-const SCREENS: { href: string; title: string; detail: string; icon: LucideIcon; roles: string[] }[] = [
+/** `module` marks a screen that only exists where that module is switched on —
+ *  there is no point offering to set up wards in a clinic with no beds. */
+const SCREENS: {
+  href: string; title: string; detail: string; icon: LucideIcon; roles: string[];
+  module?: ModuleName;
+}[] = [
   { href: "/settings/consultants", title: "Consultants", icon: Contact, roles: ["admin", "manager"],
     detail: "Doctors, OPD days and hours, fees, free follow-up and registration numbers." },
   { href: "/settings/price-list", title: "Price list", icon: Tags, roles: ["admin", "manager"],
     detail: "What each service costs. Needs the finance PIN." },
   { href: "/settings/organisations", title: "Insurers, TPAs and employers", icon: ShieldCheck,
-    roles: ["admin", "manager"],
+    roles: ["admin", "manager"], module: "insurance",
     detail: "Payers a claim can name, and the rates agreed with each." },
   { href: "/settings/wards", title: "Wards and beds", icon: BedDouble, roles: ["admin", "doctor"],
+    module: "ipd",
     detail: "Wards, nightly rates, beds, and taking a bed out of service." },
   { href: "/settings/theatre", title: "Operation list", icon: ClipboardList, roles: ["admin", "manager"],
+    module: "theatre",
     detail: "Operations, their prices, and the theatre rooms." },
   { href: "/settings/room-charges", title: "Room charges", icon: Receipt, roles: ["admin", "manager"],
+    module: "room_charges",
     detail: "The morning room-charge run and its history." },
   { href: "/settings/diet-modes", title: "Diet list", icon: Salad, roles: ["admin", "manager"],
+    module: "diet",
     detail: "The diets the ward orders and the kitchen prepares." },
   { href: "/settings/pad-layouts", title: "Pad layouts", icon: LayoutTemplate, roles: ["admin", "doctor"],
     detail: "Sections of the Visit Pad for yourself, a department or the hospital." },
@@ -34,7 +44,11 @@ const SCREENS: { href: string; title: string; detail: string; icon: LucideIcon; 
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const shown = SCREENS.filter((screen) => screen.roles.includes(user?.role ?? ""));
+  const { has } = useModules();
+  const shown = SCREENS.filter(
+    (screen) =>
+      screen.roles.includes(user?.role ?? "") && (!screen.module || has(screen.module))
+  );
 
   return (
     <div className="space-y-6">

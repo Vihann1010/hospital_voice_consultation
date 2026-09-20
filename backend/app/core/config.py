@@ -4,10 +4,13 @@ Every tunable of the platform is sourced from environment variables so the
 same image can be promoted across environments without a rebuild.
 """
 from functools import lru_cache
-from typing import List
+from typing import FrozenSet, List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.models.enums import Department
+from app.modules import Module, parse_enabled, resolve
 
 
 class Settings(BaseSettings):
@@ -164,6 +167,20 @@ class Settings(BaseSettings):
     # offered for the middle of the night.
     HOSPITAL_TIMEZONE: str = "Asia/Kolkata"
 
+    # --- Modules ---------------------------------------------------------------
+    # Which optional parts of the platform this installation runs. "all" is
+    # every module, which is what an existing hospital deployment gets by
+    # setting nothing. A clinic with no beds and no bench lists only what it
+    # has, e.g. "theatre". See app/modules.py; a module that is off is not
+    # registered on the router at all.
+    ENABLED_MODULES: str = "all"
+
+    # The department a clinician's work is filed under when their account has
+    # none. It used to be orthopedics, written into three route handlers — so a
+    # gastroenterology clinic would have filed prescriptions and investigation
+    # orders under a department it does not have. One setting, named once.
+    DEFAULT_DEPARTMENT: str = Department.ORTHOPEDICS.value
+
     # --- Prescriptions ---------------------------------------------------------
     HOSPITAL_NAME: str = "Satya Trauma & Maternity Center"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
@@ -233,6 +250,24 @@ class Settings(BaseSettings):
     def _upper(cls, v: str) -> str:
         return v.upper()
 
+    @field_validator("DEFAULT_DEPARTMENT")
+    @classmethod
+    def _department_must_exist(cls, v: str) -> str:
+        try:
+            Department(v.strip().lower())
+        except ValueError:
+            raise ValueError(
+                f"DEFAULT_DEPARTMENT '{v}' is not a department. One of: "
+                + ", ".join(d.value for d in Department)
+            ) from None
+        return v.strip().lower()
+
+    @field_validator("ENABLED_MODULES")
+    @classmethod
+    def _modules_must_be_known(cls, v: str) -> str:
+        parse_enabled(v)  # raises on a typo rather than quietly disabling a ward
+        return v
+
     @field_validator("FINANCE_PIN")
     @classmethod
     def _finance_pin_must_be_four_digits(cls, v: str) -> str:
@@ -250,6 +285,18 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def enabled_modules(self) -> FrozenSet[Module]:
+        """The modules actually served, with unsatisfied dependencies dropped."""
+        return resolve(parse_enabled(self.ENABLED_MODULES))
+
+    def module_enabled(self, module: Module) -> bool:
+        return module in self.enabled_modules
+
+    @property
+    def default_department(self) -> Department:
+        return Department(self.DEFAULT_DEPARTMENT)
 
     @property
     def llm_api_key(self) -> str:

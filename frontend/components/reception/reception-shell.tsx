@@ -30,6 +30,7 @@ import { CashCounter } from "@/components/finance/cash-counter";
 import { staffApi } from "@/lib/staffApi";
 import type { Visit } from "@/lib/types/emr";
 import { DEPARTMENT_LABEL, formatFullDate } from "@/lib/format";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -127,6 +128,7 @@ function TodaysQueue() {
 
 export function ReceptionShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const hasLab = useModules().has("laboratory");
   const [today, setToday] = useState("");
 
   useEffect(() => {
@@ -158,11 +160,13 @@ export function ReceptionShell({ children }: { children: React.ReactNode }) {
               </span>
             )}
 
-            <Link href="/lab">
-              <Button variant="ghost" size="sm">
-                <FlaskConical /> Lab
-              </Button>
-            </Link>
+            {hasLab && (
+              <Link href="/lab">
+                <Button variant="ghost" size="sm">
+                  <FlaskConical /> Lab
+                </Button>
+              </Link>
+            )}
 
             <Link href="/reception/reports">
               <Button variant="ghost" size="sm">

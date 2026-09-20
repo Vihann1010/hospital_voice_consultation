@@ -28,6 +28,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules, type ModuleName } from "@/components/dashboard/modules-provider";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 
@@ -42,23 +43,27 @@ const NAV: {
   adminOnly?: boolean;
   /** Shown only to these roles. */
   roles?: string[];
+  /** Shown only where this module is switched on. Its endpoints do not exist
+   *  otherwise, so the link would lead to a 404. */
+  module?: ModuleName;
 }[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/waiting", label: "Waiting patients", icon: Users },
   { href: "/active", label: "Current consultations", icon: Activity },
   { href: "/completed", label: "Completed", icon: CheckCircle2 },
   { href: "/patients", label: "Patient search", icon: Stethoscope },
-  { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward" },
-  { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward" },
-  { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward" },
+  { href: "/ipd", label: "Ward board", icon: BedDouble, group: "ward", module: "ipd" },
+  { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward", module: "theatre" },
+  { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward", module: "diet" },
   { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
   // The laboratory runs in its own terminal; doctors verify results there.
-  { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward", roles: ["admin", "doctor"] },
+  { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward",
+    roles: ["admin", "doctor"], module: "laboratory" },
   // Hospital-wide takings: finance:read is held by admin and manager only.
   { href: "/finance", label: "Finance", icon: Wallet, group: "desk", roles: ["admin", "manager"] },
   { href: "/finance/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
   { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
-    roles: ["admin", "manager", "doctor", "supervisor", "reception"] },
+    roles: ["admin", "manager", "doctor", "supervisor", "reception"], module: "insurance" },
   { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
   // Consultants, operation list, room charges, diet list, pad layouts and staff
   // accounts are all opened from the Settings page, filtered there by role.
@@ -68,10 +73,12 @@ const NAV: {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { has } = useModules();
   const items = NAV.filter(
     (item) =>
       (!item.adminOnly || user?.role === "admin") &&
-      (!item.roles || (user !== null && user !== undefined && item.roles.includes(user.role)))
+      (!item.roles || (user !== null && user !== undefined && item.roles.includes(user.role))) &&
+      (!item.module || has(item.module))
   );
   return (
     <nav className="thin-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2">

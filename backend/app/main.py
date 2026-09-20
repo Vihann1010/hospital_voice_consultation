@@ -37,6 +37,7 @@ from app.core.middleware import (
 )
 from app.db.session import AsyncSessionLocal, engine
 from app.departments import validate_department_config
+from app.modules import Module, dropped_for_missing_parent, parse_enabled
 from app.messaging.factory import close_provider, get_provider
 from app.services.auth_service import seed_default_users
 from app.services.delivery_service import retry_worker
@@ -86,13 +87,24 @@ async def lifespan(app: FastAPI):
         logger.warning("cache_unavailable_at_startup", extra={"backend": cache.name})
     get_provider()      # surface messaging misconfiguration at boot, not first send
     retry_worker.start()
-    room_charge_worker.start()
+    # The nightly room-charge run bills for beds. A clinic with no beds must
+    # not have a job quietly posting charges nobody will ever see.
+    if settings.module_enabled(Module.ROOM_CHARGES):
+        room_charge_worker.start()
     books_posting_worker.start()
 
     mark_ready(True)
+    enabled = settings.enabled_modules
     logger.info("startup_complete",
                 extra={"env": settings.APP_ENV, "cache": cache.name,
-                       "llm_provider": settings.LLM_PROVIDER})
+                       "llm_provider": settings.LLM_PROVIDER,
+                       "modules": sorted(m.value for m in enabled),
+                       "modules_off": sorted(
+                           m.value for m in Module if m not in enabled)})
+    dropped = dropped_for_missing_parent(parse_enabled(settings.ENABLED_MODULES), enabled)
+    if dropped:
+        # Said out loud: somebody asked for a module and did not get it.
+        logger.warning("modules_dropped_for_missing_parent", extra={"modules": dropped})
 
     yield
 
@@ -102,7 +114,7 @@ async def lifespan(app: FastAPI):
     await asyncio.sleep(min(settings.SHUTDOWN_GRACE_S * 0.1, 2.0))
 
     await retry_worker.stop()
-    await room_charge_worker.stop()
+    await room_charge_worker.stop()   # a worker that never started stops cleanly
     await books_posting_worker.stop()
     await session_manager.shutdown()
     await close_provider()

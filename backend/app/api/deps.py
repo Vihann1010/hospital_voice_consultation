@@ -6,11 +6,13 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.logging import bind_user
 from app.core.permissions import Permission, has_permission
 from app.core.security import TOKEN_TYPE_ACCESS, decode_token
 from app.db.session import get_db
 from app.models.user import User
+from app.modules import Module
 from app.repositories.user_repository import UserRepository
 from app.services.appointment_service import AppointmentService
 from app.services.auth_service import AuthService
@@ -116,6 +118,25 @@ def require_any_permission(*permissions: Permission):
                 f"Requires one of: {', '.join(p.value for p in permissions)}",
             )
         return user
+
+    return checker
+
+
+def require_module(module: Module):
+    """Refuse an endpoint that belongs to a module this installation does not run.
+
+    Most module endpoints are never registered at all (see app/api/v1/router.py),
+    which is the stronger switch. This is for the few that live inside another
+    module's router — the room-charge run sits with the ward — where the choice
+    is between one dependency and splitting a router to make a point.
+    """
+
+    async def checker() -> None:
+        if not settings.module_enabled(module):
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                f"The {module.value.replace('_', ' ')} module is not enabled here.",
+            )
 
     return checker
 

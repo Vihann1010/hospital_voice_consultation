@@ -170,7 +170,7 @@ async def create_order(
     payload: OrderCreateRequest, service: Service, user: CurrentUser
 ) -> OrderOut:
     """Generate an investigation request. Only a clinician may order."""
-    department = user.department or Department.ORTHOPEDICS
+    department = user.department or settings.default_department
     try:
         order = await service.create_order(
             patient_id=payload.patient_id,
@@ -300,7 +300,7 @@ async def upload_report(
             data=data,
             uploaded_by_id=user.id,
             uploaded_by_name=user.full_name,
-            department=user.department or Department.ORTHOPEDICS,
+            department=user.department or settings.default_department,
             document_kind=document_kind,
         )
     except InvestigationError as exc:
@@ -374,7 +374,7 @@ async def reprocess_report(
 ) -> ReportOut:
     """Re-run extraction and analysis, e.g. after OCR is installed."""
     report = await service.process_report(
-        report_id, department=user.department or Department.ORTHOPEDICS
+        report_id, department=user.department or settings.default_department
     )
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
