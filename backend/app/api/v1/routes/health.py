@@ -28,6 +28,7 @@ from app.investigations.extraction import extraction_capabilities
 from app.messaging.factory import get_provider
 from app.models.enums import UserRole
 from app.modules import Module
+from app.prescriptions.formulary import unapproved_departments
 from app.prescriptions.pdf import pdf_capabilities
 
 router = APIRouter(tags=["health"])
@@ -107,6 +108,7 @@ async def health(session: DbSession, response: Response) -> Dict[str, Any]:
             "cache": {"ok": cache_ok, "backend": cache.name,
                       "distributed": cache.distributed},
         },
+        "formulary_pending_signoff": [d.value for d in unapproved_departments()],
         "modules": {
             "enabled": sorted(m.value for m in settings.enabled_modules),
             "disabled": sorted(
@@ -146,6 +148,10 @@ async def client_config() -> Dict[str, Any]:
         "hospital_name": settings.HOSPITAL_NAME,
         "hospital_city": settings.HOSPITAL_CITY,
         "modules": sorted(m.value for m in settings.enabled_modules),
+        # Departments whose drafted prescribing content is still withheld. A
+        # doctor searching a near-empty formulary deserves to be told why
+        # rather than concluding the system is broken.
+        "formulary_pending_signoff": [d.value for d in unapproved_departments()],
     }
 
 

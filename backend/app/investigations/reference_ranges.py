@@ -110,6 +110,18 @@ REFERENCE_RANGES: Dict[str, List[ReferenceRange]] = {
     "sgot": [ReferenceRange("SGOT (AST)", "U/L", 0, 50, aliases=["ast", "sgot", "aspartate aminotransferase"])],
     "total_bilirubin": [ReferenceRange("Total Bilirubin", "mg/dL", 0.2, 1.2, None, 0, 120, None, 15.0,
                                        aliases=["bilirubin total", "s. bilirubin"])],
+    "direct_bilirubin": [ReferenceRange("Direct Bilirubin", "mg/dL", 0.0, 0.3,
+                                        aliases=["conjugated bilirubin", "bilirubin direct"])],
+    "ggt": [ReferenceRange("Gamma GT", "U/L", 8, 61, Gender.MALE, 15, 120,
+                           aliases=["ggt", "gamma gt", "gamma glutamyl transferase", "ggtp"]),
+            ReferenceRange("Gamma GT", "U/L", 5, 36, Gender.FEMALE, 15, 120,
+                           aliases=["ggt", "gamma gt", "gamma glutamyl transferase", "ggtp"])],
+    # Raised three times over in acute pancreatitis; the critical value is what
+    # makes the report worth reading the same hour it arrives.
+    "amylase": [ReferenceRange("Serum Amylase", "U/L", 25, 125, None, 0, 120, None, 375,
+                               aliases=["s. amylase", "amylase serum"])],
+    "lipase": [ReferenceRange("Serum Lipase", "U/L", 13, 60, None, 0, 120, None, 180,
+                              aliases=["s. lipase", "lipase serum"])],
     "total_protein": [ReferenceRange("Total Protein", "g/dL", 6.4, 8.3)],
     "albumin": [ReferenceRange("Albumin", "g/dL", 3.5, 5.2, aliases=["s. albumin"])],
     "total_cholesterol": [ReferenceRange("Total Cholesterol", "mg/dL", 0, 200, aliases=["cholesterol total"])],

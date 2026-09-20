@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from app.ai.pipeline.medication_rules import DRUG_CLASSES, ingredients_of, normalize_name
+from app.core.config import settings
 from app.models.enums import Department
 
 
@@ -30,6 +31,10 @@ class Medicine:
     category: str = "General"
     departments: List[Department] = field(default_factory=list)
     note: Optional[str] = None
+    # Drafted here and not yet signed off by a consultant of that speciality.
+    # Provisional entries are withheld until the department is named in
+    # APPROVED_FORMULARY — see `_approved_departments` below.
+    provisional: bool = False
 
 
 M = Medicine
@@ -42,6 +47,7 @@ class MedicineTemplate:
   medicine_codes: List[str]
   department: Department
   note: str = "Doctor review required before issuing."
+  provisional: bool = False
 
 FORMULARY: List[Medicine] = [
     # ---------------------------- Analgesics / NSAIDs ----------------------
@@ -192,7 +198,112 @@ FORMULARY: List[Medicine] = [
       note="Taper as directed; do not stop abruptly"),
     M("ORS", "ORS Sachet", ["oral rehydration salts"], "Sachet", ["21.8 g"], "SOS", "3 days",
       None, "Rehydration"),
+
+    # -------------------------- Gastroenterology ----------------------------
+    # DRAFTED, NOT YET APPROVED. Every entry below is provisional=True and is
+    # withheld from prescribing until a gastroenterologist signs it off and the
+    # department is named in APPROVED_FORMULARY. Strengths and frequencies are
+    # the common adult starting points, to be confirmed by the prescriber for
+    # the patient in front of them; nothing here adjusts for renal or hepatic
+    # impairment, pregnancy, or childhood dosing.
+    # Eradication dosing is twice daily for the full fourteen days, which is
+    # not the once-daily reflux dose. Kept as its own entry because pointing a
+    # regimen at the 7-day PPI leaves the patient on antibiotics for a week
+    # after the acid suppression has run out.
+    M("PAN_40_OD", "Pantoprazole (healing course)", ["pantoprazole"], "Tablet", ["40 mg"],
+      "OD", "4 weeks", "before breakfast", "Proton pump inhibitor",
+      [Department.GASTROENTEROLOGY],
+      note="Reflux and ulcer healing run in weeks, not days; review before repeating",
+      provisional=True),
+    M("PAN_40_BD", "Pantoprazole (eradication dose)", ["pantoprazole"], "Tablet", ["40 mg"],
+      "BD", "14 days", "before food", "Proton pump inhibitor", [Department.GASTROENTEROLOGY],
+      note="Twice-daily dosing, for H. pylori eradication", provisional=True),
+    M("ESOMEP", "Esomeprazole", ["esomeprazole"], "Tablet", ["20 mg", "40 mg"], "OD", "14 days",
+      "before breakfast", "Proton pump inhibitor", [Department.GASTROENTEROLOGY], provisional=True),
+    M("LANSOP", "Lansoprazole", ["lansoprazole"], "Capsule", ["15 mg", "30 mg"], "OD", "14 days",
+      "before breakfast", "Proton pump inhibitor", [Department.GASTROENTEROLOGY], provisional=True),
+    M("PAN_D", "Pantoprazole + Domperidone", ["pantoprazole", "domperidone"], "Capsule",
+      ["40/30 mg"], "OD", "14 days", "before breakfast", "PPI + prokinetic", [Department.GASTROENTEROLOGY],
+      note="Domperidone: use the lowest dose for the shortest time", provisional=True),
+    M("FAMOTIDINE", "Famotidine", ["famotidine"], "Tablet", ["20 mg", "40 mg"], "BD", "14 days",
+      "after food", "H2 receptor blocker", [Department.GASTROENTEROLOGY], provisional=True),
+    M("SUCRALFATE", "Sucralfate", ["sucralfate"], "Syrup", ["1 g/10 mL"], "TDS", "14 days",
+      "1 hour before food", "Mucosal protective", [Department.GASTROENTEROLOGY],
+      note="Separate from other medicines by two hours", provisional=True),
+    M("GELUSIL", "Antacid Gel (Magaldrate + Simethicone)", ["magaldrate", "simethicone"],
+      "Syrup", ["10 mL"], "SOS", "7 days", "after food and at bedtime", "Antacid", [Department.GASTROENTEROLOGY],
+      provisional=True),
+    M("ITOPRIDE", "Itopride", ["itopride"], "Tablet", ["50 mg"], "TDS", "14 days",
+      "before food", "Prokinetic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("LEVOSULPIRIDE", "Levosulpiride", ["levosulpiride"], "Tablet", ["25 mg"], "TDS", "7 days",
+      "before food", "Prokinetic", [Department.GASTROENTEROLOGY],
+      note="Avoid prolonged courses: extrapyramidal effects", provisional=True),
+
+    # Antiemetics and antispasmodics
+    M("DOMPERIDONE_10", "Domperidone", ["domperidone"], "Tablet", ["10 mg"], "TDS", "5 days",
+      "before food", "Antiemetic / prokinetic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("ONDEM_MD", "Ondansetron MD", ["ondansetron"], "Tablet", ["4 mg", "8 mg"], "SOS", "3 days",
+      "dissolves on the tongue", "Antiemetic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("MEBEVERINE", "Mebeverine", ["mebeverine"], "Tablet", ["135 mg"], "TDS", "14 days",
+      "20 minutes before food", "Antispasmodic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("DICYCLOMINE", "Dicyclomine", ["dicyclomine"], "Tablet", ["10 mg", "20 mg"], "TDS",
+      "3 days", "before food", "Antispasmodic", [Department.GASTROENTEROLOGY], provisional=True),
+
+    # Bowel
+    M("LACTULOSE", "Lactulose", ["lactulose"], "Syrup", ["10 g/15 mL"], "HS", "as advised",
+      "at bedtime", "Osmotic laxative", [Department.GASTROENTEROLOGY], provisional=True),
+    M("ISABGOL", "Isabgol (Psyllium Husk)", ["ispaghula"], "Sachet", ["5 g"], "HS", "as advised",
+      "with a full glass of water at bedtime", "Bulk laxative", [Department.GASTROENTEROLOGY],
+      note="Must be taken with plenty of water", provisional=True),
+    M("PEG_SACHET", "Polyethylene Glycol 3350", ["polyethylene glycol"], "Sachet", ["17 g"],
+      "OD", "as advised", "dissolved in water", "Osmotic laxative", [Department.GASTROENTEROLOGY], provisional=True),
+    M("BISACODYL", "Bisacodyl", ["bisacodyl"], "Tablet", ["5 mg"], "HS", "3 days",
+      "at bedtime", "Stimulant laxative", [Department.GASTROENTEROLOGY],
+      note="Short courses only", provisional=True),
+    M("LOPERAMIDE", "Loperamide", ["loperamide"], "Tablet", ["2 mg"], "SOS", "2 days", None,
+      "Antidiarrhoeal", [Department.GASTROENTEROLOGY],
+      note="Not for bloody diarrhoea or suspected colitis", provisional=True),
+    M("RACECADOTRIL", "Racecadotril", ["racecadotril"], "Capsule", ["100 mg"], "TDS", "3 days",
+      "before food", "Antidiarrhoeal", [Department.GASTROENTEROLOGY], provisional=True),
+    M("PROBIOTIC", "Probiotic (Saccharomyces boulardii)", ["saccharomyces boulardii"], "Sachet",
+      ["250 mg"], "BD", "7 days", "after food", "Probiotic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("RIFAXIMIN", "Rifaximin", ["rifaximin"], "Tablet", ["200 mg", "400 mg", "550 mg"], "BD",
+      "as advised", "after food", "Gut-selective antibiotic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("MESALAMINE", "Mesalamine", ["mesalamine"], "Tablet", ["400 mg", "800 mg", "1.2 g"], "BD",
+      "as advised", "after food", "Aminosalicylate", [Department.GASTROENTEROLOGY],
+      note="Maintenance therapy: continue as directed", provisional=True),
+
+    # Liver
+    M("UDCA", "Ursodeoxycholic Acid", ["ursodeoxycholic acid"], "Tablet", ["150 mg", "300 mg"],
+      "BD", "as advised", "after food", "Bile acid", [Department.GASTROENTEROLOGY], provisional=True),
+    M("SILYMARIN", "Silymarin", ["silymarin"], "Tablet", ["140 mg"], "TDS", "as advised",
+      "after food", "Hepatoprotective", [Department.GASTROENTEROLOGY], provisional=True),
+    M("LOLA", "L-Ornithine L-Aspartate", ["l-ornithine l-aspartate"], "Sachet", ["3 g"], "TDS",
+      "as advised", "in water after food", "Hepatic support", [Department.GASTROENTEROLOGY], provisional=True),
+    M("PROPRANOLOL", "Propranolol", ["propranolol"], "Tablet", ["10 mg", "20 mg", "40 mg"], "BD",
+      "continue", "after food", "Non-selective beta blocker", [Department.GASTROENTEROLOGY],
+      note="For variceal prophylaxis: titrate to heart rate as directed", provisional=True),
+
+    # Enzymes and H. pylori components
+    M("PANCREATIN", "Pancreatic Enzyme (Lipase-Protease-Amylase)", ["pancreatin"], "Capsule",
+      ["10000 IU", "25000 IU"], "TDS", "as advised", "with meals",
+      "Pancreatic enzyme replacement", [Department.GASTROENTEROLOGY], provisional=True),
+    M("CLARITHROMYCIN", "Clarithromycin", ["clarithromycin"], "Tablet", ["250 mg", "500 mg"],
+      "BD", "14 days", "after food", "Macrolide antibiotic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("AMOX_500", "Amoxicillin 500", ["amoxicillin"], "Capsule", ["500 mg"], "BD", "14 days",
+      "after food", "Penicillin antibiotic", [Department.GASTROENTEROLOGY], provisional=True),
+    M("TINIDAZOLE", "Tinidazole", ["tinidazole"], "Tablet", ["500 mg"], "BD", "14 days",
+      "after food", "Nitroimidazole", [Department.GASTROENTEROLOGY],
+      note="No alcohol during the course and for three days after", provisional=True),
+    M("LEVOFLOXACIN", "Levofloxacin", ["levofloxacin"], "Tablet", ["250 mg", "500 mg"], "OD",
+      "as advised", "after food", "Fluoroquinolone", [Department.GASTROENTEROLOGY],
+      note="Second-line H. pylori regimens only; tendon and QT cautions", provisional=True),
+    M("BISMUTH", "Colloidal Bismuth Subcitrate", ["bismuth subcitrate"], "Tablet", ["120 mg"],
+      "QID", "14 days", "before food", "Bismuth salt", [Department.GASTROENTEROLOGY],
+      note="Blackens the tongue and stool — tell the patient, or they will think it is bleeding",
+      provisional=True),
 ]
+
 
 FORMULARY_BY_CODE: Dict[str, Medicine] = {item.code: item for item in FORMULARY}
 
@@ -226,6 +337,104 @@ MEDICINE_TEMPLATES: List[MedicineTemplate] = [
     "Polycystic ovary syndrome",
     ["polycystic ovary", "pcos", "pcod"],
     ["METFORMIN", "MYOINOSITOL"], Department.GYNECOLOGY,
+  ),
+
+  # ------------------------- Gastroenterology ------------------------------
+  # DRAFTED, NOT YET APPROVED — every one is provisional and withheld until a
+  # gastroenterologist signs them off. A template is a whole regimen, so it is
+  # the part of this file that most needs a consultant's name against it.
+  MedicineTemplate(
+    "Gastro-oesophageal reflux disease",
+    ["gerd", "reflux", "acidity", "heartburn", "acid reflux"],
+    ["PAN_40_OD", "GELUSIL"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. Advise weight, late meals and smoking first.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Functional dyspepsia",
+    ["dyspepsia", "indigestion", "gas", "bloating", "fullness"],
+    ["PAN_D", "ITOPRIDE"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. Exclude alarm features before treating empirically.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "H. pylori eradication — first line (14 days)",
+    ["h pylori", "helicobacter", "hp eradication", "triple therapy"],
+    ["PAN_40_BD", "AMOX_500", "CLARITHROMYCIN"], Department.GASTROENTEROLOGY,
+    note=(
+      "Doctor review required. Fourteen days, all three together, twice daily. "
+      "Confirm eradication four weeks after finishing, off PPI for two weeks. "
+      "Check penicillin allergy and local clarithromycin resistance before use."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "H. pylori eradication — bismuth quadruple",
+    ["h pylori second line", "quadruple therapy", "bismuth"],
+    ["PAN_40_BD", "BISMUTH", "TINIDAZOLE", "AMOX_500"], Department.GASTROENTEROLOGY,
+    note=(
+      "Doctor review required. For penicillin allergy or a failed first course, "
+      "where the antibiotic choice changes — do not repeat what has already failed."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Peptic ulcer disease",
+    ["peptic ulcer", "gastric ulcer", "duodenal ulcer", "ulcer"],
+    ["PAN_40_OD", "SUCRALFATE"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. Stop NSAIDs; test for H. pylori.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Acute gastroenteritis",
+    ["gastroenteritis", "loose motions", "diarrhoea", "diarrhea", "food poisoning"],
+    ["ORS", "PROBIOTIC", "ONDEM_MD"], Department.GASTROENTEROLOGY,
+    note=(
+      "Doctor review required. Rehydration is the treatment. No antimotility "
+      "drug where there is blood in the stool or a fever."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Irritable bowel syndrome — diarrhoea predominant",
+    ["ibs", "ibs-d", "irritable bowel"],
+    ["MEBEVERINE", "PROBIOTIC"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. A diagnosis of exclusion; review the alarm features.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Irritable bowel syndrome — constipation predominant",
+    ["ibs-c", "constipation predominant"],
+    ["MEBEVERINE", "ISABGOL"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. Fibre and fluids before anything else.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Chronic constipation",
+    ["constipation", "hard stool", "kabz"],
+    ["ISABGOL", "LACTULOSE"], Department.GASTROENTEROLOGY,
+    note="Doctor review required. Review the drugs the patient already takes.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Non-alcoholic fatty liver disease",
+    ["nafld", "fatty liver", "hepatic steatosis"],
+    ["SILYMARIN", "UDCA"], Department.GASTROENTEROLOGY,
+    note=(
+      "Doctor review required. Weight loss and glycaemic control are the "
+      "treatment; medicines are adjuncts."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Gallstone disease — symptomatic",
+    ["gallstones", "cholelithiasis", "biliary colic"],
+    ["DROTIN", "PARA"], Department.GASTROENTEROLOGY,
+    note=(
+      "Doctor review required. Antispasmodic and simple analgesia for the "
+      "attack; surgical referral where they recur. Avoid NSAIDs here."
+    ),
+    provisional=True,
   ),
 ]
 
@@ -341,6 +550,69 @@ INTERACTION_PAIRS: Dict[Tuple[str, str], Tuple[str, str, str]] = {
         "caution", "Both affect serotonin pathways.",
         "Watch for serotonin-related symptoms.",
     ),
+
+    # Gastroenterology. These arrived with the H. pylori regimens: a fourteen-day
+    # course of clarithromycin is prescribed to outpatients who are frequently
+    # already on a statin or a blood thinner, and the harm lands after they have
+    # gone home. Unlike the formulary entries above, these are not gated behind
+    # sign-off — a warning that only appears once the content is approved is a
+    # warning missing for exactly as long as it is most needed.
+    ("clarithromycin", "atorvastatin"): (
+        "serious", "Clarithromycin blocks statin metabolism; risk of rhabdomyolysis.",
+        "Hold the statin for the course, or use a regimen without clarithromycin.",
+    ),
+    ("clarithromycin", "simvastatin"): (
+        "serious", "Contraindicated together; severe myopathy risk.",
+        "Stop the statin for the course or change the antibiotic.",
+    ),
+    ("clarithromycin", "warfarin"): (
+        "serious", "Clarithromycin potentiates warfarin.",
+        "Monitor INR during and after the course.",
+    ),
+    ("clarithromycin", "domperidone"): (
+        "serious", "Both prolong the QT interval; additive arrhythmia risk.",
+        "Use a different prokinetic during the eradication course.",
+    ),
+    ("clarithromycin", "colchicine"): (
+        "serious", "Clarithromycin raises colchicine levels; toxicity can be fatal.",
+        "Avoid the combination.",
+    ),
+    ("tinidazole", "alcohol"): (
+        "serious", "Disulfiram-like reaction.",
+        "No alcohol during the course and for three days after.",
+    ),
+    ("tinidazole", "warfarin"): (
+        "serious", "Nitroimidazoles potentiate warfarin.",
+        "Monitor INR closely.",
+    ),
+    ("clopidogrel", "omeprazole"): (
+        "serious", "Omeprazole reduces the antiplatelet effect of clopidogrel.",
+        "Use pantoprazole instead.",
+    ),
+    ("clopidogrel", "esomeprazole"): (
+        "serious", "Esomeprazole reduces the antiplatelet effect of clopidogrel.",
+        "Use pantoprazole instead.",
+    ),
+    ("domperidone", "ondansetron"): (
+        "caution", "Additive QT prolongation.",
+        "Use one antiemetic at a time where the heart is a concern.",
+    ),
+    ("levofloxacin", "domperidone"): (
+        "caution", "Additive QT prolongation.",
+        "Review the need for both.",
+    ),
+    ("sucralfate", "levothyroxine"): (
+        "caution", "Sucralfate binds levothyroxine and reduces its absorption.",
+        "Separate the doses by at least two hours.",
+    ),
+    ("sucralfate", "ciprofloxacin"): (
+        "caution", "Sucralfate binds fluoroquinolones and reduces absorption.",
+        "Separate the doses by at least two hours.",
+    ),
+    ("loperamide", "ondansetron"): (
+        "caution", "Both prolong the QT interval at higher doses.",
+        "Keep loperamide to short, low-dose use.",
+    ),
 }
 
 # Ingredients that should not be prescribed in pregnancy.
@@ -360,6 +632,46 @@ PREGNANCY_CAUTIONS: Dict[str, Tuple[str, str]] = {
 }
 
 
+def _is_available(item) -> bool:
+    """Whether a drafted entry may be prescribed here yet.
+
+    An entry marked provisional was written by whoever added the speciality,
+    not by a consultant who practises it. It stays out of the prescribing
+    screens until its department is named in APPROVED_FORMULARY. An entry with
+    no department is general content that shipped with the platform.
+    """
+    if not getattr(item, "provisional", False):
+        return True
+    approved = settings.approved_formulary_departments
+    departments = (
+        [item.department] if isinstance(item, MedicineTemplate) else item.departments
+    )
+    return bool(departments) and all(d in approved for d in departments)
+
+
+def available_formulary() -> List[Medicine]:
+    """The medicines this installation may actually prescribe today."""
+    return [item for item in FORMULARY if _is_available(item)]
+
+
+def unapproved_departments() -> List[Department]:
+    """Departments carrying drafted content nobody has signed off, for the log."""
+    approved = settings.approved_formulary_departments
+    pending = {
+        department
+        for item in FORMULARY
+        if getattr(item, "provisional", False)
+        for department in item.departments
+        if department not in approved
+    }
+    pending.update(
+        template.department
+        for template in MEDICINE_TEMPLATES
+        if template.provisional and template.department not in approved
+    )
+    return sorted(pending, key=lambda d: d.value)
+
+
 def _haystack(item: Medicine) -> str:
     return " ".join(
         [item.code.lower(), item.name.lower(), item.category.lower(), *item.ingredients]
@@ -376,7 +688,7 @@ def search(
     limit: int = 30,
 ) -> List[Medicine]:
     """Rank formulary matches for autocomplete: name prefix beats ingredient."""
-    pool = FORMULARY
+    pool = available_formulary()
     if department is not None:
         pool = [m for m in pool if not m.departments or department in m.departments]
     if not query or not query.strip():
@@ -412,7 +724,8 @@ def search_templates(
     """Find doctor-reviewed medicine templates by disease name or keyword."""
     pool = [
       template for template in MEDICINE_TEMPLATES
-      if department is None or template.department == department
+      if (department is None or template.department == department)
+      and _is_available(template)
     ]
     if not query or not query.strip():
       return pool[:limit]
@@ -439,6 +752,23 @@ def search_templates(
 
 
 def get(code: str) -> Optional[Medicine]:
+    """Look a medicine up by code, unless it is drafted and unapproved.
+
+    Reached from the prescribing screen and from a template's medicine list,
+    so withholding it here is what stops an unapproved drug being prescribed
+    by anyone who knows its code.
+    """
+    item = FORMULARY_BY_CODE.get(code)
+    return item if item is not None and _is_available(item) else None
+
+
+def get_including_unapproved(code: str) -> Optional[Medicine]:
+    """For reading an existing prescription, where the drug was already given.
+
+    A prescription already issued names what the patient is taking. Hiding the
+    entry afterwards would make an old prescription unreadable, which helps
+    nobody; the control belongs at the point of prescribing.
+    """
     return FORMULARY_BY_CODE.get(code)
 
 
@@ -460,8 +790,15 @@ def match_by_name(name: str) -> Optional[Medicine]:
 
 
 def ingredients_for(name: str, code: Optional[str] = None) -> Set[str]:
+    """What a prescribed medicine contains, for the duplicate and interaction checks.
+
+    Resolves a drafted entry too. Knowing what a drug contains is never a
+    decision to prescribe it — it is the check that catches the clarithromycin
+    already on the patient's list — and a safety check that goes quiet because
+    content is awaiting sign-off would be worse than no gate at all.
+    """
     if code:
-        item = get(code)
+        item = get_including_unapproved(code)
         if item:
             return set(item.ingredients)
     matched = match_by_name(name)

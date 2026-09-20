@@ -38,6 +38,7 @@ from app.core.middleware import (
 from app.db.session import AsyncSessionLocal, engine
 from app.departments import validate_department_config
 from app.modules import Module, dropped_for_missing_parent, parse_enabled
+from app.prescriptions.formulary import unapproved_departments
 from app.messaging.factory import close_provider, get_provider
 from app.services.auth_service import seed_default_users
 from app.services.delivery_service import retry_worker
@@ -105,6 +106,17 @@ async def lifespan(app: FastAPI):
     if dropped:
         # Said out loud: somebody asked for a module and did not get it.
         logger.warning("modules_dropped_for_missing_parent", extra={"modules": dropped})
+
+    # Drafted prescribing content that no consultant of that speciality has
+    # signed off. It is withheld from the prescribing screens, and said here
+    # every boot so it is not forgotten about in a comment.
+    pending = unapproved_departments()
+    if pending:
+        logger.warning(
+            "formulary_awaiting_clinical_signoff",
+            extra={"departments": [d.value for d in pending],
+                   "note": "withheld from prescribing; add to APPROVED_FORMULARY once reviewed"},
+        )
 
     yield
 

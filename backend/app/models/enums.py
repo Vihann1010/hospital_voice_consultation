@@ -66,6 +66,11 @@ class InvestigationCategory(str, enum.Enum):
     DEXA = "dexa"
     ORTHOPEDIC = "orthopedic"
     GYNECOLOGY = "gynecology"
+    # GI-specific bench and bedside tests: H. pylori, stool studies, liver
+    # elastography. The scope procedures are their own category because they
+    # are booked and consented like a procedure, not collected like a sample.
+    GASTROENTEROLOGY = "gastroenterology"
+    ENDOSCOPY = "endoscopy"
     HORMONAL = "hormonal"
     TUMOR_MARKERS = "tumor_markers"
 

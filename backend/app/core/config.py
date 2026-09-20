@@ -181,6 +181,14 @@ class Settings(BaseSettings):
     # orders under a department it does not have. One setting, named once.
     DEFAULT_DEPARTMENT: str = Department.ORTHOPEDICS.value
 
+    # Departments whose drafted prescribing content a consultant of that
+    # speciality has reviewed and signed off. Drafted medicines and regimen
+    # templates are withheld from the prescribing screens until the department
+    # is named here — a comment saying "needs review" is not a control, and a
+    # regimen nobody has approved must not be one click from a patient. The two
+    # departments the platform was built with were reviewed before release.
+    APPROVED_FORMULARY: str = "orthopedics,gynecology"
+
     # --- Prescriptions ---------------------------------------------------------
     HOSPITAL_NAME: str = "Satya Trauma & Maternity Center"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
@@ -262,6 +270,18 @@ class Settings(BaseSettings):
             ) from None
         return v.strip().lower()
 
+    @field_validator("APPROVED_FORMULARY")
+    @classmethod
+    def _approved_departments_must_exist(cls, v: str) -> str:
+        for name in [part.strip().lower() for part in v.split(",") if part.strip()]:
+            try:
+                Department(name)
+            except ValueError:
+                raise ValueError(
+                    f"APPROVED_FORMULARY names '{name}', which is not a department."
+                ) from None
+        return v
+
     @field_validator("ENABLED_MODULES")
     @classmethod
     def _modules_must_be_known(cls, v: str) -> str:
@@ -297,6 +317,14 @@ class Settings(BaseSettings):
     @property
     def default_department(self) -> Department:
         return Department(self.DEFAULT_DEPARTMENT)
+
+    @property
+    def approved_formulary_departments(self) -> FrozenSet[Department]:
+        return frozenset(
+            Department(part.strip().lower())
+            for part in self.APPROVED_FORMULARY.split(",")
+            if part.strip()
+        )
 
     @property
     def llm_api_key(self) -> str:

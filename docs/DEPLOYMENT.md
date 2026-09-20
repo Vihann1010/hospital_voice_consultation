@@ -97,6 +97,32 @@ and investigation orders are filed when their account names no department. It
 defaults to `orthopedics`, which is what the code did before it was a setting;
 a single-speciality clinic should name its own.
 
+### Prescribing content awaiting sign-off
+
+`APPROVED_FORMULARY` names the departments whose drafted medicines and regimen
+templates a consultant of that speciality has reviewed. The two departments the
+platform was built with — `orthopedics,gynecology` — were reviewed before
+release and are the default.
+
+Content added for a new speciality is marked provisional in the source and is
+**withheld from the prescribing screens** until its department is named here:
+it cannot be found by search, cannot be reached through a regimen template, and
+cannot be fetched by typing its code. A comment saying "needs review" is not a
+control, and a regimen nobody has approved should not be one click from a
+patient. The API says which departments are waiting at `GET /api/v1/config` and
+again in the startup log, every boot.
+
+Two things the gate deliberately does not touch. A prescription already issued
+stays readable — hiding the drug afterwards would make an old prescription
+unreadable and helps nobody. And the interaction and duplicate checks resolve
+drafted entries too: a safety warning that is missing while content awaits
+review would be missing exactly when it is most needed.
+
+```ini
+# After the gastroenterologist has been through the formulary
+APPROVED_FORMULARY=orthopedics,gynecology,gastroenterology
+```
+
 Two behaviours worth knowing. A module whose parent is off is dropped and the
 startup log says so, so `diet` without `ipd` is not a half-working kitchen
 sheet. And a name that is not a module stops the boot rather than quietly
