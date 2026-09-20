@@ -13,7 +13,7 @@ import { BedDouble, Loader2, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { BedStatus, WardBoard, WardType } from "@/lib/types/ipd";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
-import type { Department } from "@/lib/types/core";
+import { DEPARTMENTS } from "@/lib/types/core";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -152,7 +152,7 @@ export function WardsAndBeds({ canEdit }: { canEdit: boolean }) {
                 <select className={SELECT} value={wardForm.department}
                         onChange={(event) => set({ department: event.target.value })}>
                   <option value="">Any department</option>
-                  {(["orthopedics", "gynecology"] as Department[]).map((dept) => (
+                  {DEPARTMENTS.map((dept) => (
                     <option key={dept} value={dept}>{DEPARTMENT_LABEL[dept] ?? dept}</option>
                   ))}
                 </select>

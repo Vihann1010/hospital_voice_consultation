@@ -11,13 +11,13 @@ from typing import AsyncIterator, Optional
 
 from app.ai.pipeline.base_service import parse_json_object
 from app.ai.pipeline.schemas import ConversationTurnPlan
-from app.ai.prompts import GYNECOLOGY_GUIDE, ORTHOPEDIC_GUIDE
+from app.ai.prompts import GENERIC_DOCTOR
 from app.ai.providers.factory import LLMGateway, get_gateway
 from app.ai.session.memory import ConversationMemory
 from app.ai.streaming_json import UtteranceStreamExtractor
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.models.enums import Department
+from app.departments import profile_for
 
 logger = get_logger(__name__)
 
@@ -38,16 +38,16 @@ Reply with EXACTLY one JSON object, nothing else, with the keys IN THIS ORDER ("
 
 def _persona(memory: ConversationMemory) -> str:
     dept = memory.department
-    guide = ORTHOPEDIC_GUIDE if dept == Department.ORTHOPEDICS else GYNECOLOGY_GUIDE
-    doctor = "Dr. A K Agarwal" if dept == Department.ORTHOPEDICS else "Dr. Manisha Agarwal"
+    profile = profile_for(dept)
+    doctor = memory.doctor_name or GENERIC_DOCTOR
     p = memory.patient_info
     return f"""You are the voice intake assistant of Satya Hospital, preparing {doctor}'s next consultation. You are on a live voice call; everything in "utterance" is spoken aloud.
 
-Registered patient: {p.get('name')} — age {p.get('age')}, gender {p.get('gender')}, department {dept.value}.
+Registered patient: {p.get('name')} — age {p.get('age')}, gender {p.get('gender')}, department {profile.label}.
 
 Style: a kind, experienced nurse. One question at a time. Acknowledge before asking. Mirror the patient's language (Hindi / Hinglish / simple Indian English). Never repeat an already-answered question — the checklist below shows what is already collected. Probe a vague answer once, then move on. Never diagnose or prescribe; say the doctor will advise after seeing them.
 
-{guide}"""
+{profile.intake_guide}"""
 
 
 def _turn_directive(memory: ConversationMemory) -> str:

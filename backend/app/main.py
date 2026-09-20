@@ -1,7 +1,8 @@
 """Satya Hospital AI Platform — API entrypoint.
 
 Startup order matters and is deliberate:
-  1. validate configuration (refuse to boot production with shipped defaults)
+  1. validate configuration (refuse to boot production with shipped defaults,
+     and refuse to serve a department that is only half configured)
   2. verify the schema is migrated — the app no longer creates tables itself
   3. seed accounts, warm the cache backend, start background workers
   4. only then mark the node ready, so the load balancer sends no traffic to a
@@ -35,6 +36,7 @@ from app.core.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.db.session import AsyncSessionLocal, engine
+from app.departments import validate_department_config
 from app.messaging.factory import close_provider, get_provider
 from app.services.auth_service import seed_default_users
 from app.services.delivery_service import retry_worker
@@ -71,6 +73,9 @@ async def _verify_schema() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     assert_production_ready(settings)
+    # Before anything else clinical: every department must be fully configured.
+    # A half-configured one screens no red flags, and does it silently.
+    validate_department_config()
     await _verify_schema()
 
     async with AsyncSessionLocal() as session:

@@ -21,6 +21,7 @@ from app.core.logging import get_logger
 from app.core.security import TOKEN_TYPE_CONSULTATION, decode_token
 from app.db.session import AsyncSessionLocal
 from app.models.enums import ConsultationStatus, TurnRole
+from app.services.consultant_directory import department_doctor_name
 from app.services.consultation_service import ConsultationService
 
 logger = get_logger(__name__)
@@ -54,6 +55,9 @@ async def consultation_socket(
         if consultation.status != ConsultationStatus.IN_PROGRESS:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        # Read once, here, while the session is open: the assistant names the
+        # doctor out loud, and that name belongs to the consultant register.
+        doctor_name = await department_doctor_name(session, consultation.department)
 
     send_failures: dict = {}
 
@@ -109,6 +113,7 @@ async def consultation_socket(
         send_audio=send_audio,
         record_turn=record_turn,
         save_medical_json=save_medical_json,
+        doctor_name=doctor_name,
     )
 
     ended_by_patient = False

@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from app.ai.providers.base import CostLedger
 from app.core.config import settings
+from app.departments import require_department
 from app.models.enums import Department
 
 # ---------------------------------------------------------------------------
@@ -59,6 +60,13 @@ DEPARTMENT_SLOTS: Dict[Department, List[SlotSpec]] = {
         SlotSpec("obstetric_history", "Pregnancies, deliveries, miscarriages", False),
         SlotSpec("associated_symptoms", "Discharge, urinary symptoms, pelvic pain pattern", False),
     ],
+    Department.GASTROENTEROLOGY: [
+        SlotSpec("pain_site", "Where in the abdomen, and whether it radiates", False),
+        SlotSpec("relation_to_food", "Before or after eating, which foods, night pain", False),
+        SlotSpec("bowel_habit", "Frequency, recent change, stool appearance, blood", False),
+        SlotSpec("appetite_weight", "Appetite, and any unintended weight loss", False),
+        SlotSpec("endoscopy_history", "Previous endoscopy, colonoscopy, USG or liver tests", False),
+    ],
 }
 
 
@@ -73,8 +81,14 @@ class Slot:
         return bool(self.value and self.value.strip())
 
 
+def slots_for(department: Department) -> List[SlotSpec]:
+    """Common slots plus the department's own, or raise if it has none."""
+    specific = require_department(DEPARTMENT_SLOTS, department, "intake slot checklist")
+    return COMMON_SLOTS + specific
+
+
 def slot_keys_for(department: Department) -> List[str]:
-    return [s.key for s in COMMON_SLOTS + DEPARTMENT_SLOTS[department]]
+    return [s.key for s in slots_for(department)]
 
 
 # ---------------------------------------------------------------------------
@@ -96,13 +110,19 @@ class ConversationMemory:
         consultation_id: uuid.UUID,
         department: Department,
         patient_info: Dict[str, Any],
+        doctor_name: Optional[str] = None,
     ) -> None:
         self.consultation_id = consultation_id
         self.department = department
         self.patient_info = patient_info
+        # Who the patient is being prepared for, resolved from the consultant
+        # register at session start. None when the department has no single
+        # consultant on it; the prompts then say "the doctor" rather than
+        # naming somebody who is not in today.
+        self.doctor_name = doctor_name
         self.turns: List[Turn] = []
         self.slots: Dict[str, Slot] = {
-            spec.key: Slot(spec) for spec in COMMON_SLOTS + DEPARTMENT_SLOTS[department]
+            spec.key: Slot(spec) for spec in slots_for(department)
         }
         self.symptoms: List[Dict[str, Any]] = []
         self.deterministic_flags: List[str] = []

@@ -14,7 +14,7 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { Consultant } from "@/lib/types/appointments";
 import type { ServiceItem } from "@/lib/types/emr";
-import type { Department, User } from "@/lib/types/core";
+import { DEPARTMENTS, type Department, type User } from "@/lib/types/core";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const SELECT = "h-9 rounded-md border border-border bg-white px-2 text-sm text-ink";
-const DEPARTMENTS: Department[] = ["orthopedics", "gynecology"];
 const DAYS: [string, string][] = [["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["7", "Sun"]];
 
 interface ConsultantForm {

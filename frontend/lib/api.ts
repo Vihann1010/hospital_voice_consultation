@@ -28,7 +28,11 @@ export const API_URL = resolveApiUrl();
 export const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? API_URL.replace(/^http/, "ws");
 
-export type Department = "orthopedics" | "gynecology";
+// Re-exported, never redefined: two copies of this union drift apart.
+import { DEPARTMENTS, type Department } from "@/lib/types/core";
+
+export { DEPARTMENTS };
+export type { Department };
 export type Gender = "male" | "female" | "other";
 
 export interface StartConsultationRequest {

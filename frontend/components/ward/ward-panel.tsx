@@ -28,7 +28,8 @@ import { formatINR, rupeesToPaise } from "@/lib/types/emr";
 import type { PaymentMode } from "@/lib/types/emr";
 import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
 import { ADVANCE_MODES, TakeAdvance, openWalletReceipt } from "@/components/ipd/take-advance";
-import type { Department, Gender } from "@/lib/types/core";
+import { DEPARTMENTS, type Department, type Gender } from "@/lib/types/core";
+import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -264,7 +265,9 @@ function AdmitSheet({
           <label className="field-label" htmlFor="ad-dept">Department</label>
           <select id="ad-dept" value={department} className="field-input"
                   onChange={(e) => setDepartment(e.target.value as Department)}>
-            <option value="orthopedics">Trauma &amp; Orthopedics</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
+            ))}
             <option value="gynecology">Maternity &amp; Gynecology</option>
           </select>
         </div>

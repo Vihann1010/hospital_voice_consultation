@@ -17,8 +17,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { ConsultationDetail, ConsultationListItem, Department } from "@/lib/types/core";
-import { formatDate } from "@/lib/format";
+import { DEPARTMENTS, type ConsultationDetail, type ConsultationListItem, type Department } from "@/lib/types/core";
+import { DEPARTMENT_LABEL, formatDate } from "@/lib/format";
 import type { QueuedPatient } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -174,11 +174,10 @@ export function IntakeQueue() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {([
-          { value: "all", label: "Everyone" },
-          { value: "orthopedics", label: "Orthopedics" },
-          { value: "gynecology", label: "Gynecology" },
-        ] as const).map((option) => (
+        {[
+          { value: "all" as const, label: "Everyone" },
+          ...DEPARTMENTS.map((d) => ({ value: d, label: DEPARTMENT_LABEL[d] ?? d })),
+        ].map((option) => (
           <button
             key={option.value}
             onClick={() => setDepartment(option.value)}
@@ -241,7 +240,7 @@ export function IntakeQueue() {
                       {entry.patient.uhid}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-ink-faint">
-                      {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                      {DEPARTMENT_LABEL[entry.department] ?? entry.department}
                       {entry.doctor_name ? ` · ${entry.doctor_name}` : ""}
                     </p>
                   </div>
@@ -293,7 +292,7 @@ export function IntakeQueue() {
                       {entry.patient?.name ?? "Registered patient"}
                     </p>
                     <p className="truncate text-sm text-ink-muted">
-                      {entry.patient?.phone_number ?? ""} · {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                      {entry.patient?.phone_number ?? ""} · {DEPARTMENT_LABEL[entry.department] ?? entry.department}
                     </p>
                   </div>
                   <p className="hidden text-right text-xs text-ink-faint sm:block">

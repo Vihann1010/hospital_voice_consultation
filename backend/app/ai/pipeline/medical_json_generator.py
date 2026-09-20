@@ -11,6 +11,7 @@ from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import MedicalRecord
 from app.ai.providers.base import CostLedger
 from app.ai.session.memory import ConversationMemory
+from app.departments import profile_for
 
 
 class MedicalJSONGeneratorService(BaseAIService[MedicalRecord]):
@@ -23,16 +24,16 @@ class MedicalJSONGeneratorService(BaseAIService[MedicalRecord]):
     async def generate(
         self, memory: ConversationMemory, *, ledger: Optional[CostLedger] = None
     ) -> MedicalRecord:
+        profile = profile_for(memory.department)
         system = (
             "You are the clinical documentation model of Satya Hospital "
-            f"({memory.department.value} department). Build the patient's structured medical "
+            f"({profile.label} department). Build the patient's structured medical "
             "record from the collected data below. Rules: never invent facts; use null/empty "
             "for anything not stated; convert weight to kilograms and height to centimeters "
             "when given in other units; numbers must be numbers, not strings. "
-            "`department_specific` holds structured findings for this department (e.g. "
-            "affected_joint, injury_history, imaging_done for orthopedics; "
-            "last_menstrual_period, cycle_regularity, obstetric_history, pregnancy_possible "
-            "for gynecology). `red_flags` must include every flag listed in the input."
+            "`department_specific` holds structured findings for this department "
+            f"({profile.extraction_fields}). "
+            "`red_flags` must include every flag listed in the input."
         )
         collected = {
             "patient": memory.patient_info,

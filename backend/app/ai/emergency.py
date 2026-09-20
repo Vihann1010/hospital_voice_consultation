@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import List
 
+from app.departments import require_department
 from app.models.enums import Department
 
 _FLAGS = [
@@ -62,7 +63,11 @@ _FLAGS = [
     ),
 ]
 
-_DEPARTMENT_FLAGS = {
+# Keyed by department and read through require_department: a department with no
+# block here raises rather than screening against nothing. An empty red-flag
+# list is indistinguishable from "no emergency", which is the one mistake this
+# module must never make.
+DEPARTMENT_FLAGS = {
     Department.ORTHOPEDICS: [
         (
             "open_or_deformed_fracture",
@@ -115,12 +120,58 @@ _DEPARTMENT_FLAGS = {
             r"|menopause.{0,35}(bleed|khoon|spotting)",
         ),
     ],
+    Department.GASTROENTEROLOGY: [
+        (
+            "gi_bleeding",
+            r"(vomit\w*|throw\w*\s+up|ulti|उल्टी)\s*.{0,25}(blood|khoon|खून)"
+            r"|(blood|khoon|खून)\s*.{0,25}(vomit|ulti|उल्टी)"
+            r"|coffee\s*ground"
+            r"|(black|tarry|kal[ai])\s*(stool|motion|shauch|tatti|पाखाना|मल)"
+            r"|(stool|motion|shauch|tatti|पाखाना|मल)s?\s*"
+            r"(is\s+|are\s+|was\s+|were\s+|ho\s+raha\s+hai\s+|hai\s+)?"
+            r"(very\s+|bilkul\s+)?(black|tarry|kal[ai])"
+            r"|mel(a?ena|aena)"
+            r"|(stool|motion|shauch|latrine|tatti|पाखाना|मल)\s*.{0,25}(blood|khoon|खून)"
+            r"|(blood|khoon|खून)\s*.{0,25}(stool|motion|shauch|latrine|tatti|पाखाना|मल)"
+            r"|rectal\s+bleed|bleeding\s+from\s+(the\s+)?(back\s+passage|anus)"
+            r"|शौच\s*.{0,15}खून|काला\s*(पाखाना|मल)",
+        ),
+        (
+            "bowel_obstruction",
+            r"(not\s+passing|unable\s+to\s+pass|no)\s*(gas|wind|stool|motion)"
+            r"|(gas|wind)\s*(and|or)?\s*(stool|motion)\s*.{0,15}(not\s+passing|band|nahi)"
+            r"|(stomach|pet|abdomen|पेट)\s*.{0,15}(swollen|distend|phool|फूल)"
+            r"|(continuous|constant|repeated|baar\s*baar)\s+vomit"
+            r"|पेट\s*.{0,15}फूल|गैस\s*.{0,15}नहीं",
+        ),
+        (
+            "severe_epigastric_pain",
+            r"(severe|unbearable|worst|bahut\s*tez|असहनीय|तेज़?)\s*.{0,18}"
+            r"(stomach|abdominal|abdomen|epigastric|pet|पेट)\s*(pain|dard|दर्द)"
+            r"|(stomach|abdominal|pet|पेट)\s*(pain|dard|दर्द)\s*.{0,25}"
+            r"(going|radiat\w*|spread\w*|jata|जाता)\s*.{0,12}(back|peeth|पीठ)",
+        ),
+        (
+            "jaundice",
+            r"(eyes?|skin|aankh\w*|आंख\w*|आँख\w*)\s*.{0,18}(yellow|peel[ai]|पील[ेाी])"
+            r"|(yellow|peel[ai]|पील[ेाी])\s*.{0,18}(eyes?|skin|aankh|आंख|आँख)"
+            r"|jaundice|piliya|पीलिया"
+            r"|urine\s*.{0,15}(very\s+)?dark|peshab\s*.{0,12}(gadha|kala)",
+        ),
+        (
+            "dysphagia",
+            r"(can'?t|cannot|unable\s+to|not\s+able\s+to|difficult\w*|nahi)\s*.{0,18}"
+            r"(swallow|nigal|निगल)"
+            r"|(food|khana|खाना)\s*.{0,18}(stuck|atk|अटक)"
+            r"|(swallow|nigal|निगल)\w*\s*.{0,15}(pain|dard|दर्द|mushkil|मुश्किल)",
+        ),
+    ],
 }
 
 _COMPILED = [(flag, re.compile(pattern, re.IGNORECASE)) for flag, pattern in _FLAGS]
 _COMPILED_DEPT = {
     dept: [(flag, re.compile(pattern, re.IGNORECASE)) for flag, pattern in flags]
-    for dept, flags in _DEPARTMENT_FLAGS.items()
+    for dept, flags in DEPARTMENT_FLAGS.items()
 }
 
 
@@ -136,7 +187,10 @@ class ScreenResult:
 def screen_utterance(text: str, department: Department) -> ScreenResult:
     """Screen one utterance for emergency red flags. Pure, fast, no I/O."""
     hits: List[str] = []
-    for flag, pattern in _COMPILED + _COMPILED_DEPT.get(department, []):
+    department_patterns = require_department(
+        _COMPILED_DEPT, department, "emergency red flags"
+    )
+    for flag, pattern in _COMPILED + department_patterns:
         if pattern.search(text) and flag not in hits:
             hits.append(flag)
     return ScreenResult(flags=hits)

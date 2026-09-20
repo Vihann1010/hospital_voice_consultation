@@ -10,6 +10,7 @@ from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import ClinicalSummary, MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
 from app.ai.session.memory import ConversationMemory
+from app.departments import label_for
 
 
 class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
@@ -27,11 +28,11 @@ class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
         *,
         ledger: Optional[CostLedger] = None,
     ) -> ClinicalSummary:
-        doctor = (
-            "Dr. A K Agarwal (Orthopedics)"
-            if memory.department.value == "orthopedics"
-            else "Dr. Manisha Agarwal (Gynecology)"
-        )
+        # Named from the consultant register, never from a hardcoded pair —
+        # the old version handed every non-orthopedic patient to the
+        # gynaecologist, whatever department they had actually come to.
+        label = label_for(memory.department)
+        doctor = f"{memory.doctor_name} ({label})" if memory.doctor_name else f"the {label} consultant"
         system = (
             f"You write pre-consultation clinical summaries for {doctor} at Satya Hospital. "
             "Audience: the treating doctor, seconds before walking in. Style: precise clinical "

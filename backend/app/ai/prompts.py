@@ -1,39 +1,28 @@
-"""Prompt library for the intake assistant and the extraction model."""
+"""Prompt library for the intake assistant and the extraction model.
+
+The department-specific parts of these prompts — what to ask about, what counts
+as a red flag — live in ``app.departments``, not here, so that one file is the
+whole answer to "what does this installation need to know about a speciality".
+The doctor's name is passed in from the consultant register rather than written
+into a prompt: the hospital maintains it there, and a name hardcoded here goes
+stale the day a consultant changes.
+"""
+from typing import Optional
+
+from app.departments import profile_for
 from app.models.enums import Department, Gender
 from app.models.patient import Patient
 
-ORTHOPEDIC_GUIDE = """
-Department-specific areas to cover naturally (Orthopedics — Dr. A K Agarwal):
-- Exact location of the pain or problem (joint, bone, muscle, back region).
-- Nature of pain: sharp, dull, throbbing, radiating; pain score 1-10.
-- What makes it better or worse: rest, movement, position, time of day.
-- Any injury, fall or accident that started it.
-- Swelling, redness, warmth, stiffness, locking, clicking or giving-way.
-- Morning stiffness and its duration; difficulty walking, climbing stairs, gripping.
-- Numbness, tingling or weakness in limbs.
-- Previous fractures, joint problems, physiotherapy, injections or implants.
-- X-rays, MRI or other scans already done.
-"""
-
-GYNECOLOGY_GUIDE = """
-Department-specific areas to cover naturally (Gynecology — Dr. Manisha Agarwal):
-- Menstrual history: last period date, cycle regularity, duration, flow, pain.
-- Any chance of current pregnancy; obstetric history (pregnancies, deliveries, miscarriages) — ask gently.
-- Unusual discharge, itching, burning, or pain during urination.
-- Pelvic or lower abdominal pain and its relation to the cycle.
-- Contraception currently used, if any.
-- Menopause status where age-appropriate; any bleeding after menopause.
-- Breast symptoms: lumps, pain, discharge.
-- Previous gynecological procedures, surgeries or ultrasounds.
-Be especially respectful and unhurried with these questions.
-"""
+# Said instead of a name when the department has no single consultant on the
+# register — better a warm generic than the wrong doctor's name.
+GENERIC_DOCTOR = "the doctor"
 
 
-def build_intake_system_prompt(patient: Patient, department: Department) -> str:
-    guide = ORTHOPEDIC_GUIDE if department == Department.ORTHOPEDICS else GYNECOLOGY_GUIDE
-    doctor = (
-        "Dr. A K Agarwal" if department == Department.ORTHOPEDICS else "Dr. Manisha Agarwal"
-    )
+def build_intake_system_prompt(
+    patient: Patient, department: Department, doctor_name: Optional[str] = None
+) -> str:
+    guide = profile_for(department).intake_guide
+    doctor = doctor_name or GENERIC_DOCTOR
     pronoun_note = ""
     if patient.gender == Gender.MALE and department == Department.GYNECOLOGY:
         pronoun_note = (
@@ -92,8 +81,7 @@ Schema (use null for anything not yet mentioned; never invent facts):
 }
 
 "department_specific" holds structured findings for the department in question
-(e.g. affected_joint, injury_history, imaging_done for orthopedics; last_menstrual_period,
-cycle_regularity, obstetric_history, pregnancy_possible for gynecology).
+(the department's own fields are named in the user prompt).
 Numbers must be numbers, not strings. Convert weight to kilograms and height to centimeters
 when the patient states them in other units."""
 

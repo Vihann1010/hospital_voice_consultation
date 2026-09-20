@@ -2,27 +2,29 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { startConsultation, type Department, type Gender } from "@/lib/api";
+import { startConsultation, DEPARTMENTS, type Department, type Gender } from "@/lib/api";
+import { DEPARTMENT_LABEL } from "@/lib/format";
 
-const DEPARTMENTS: {
-  value: Department;
-  label: string;
-  doctor: string;
-  blurb: string;
-}[] = [
-  {
-    value: "orthopedics",
-    label: "Orthopedics",
-    doctor: "Dr. A K Agarwal",
-    blurb: "Bones, joints, back pain, injuries",
-  },
-  {
-    value: "gynecology",
-    label: "Gynecology",
-    doctor: "Dr. Manisha Agarwal",
-    blurb: "Women's health, pregnancy care, cycles",
-  },
-];
+/** One line telling a patient what the department is for, in their words. */
+const DEPARTMENT_BLURB: Record<string, string> = {
+  orthopedics: "Bones, joints, back pain, injuries",
+  gynecology: "Women's health, pregnancy care, cycles",
+  gastroenterology: "Stomach, digestion, liver, acidity",
+};
+
+/** The departments a patient can walk in and pick from.
+ *
+ * The doctor's name used to be printed on each card. It was hardcoded, so it
+ * was wrong the moment a consultant changed and wrong from the start at a
+ * clinic that never employed them — and this screen is unauthenticated, so it
+ * cannot read the consultant register. The department and what it covers is
+ * what the patient actually needs to choose correctly. */
+const DEPARTMENT_CHOICES: { value: Department; label: string; blurb: string }[] =
+  DEPARTMENTS.map((value) => ({
+    value,
+    label: DEPARTMENT_LABEL[value] ?? value,
+    blurb: DEPARTMENT_BLURB[value] ?? "",
+  }));
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "female", label: "Female" },
@@ -163,7 +165,7 @@ export default function IntakePage() {
           <fieldset>
             <legend className="field-label">Department</legend>
             <div className="grid gap-3 sm:grid-cols-2">
-              {DEPARTMENTS.map((d) => {
+              {DEPARTMENT_CHOICES.map((d) => {
                 const selected = department === d.value;
                 return (
                   <button
@@ -179,9 +181,6 @@ export default function IntakePage() {
                   >
                     <span className="block font-display text-[15px] font-semibold">
                       {d.label}
-                    </span>
-                    <span className={`block text-xs ${selected ? "text-mint/80" : "text-ink-muted"}`}>
-                      {d.doctor}
                     </span>
                     <span className={`mt-1 block text-xs ${selected ? "text-mint/70" : "text-ink-faint"}`}>
                       {d.blurb}

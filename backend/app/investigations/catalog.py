@@ -24,7 +24,7 @@ class Investigation:
     preparation: Optional[str] = None
     turnaround: Optional[str] = None
     analytes: List[str] = field(default_factory=list)   # canonical reference-range keys
-    departments: List[Department] = field(default_factory=list)  # empty = both
+    departments: List[Department] = field(default_factory=list)  # empty = every department
     note: Optional[str] = None
 
 

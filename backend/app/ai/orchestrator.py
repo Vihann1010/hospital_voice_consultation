@@ -54,10 +54,14 @@ class VoiceSession:
         send_audio: SendBytes,
         record_turn: RecordTurn,
         save_medical_json: SaveMedicalJson,
+        doctor_name: Optional[str] = None,
     ) -> None:
         self.consultation_id: uuid.UUID = consultation.id
         self.department = consultation.department
         self.patient = patient
+        # Resolved from the consultant register by the caller, which has the
+        # database session. None when the department has no single consultant.
+        self.doctor_name = doctor_name
         self.previous_turns = previous_turns
         self.send_json = send_json
         self.send_audio = send_audio
@@ -99,6 +103,7 @@ class VoiceSession:
                 "gender": self.patient.gender.value,
                 "phone_number": self.patient.phone_number,
             },
+            doctor_name=self.doctor_name,
         )
         for turn in self.previous_turns:  # rebuild context after a reconnect
             if turn.role == TurnRole.PATIENT:

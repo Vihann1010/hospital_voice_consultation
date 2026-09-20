@@ -15,6 +15,7 @@ import {
 import { staffApi } from "@/lib/staffApi";
 import type { CollectionSummary } from "@/lib/types/emr";
 import { formatINR } from "@/lib/types/emr";
+import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,9 +189,7 @@ export function FinanceDashboard() {
                     {Object.entries(summary.by_department).map(([department, amount]) => (
                       <li key={department} className="flex items-center justify-between text-sm">
                         <span className="capitalize text-ink">
-                          {department === "orthopedics"
-                            ? "Trauma & Orthopedics"
-                            : "Maternity & Gynecology"}
+                          {DEPARTMENT_FULL_LABEL[department] ?? department}
                         </span>
                         <span className="tabular font-medium text-ink">
                           {formatINR(amount)}

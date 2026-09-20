@@ -12,7 +12,7 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { ServiceCategory, ServiceItem } from "@/lib/types/emr";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
-import type { Department } from "@/lib/types/core";
+import { DEPARTMENTS } from "@/lib/types/core";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
                 <select className={SELECT} value={form.department}
                         onChange={(event) => set({ department: event.target.value })}>
                   <option value="">Any department</option>
-                  {(["orthopedics", "gynecology"] as Department[]).map((dept) => (
+                  {DEPARTMENTS.map((dept) => (
                     <option key={dept} value={dept}>{DEPARTMENT_LABEL[dept] ?? dept}</option>
                   ))}
                 </select>

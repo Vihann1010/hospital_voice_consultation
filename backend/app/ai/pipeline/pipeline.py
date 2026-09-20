@@ -32,6 +32,7 @@ from app.ai.pipeline.symptom_extractor import SymptomExtractorService
 from app.ai.providers.factory import LLMGateway, get_gateway
 from app.ai.session.memory import ConversationMemory
 from app.core.logging import get_logger
+from app.departments import profile_for
 from app.models.enums import Department
 
 logger = get_logger(__name__)
@@ -39,16 +40,7 @@ logger = get_logger(__name__)
 
 def fallback_patient_education(department: Department) -> PatientEducation:
     """Return safe two-line Hindi guidance when the education model is unavailable."""
-    if department == Department.ORTHOPEDICS:
-        instructions = [
-            "दर्द वाले अंग को आराम दें और उसे अनावश्यक दबाव या चोट से बचाएं।",
-            "अपनी सभी जांच रिपोर्ट साथ लाएं और डॉक्टर की सलाह के बिना दवा शुरू या बंद न करें।",
-        ]
-    else:
-        instructions = [
-            "आराम करें, पर्याप्त पानी पिएं और अपनी जांच रिपोर्ट तथा दवाओं की सूची साथ लाएं।",
-            "तेज दर्द, अधिक रक्तस्राव, चक्कर या सांस लेने में परेशानी हो तो तुरंत अस्पताल जाएं।",
-        ]
+    instructions = list(profile_for(department).fallback_self_care)
     return PatientEducation(language="hi", general_self_care=instructions)
 
 

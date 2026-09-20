@@ -1,6 +1,13 @@
 /** Shared contracts mirroring the backend Pydantic schemas. */
 
-export type Department = "orthopedics" | "gynecology";
+/** The departments this installation runs, in the order they are offered.
+ *
+ * This array is the single source: the type is derived from it, and every
+ * dropdown maps over it. Screens used to spell the pair out inline, which is
+ * why a third department had to be added in fourteen files and was silently
+ * missing from the ones nobody remembered. Labels live in lib/format.ts. */
+export const DEPARTMENTS = ["orthopedics", "gynecology", "gastroenterology"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
 export type Gender = "male" | "female" | "other";
 export type ConsultationStatus = "in_progress" | "completed" | "abandoned";
 export type RiskLevel = "low" | "moderate" | "high" | "critical";

@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.departments import code_for, label_for
 from app.messaging.base import OutboundDocument
 from app.models.enums import (
     DeliveryChannel,
@@ -35,11 +36,10 @@ from app.services.delivery_service import DeliveryService
 
 logger = get_logger(__name__)
 
-DEPARTMENT_LABELS = {
-    Department.ORTHOPEDICS: "Orthopedics",
-    Department.GYNECOLOGY: "Gynecology",
-}
-DEPARTMENT_CODES = {Department.ORTHOPEDICS: "ORT", Department.GYNECOLOGY: "GYN"}
+# Both come from the department registry, so a new speciality cannot end up
+# numbering its prescriptions under another department's code.
+DEPARTMENT_LABELS = {d: label_for(d) for d in Department}
+DEPARTMENT_CODES = {d: code_for(d) for d in Department}
 
 
 class PrescriptionError(Exception):

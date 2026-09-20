@@ -12,6 +12,7 @@ pytestmark = pytest.mark.unit
 
 ORTHO = Department.ORTHOPEDICS
 GYN = Department.GYNECOLOGY
+GASTRO = Department.GASTROENTEROLOGY
 
 
 @pytest.mark.parametrize(
@@ -31,6 +32,18 @@ GYN = Department.GYNECOLOGY
         ("bleeding after menopause for two weeks", GYN, "postmenopausal_bleeding"),
         ("I feel like I want to kill myself", GYN, "suicidal_ideation"),
         ("she became unconscious for a minute", ORTHO, "loss_of_consciousness"),
+        ("I vomited blood this morning", GASTRO, "gi_bleeding"),
+        ("ulti mein khoon aaya", GASTRO, "gi_bleeding"),
+        ("my stool is black and tarry since two days", GASTRO, "gi_bleeding"),
+        ("black stool since yesterday", GASTRO, "gi_bleeding"),
+        ("melaena for three days", GASTRO, "gi_bleeding"),
+        ("there is blood in my motion", GASTRO, "gi_bleeding"),
+        ("pet phool gaya hai aur gas nahi nikal rahi", GASTRO, "bowel_obstruction"),
+        ("severe stomach pain going to the back", GASTRO, "severe_epigastric_pain"),
+        ("my eyes have turned yellow and urine is very dark", GASTRO, "jaundice"),
+        ("aankhein peeli ho gayi hain", GASTRO, "jaundice"),
+        ("food gets stuck when I swallow", GASTRO, "dysphagia"),
+        ("मुझे सीने में दर्द हो रहा है", GASTRO, "chest_pain"),
     ],
 )
 def test_detects_red_flags(utterance, department, expected_flag):
@@ -48,6 +61,12 @@ def test_detects_red_flags(utterance, department, expected_flag):
         ("My periods are irregular and painful for six months", GYN),
         ("White discharge for two weeks, no fever", GYN),
         ("I take metformin for sugar and have a mild cold", ORTHO),
+        ("I get acidity after eating spicy food", GASTRO),
+        ("loose motions for two days after a wedding meal", GASTRO),
+        ("khana khane ke baad pet bhari lagta hai", GASTRO),
+        ("constipation since a month, no bleeding", GASTRO),
+        # "black" next to "motion" is not enough on its own.
+        ("my motion is normal and black tea in the morning", GASTRO),
     ],
 )
 def test_routine_complaints_do_not_trigger(utterance, department):
@@ -59,6 +78,31 @@ def test_department_specific_flags_are_scoped():
     """An obstetric flag must not fire in an orthopedic consultation."""
     result = screen_utterance("baby is not moving since yesterday", ORTHO)
     assert "reduced_fetal_movement" not in result.flags
+
+
+def test_gastro_flags_do_not_fire_in_other_departments():
+    """A GI flag belongs to the GI consultation, like every other scoped flag."""
+    assert "gi_bleeding" not in screen_utterance("blood in my motion", ORTHO).flags
+
+
+def test_unconfigured_department_raises_rather_than_passing_everything():
+    """The failure this module must never have: screening against nothing.
+
+    A department with no red-flag block used to return an empty list, which is
+    indistinguishable from "no emergency found". It now raises.
+    """
+    import app.ai.emergency as emergency
+    from app.departments import DepartmentNotConfigured
+
+    original = emergency._COMPILED_DEPT
+    emergency._COMPILED_DEPT = {
+        d: v for d, v in original.items() if d is not Department.GASTROENTEROLOGY
+    }
+    try:
+        with pytest.raises(DepartmentNotConfigured):
+            screen_utterance("I vomited blood this morning", GASTRO)
+    finally:
+        emergency._COMPILED_DEPT = original
 
 
 def test_multiple_flags_are_all_reported():

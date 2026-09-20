@@ -114,12 +114,33 @@ export function titleCase(value?: string | null): string {
 export const DEPARTMENT_LABEL: Record<string, string> = {
   orthopedics: "Orthopedics",
   gynecology: "Gynecology",
+  gastroenterology: "Gastroenterology",
 };
 
-export const DEPARTMENT_DOCTOR: Record<string, string> = {
-  orthopedics: "Dr. A K Agarwal",
-  gynecology: "Dr. Manisha Agarwal",
+/** The hospital's own name for the department, used on the dropdowns where
+ * staff pick one. Kept separate from the short label, which is what fits in a
+ * table cell. */
+export const DEPARTMENT_FULL_LABEL: Record<string, string> = {
+  orthopedics: "Trauma & Orthopedics",
+  gynecology: "Maternity & Gynecology",
+  gastroenterology: "Gastroenterology",
 };
+
+/** Three letters used in visit and prescription numbers.
+ *
+ * Mirrors DepartmentProfile.code in backend/app/departments.py. Both sides
+ * print the same number for the same visit, so the two must not drift; the
+ * backend is the authority if they ever do. */
+export const DEPARTMENT_CODE: Record<string, string> = {
+  orthopedics: "ORT",
+  gynecology: "GYN",
+  gastroenterology: "GAS",
+};
+
+/** Doctor names are NOT listed here. They belong to the consultant register,
+ * which is where the hospital maintains them; a name hardcoded in the frontend
+ * is wrong the day a consultant changes, and wrong from the start in a clinic
+ * that never employed them. */
 
 /** The hospital's own clock.
  *

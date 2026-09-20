@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Clock, Loader2, Mic, Save } from "lucide-react";
 import { useConsultation } from "@/lib/hooks/useConsultation";
 import type { QueuedPatient } from "@/lib/types/emr";
 import type { ConsultationDetail, MedicalRecord } from "@/lib/types/core";
+import { DEPARTMENT_LABEL } from "@/lib/format";
 import { staffApi } from "@/lib/staffApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,7 +144,7 @@ export function LiveIntakeWorkspace({
         <div className="min-w-0">
           <h1 className="truncate font-display text-lg font-semibold text-pine">{patient.patient.name}</h1>
           <p className="text-xs text-ink-muted">
-            {patient.patient.age} yrs · {patient.patient.gender} · {patient.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+            {patient.patient.age} yrs · {patient.patient.gender} · {DEPARTMENT_LABEL[patient.department] ?? patient.department}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">

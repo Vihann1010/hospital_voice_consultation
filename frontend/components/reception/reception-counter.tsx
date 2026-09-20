@@ -29,7 +29,8 @@ import {
   cleanModeDetails,
 } from "@/components/finance/payment-mode-fields";
 import { WalletPanel } from "@/components/finance/wallet-panel";
-import type { Department, Gender } from "@/lib/types/core";
+import { DEPARTMENTS, type Department, type Gender } from "@/lib/types/core";
+import { DEPARTMENT_CODE, DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -159,7 +160,7 @@ export function ReceptionCounter() {
   useEffect(() => {
     if (services.length === 0) return;
     const suffix = visitType === "new" ? "NEW" : "FUP";
-    const code = `OPD-${department === "orthopedics" ? "ORT" : "GYN"}-${suffix}`;
+    const code = `OPD-${DEPARTMENT_CODE[department] ?? "GEN"}-${suffix}`;
     const consultation = services.find((item) => item.code === code);
     if (!consultation) return;
 
@@ -695,7 +696,9 @@ export function ReceptionCounter() {
               <label className="field-label" htmlFor="rc-dept">Department</label>
               <select id="rc-dept" value={department} className="field-input"
                       onChange={(e) => setDepartment(e.target.value as Department)}>
-                <option value="orthopedics">Trauma &amp; Orthopedics</option>
+                {DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
+                ))}
                 <option value="gynecology">Maternity &amp; Gynecology</option>
               </select>
             </div>

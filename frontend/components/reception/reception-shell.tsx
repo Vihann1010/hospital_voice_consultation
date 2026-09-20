@@ -29,7 +29,7 @@ import { Logo } from "@/components/brand/logo";
 import { CashCounter } from "@/components/finance/cash-counter";
 import { staffApi } from "@/lib/staffApi";
 import type { Visit } from "@/lib/types/emr";
-import { formatFullDate } from "@/lib/format";
+import { DEPARTMENT_LABEL, formatFullDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -106,7 +106,7 @@ function TodaysQueue() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink">{visit.patient_name}</p>
                 <p className="truncate text-[11px] capitalize text-ink-faint">
-                  {visit.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                  {DEPARTMENT_LABEL[visit.department] ?? visit.department}
                   {" · "}
                   {visit.status.replace("_", " ")}
                 </p>

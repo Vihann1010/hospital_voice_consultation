@@ -25,8 +25,18 @@ class UserRole(str, enum.Enum):
 
 
 class Department(str, enum.Enum):
+    """The clinical departments this installation runs.
+
+    Adding a member here is only half the work: every department must also be
+    configured in ``app.departments`` (intake guide, red flags, slots, labels),
+    and the application refuses to start until it is. A department that exists
+    as an enum value but has no clinical content would screen no red flags and
+    silently hand the patient another speciality's intake questions.
+    """
+
     ORTHOPEDICS = "orthopedics"
     GYNECOLOGY = "gynecology"
+    GASTROENTEROLOGY = "gastroenterology"
 
 
 class Gender(str, enum.Enum):

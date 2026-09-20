@@ -12,22 +12,8 @@ from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
 from app.ai.session.memory import ConversationMemory
+from app.departments import profile_for
 
-_DEPT_RED_FLAG_GUIDE = {
-    "orthopedics": (
-        "Orthopedic red flags include: suspected open/deformed fracture, neurovascular "
-        "compromise (numb/cold/pulseless limb), cauda equina features (saddle anaesthesia, "
-        "urinary retention/incontinence with back pain), septic arthritis features (hot "
-        "swollen joint + fever), night pain with weight loss or cancer history, significant "
-        "trauma in the elderly, progressive neurological deficit."
-    ),
-    "gynecology": (
-        "Gynecological red flags include: pregnancy with bleeding or severe abdominal pain "
-        "(possible ectopic/miscarriage), reduced fetal movements, heavy bleeding with "
-        "dizziness/syncope, postmenopausal bleeding, fever with pelvic pain and discharge "
-        "(possible PID/sepsis), severe hyperemesis with dehydration."
-    ),
-}
 
 
 class RiskDetectionService(BaseAIService[RiskAssessment]):
@@ -44,10 +30,11 @@ class RiskDetectionService(BaseAIService[RiskAssessment]):
         *,
         ledger: Optional[CostLedger] = None,
     ) -> RiskAssessment:
-        guide = _DEPT_RED_FLAG_GUIDE.get(memory.department.value, "")
+        profile = profile_for(memory.department)
+        guide = profile.red_flag_guide
         system = (
             "You are a triage risk-assessment model for Satya Hospital's "
-            f"{memory.department.value} department. Grade risk conservatively but honestly — "
+            f"{profile.label} department. Grade risk conservatively but honestly — "
             "do not inflate routine complaints, do not miss dangerous combinations. "
             f"{guide} Deterministic screening already flagged: "
             f"{memory.deterministic_flags or 'none'} — evaluate each of these too. "

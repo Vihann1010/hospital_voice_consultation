@@ -12,7 +12,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
-import type { Department, StaffRole, User } from "@/lib/types/core";
+import { DEPARTMENTS, type Department, type StaffRole, type User } from "@/lib/types/core";
+import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -366,7 +367,9 @@ export default function StaffAccountsPage() {
                   value={department}
                   onChange={(e) => setDepartment(e.target.value as Department)}
                 >
-                  <option value="orthopedics">Trauma &amp; Orthopedics</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
+                  ))}
                   <option value="gynecology">Maternity &amp; Gynecology</option>
                 </select>
               </div>
