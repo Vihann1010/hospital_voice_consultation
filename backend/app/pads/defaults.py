@@ -29,8 +29,9 @@ Judgements worth stating, because they are clinical rather than technical:
   and flattening that into a document would lose exactly what the ward needs.
 """
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
+from app.models.enums import Department
 from app.pads import forms
 from app.theatre.rules import ANAESTHESIA_TYPES
 
@@ -659,18 +660,118 @@ PROTECTED_SECTIONS: Dict[str, Dict[str, List[str]]] = {
 }
 
 
+
+# ------------------------------------------------------- department layouts
+# A department may ship its own shape for a document, used when nobody has
+# saved a layout for it. This is not a fork of the pad: it is the same
+# sections, reordered and renamed to the way that speciality actually works,
+# with the ones that speciality always writes brought to the front.
+#
+# A layout here still goes through the same validation and the same protected
+# keys as one an administrator saves, and an administrator can still edit it
+# from the Pad layouts screen — this only decides where they start from.
+
+_OPD_VISIT_GASTRO: List[Dict[str, Any]] = [
+    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+     "ai_source": "intake_summary", "visible_in_print": True},
+    {"key": "complaints", "title": "Chief complaints", "kind": "list",
+     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
+    {"key": "history", "title": "History", "kind": "text",
+     "placeholder": "Onset, progression, relation to food, weight change"},
+    # The four questions a gastroenterologist asks every patient, as their own
+    # boxes rather than buried in free text: they are what the next visit is
+    # compared against, and a change in any of them is the reason to scope.
+    {
+        "key": "gi_symptoms",
+        "title": "GI review",
+        "kind": "fields",
+        "fields": [
+            {"key": "appetite", "label": "Appetite", "type": "select",
+             "options": ["Normal", "Reduced", "Increased"]},
+            {"key": "weight_change", "label": "Weight change", "type": "text",
+             "placeholder": "kg gained or lost, over how long"},
+            {"key": "bowel_habit", "label": "Bowel habit", "type": "text",
+             "placeholder": "Frequency, consistency, any recent change"},
+            {"key": "bleeding", "label": "Bleeding", "type": "select",
+             "options": ["None", "Haematemesis", "Melaena", "Fresh rectal bleeding",
+                         "Occult — on testing"]},
+        ],
+    },
+    {
+        "key": "vitals",
+        "title": "Vitals",
+        "kind": "fields",
+        "fields": [
+            {"key": "bp", "label": "BP", "type": "text", "unit": "mmHg"},
+            {"key": "pulse", "label": "Pulse", "type": "number", "unit": "/min"},
+            {"key": "temperature", "label": "Temp", "type": "number", "unit": "°F"},
+            {"key": "spo2", "label": "SpO2", "type": "number", "unit": "%"},
+            {"key": "weight", "label": "Weight", "type": "number", "unit": "kg"},
+            {"key": "height", "label": "Height", "type": "number", "unit": "cm"},
+        ],
+    },
+    {"key": "examination", "title": "Abdominal examination", "kind": "list",
+     "catalogue_category": "examination",
+     "placeholder": "Tenderness, organomegaly, masses, bowel sounds"},
+    {"key": "red_flags", "title": "Red flags", "kind": "ai",
+     "ai_source": "red_flags", "visible_in_print": False},
+    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
+     "ai_source": "differentials", "visible_in_print": False},
+    {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
+     "catalogue_category": "diagnosis", "carry_forward": True,
+     "placeholder": "Add a diagnosis"},
+    # Carried forward on purpose: what the last scope showed is the context for
+    # every visit after it, and a doctor should not have to open another screen
+    # to remember it.
+    {"key": "endoscopy_history", "title": "Previous endoscopy", "kind": "text",
+     "carry_forward": True,
+     "placeholder": "Date, procedure, findings, biopsy result"},
+    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+     "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
+    {"key": "diet_advice", "title": "Diet advice", "kind": "list",
+     "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "Meal timing, what to avoid, alcohol"},
+    {"key": "advice", "title": "Advice", "kind": "list",
+     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    {
+        "key": "follow_up",
+        "title": "Follow-up",
+        "kind": "fields",
+        "fields": [
+            {"key": "date", "label": "Review on", "type": "date"},
+            {"key": "notes", "label": "Notes", "type": "text"},
+        ],
+    },
+]
+
+#: (document type, department) -> the sections that department starts from.
+DEPARTMENT_LAYOUTS: Dict[Tuple[str, Department], List[Dict[str, Any]]] = {
+    ("opd_visit", Department.GASTROENTEROLOGY): _OPD_VISIT_GASTRO,
+}
+
+
 def document_type(key: str) -> Optional[DocumentType]:
     return REGISTRY.get(key)
 
 
-def default_layout(document_type_key: str) -> Optional[List[Dict[str, Any]]]:
-    """The built-in sections for a document type, or None if there is none."""
+def default_layout(
+    document_type_key: str, department: Optional[Department] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """The built-in sections for a document type, or None if there is none.
+
+    A department that ships its own shape for this document gets that one. It
+    is only a starting point: an administrator who saves a layout replaces it,
+    and the saved one wins from then on.
+    """
     spec = REGISTRY.get(document_type_key)
     if spec is None:
         return None
+    sections = DEPARTMENT_LAYOUTS.get((document_type_key, department)) if department else None
+    if sections is None:
+        sections = spec.sections
     # A fresh copy every time: a caller that mutates the result must not
     # change the default for every later request in this process.
     return [
         dict(section, fields=[dict(item) for item in section.get("fields", [])])
-        for section in spec.sections
+        for section in sections
     ]

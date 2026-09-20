@@ -153,6 +153,8 @@ async def client_config() -> Dict[str, Any]:
         # rather than concluding the system is broken.
         "formulary_pending_signoff": [d.value for d in unapproved_departments()],
         "theatre_vocabulary": settings.THEATRE_VOCABULARY,
+        "departments": [d.value for d in settings.enabled_departments],
+        "default_department": settings.default_department.value,
     }
 
 

@@ -13,7 +13,7 @@ import { BedDouble, Loader2, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { BedStatus, WardBoard, WardType } from "@/lib/types/ipd";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
-import { DEPARTMENTS } from "@/lib/types/core";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +54,7 @@ const EMPTY_WARD: WardForm = {
 };
 
 export function WardsAndBeds({ canEdit }: { canEdit: boolean }) {
+  const { departments } = useModules();
   const [wards, setWards] = useState<WardBoard[]>([]);
   const [wardForm, setWardForm] = useState<WardForm | null>(null);
   const [bedFor, setBedFor] = useState<WardBoard | null>(null);
@@ -152,7 +153,7 @@ export function WardsAndBeds({ canEdit }: { canEdit: boolean }) {
                 <select className={SELECT} value={wardForm.department}
                         onChange={(event) => set({ department: event.target.value })}>
                   <option value="">Any department</option>
-                  {DEPARTMENTS.map((dept) => (
+                  {departments.map((dept) => (
                     <option key={dept} value={dept}>{DEPARTMENT_LABEL[dept] ?? dept}</option>
                   ))}
                 </select>

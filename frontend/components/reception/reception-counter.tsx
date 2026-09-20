@@ -29,8 +29,9 @@ import {
   cleanModeDetails,
 } from "@/components/finance/payment-mode-fields";
 import { WalletPanel } from "@/components/finance/wallet-panel";
-import { DEPARTMENTS, type Department, type Gender } from "@/lib/types/core";
+import { type Department, type Gender } from "@/lib/types/core";
 import { DEPARTMENT_CODE, DEPARTMENT_FULL_LABEL } from "@/lib/format";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,7 @@ const lineDiscount = (line: BillLine) =>
   Math.min(rupeesToPaise(line.discountRupees || "0"), lineGross(line));
 
 export function ReceptionCounter() {
+  const { departments, defaultDepartment } = useModules();
   const toast = useToast();
   const { user } = useAuth();
   // Returning a balance is money leaving the hospital, so the button only
@@ -103,7 +105,9 @@ export function ReceptionCounter() {
   const [city, setCity] = useState("");
 
   // Visit
-  const [department, setDepartment] = useState<Department>("orthopedics");
+  // Starts on the site's own department, which in a single-speciality clinic
+  // is the only one there is.
+  const [department, setDepartment] = useState<Department>(defaultDepartment);
   const [visitType, setVisitType] = useState<VisitType>("new");
   // The counter used to send no doctor at all, which left every visit with a
   // blank doctor name on the queue board and meant the consultant's own
@@ -696,7 +700,7 @@ export function ReceptionCounter() {
               <label className="field-label" htmlFor="rc-dept">Department</label>
               <select id="rc-dept" value={department} className="field-input"
                       onChange={(e) => setDepartment(e.target.value as Department)}>
-                {DEPARTMENTS.map((d) => (
+                {departments.map((d) => (
                   <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
                 ))}
                 <option value="gynecology">Maternity &amp; Gynecology</option>

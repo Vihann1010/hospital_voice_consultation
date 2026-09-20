@@ -26,6 +26,7 @@ import { VisitPad } from "@/components/pad/visit-pad";
 import { PatientForms } from "@/components/pad/patient-forms";
 import { LabResultsPanel } from "@/components/lab/lab-results-panel";
 import { RedFlagList, InfoRow } from "@/components/dashboard/clinical-blocks";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,6 +49,7 @@ function intakeVitals(stored?: Record<string, unknown> | null): [string, string]
 }
 
 export default function ConsultationDetailPage() {
+  const hasLab = useModules().has("laboratory");
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [data, setData] = useState<ConsultationDetail | null>(null);
@@ -161,7 +163,15 @@ export default function ConsultationDetailPage() {
               <TabsTrigger value="reports">
                 <FlaskConical className="h-3.5 w-3.5" /> Reports brought
               </TabsTrigger>
-              <TabsTrigger value="lab"><FlaskConical className="h-3.5 w-3.5" /> Lab results</TabsTrigger>
+              {/* An in-house bench this clinic may not have: the panel behind
+                  this tab reads /lab, which is not served when the module is
+                  off. Reports the patient brings in are a separate tab and
+                  are always there. */}
+              {hasLab && (
+                <TabsTrigger value="lab">
+                  <FlaskConical className="h-3.5 w-3.5" /> Lab results
+                </TabsTrigger>
+              )}
               <TabsTrigger value="transcript"><FileText className="h-3.5 w-3.5" /> Transcript</TabsTrigger>
           </TabsList>
 
@@ -239,9 +249,11 @@ export default function ConsultationDetailPage() {
               <BroughtReports consultationId={data.id} />
             </TabsContent>
 
-            <TabsContent value="lab">
-              <LabResultsPanel patientId={data.patient.id} />
-            </TabsContent>
+            {hasLab && (
+              <TabsContent value="lab">
+                <LabResultsPanel patientId={data.patient.id} />
+              </TabsContent>
+            )}
 
             <TabsContent value="transcript" className="h-[calc(100dvh-260px)] min-h-0 overflow-hidden">
               <TranscriptView turns={data.turns} className="h-full" />

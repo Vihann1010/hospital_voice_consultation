@@ -14,7 +14,8 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { Consultant } from "@/lib/types/appointments";
 import type { ServiceItem } from "@/lib/types/emr";
-import { DEPARTMENTS, type Department, type User } from "@/lib/types/core";
+import { type Department, type User } from "@/lib/types/core";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +69,7 @@ function days(value: string): string {
 }
 
 export function ConsultantsAdmin() {
+  const { departments } = useModules();
   const { user } = useAuth();
   const editable = ["admin", "manager"].includes(user?.role ?? "");
   const [consultants, setConsultants] = useState<Consultant[]>([]);
@@ -151,7 +153,7 @@ export function ConsultantsAdmin() {
                 <span className="text-xs text-ink-muted">Department</span>
                 <select className={`${SELECT} w-full`} value={form.department}
                         onChange={(e) => set({ department: e.target.value as Department })}>
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{DEPARTMENT_LABEL[d] ?? d}</option>)}
+                  {departments.map((d) => <option key={d} value={d}>{DEPARTMENT_LABEL[d] ?? d}</option>)}
                 </select>
               </label>
               <label className="space-y-1">

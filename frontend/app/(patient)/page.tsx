@@ -2,8 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { startConsultation, DEPARTMENTS, type Department, type Gender } from "@/lib/api";
+import { startConsultation, type Department, type Gender } from "@/lib/api";
 import { DEPARTMENT_LABEL } from "@/lib/format";
+import { useModules } from "@/components/dashboard/modules-provider";
 
 /** One line telling a patient what the department is for, in their words. */
 const DEPARTMENT_BLURB: Record<string, string> = {
@@ -19,12 +20,13 @@ const DEPARTMENT_BLURB: Record<string, string> = {
  * clinic that never employed them — and this screen is unauthenticated, so it
  * cannot read the consultant register. The department and what it covers is
  * what the patient actually needs to choose correctly. */
-const DEPARTMENT_CHOICES: { value: Department; label: string; blurb: string }[] =
-  DEPARTMENTS.map((value) => ({
+function departmentChoices(departments: readonly Department[]) {
+  return departments.map((value) => ({
     value,
     label: DEPARTMENT_LABEL[value] ?? value,
     blurb: DEPARTMENT_BLURB[value] ?? "",
   }));
+}
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "female", label: "Female" },
@@ -34,11 +36,17 @@ const GENDERS: { value: Gender; label: string }[] = [
 
 export default function IntakePage() {
   const router = useRouter();
+  const { departments } = useModules();
+  const choices = departmentChoices(departments);
+  // A clinic with one speciality should not ask a question with one answer:
+  // the department is settled, so the patient fills in four fields, not five.
+  const onlyDepartment = choices.length === 1 ? choices[0].value : null;
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
   const [phone, setPhone] = useState("");
-  const [department, setDepartment] = useState<Department | "">("");
+  const [chosenDepartment, setDepartment] = useState<Department | "">("");
+  const department = onlyDepartment ?? chosenDepartment;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -162,10 +170,11 @@ export default function IntakePage() {
             />
           </div>
 
+          {onlyDepartment === null && (
           <fieldset>
             <legend className="field-label">Department</legend>
             <div className="grid gap-3 sm:grid-cols-2">
-              {DEPARTMENT_CHOICES.map((d) => {
+              {choices.map((d) => {
                 const selected = department === d.value;
                 return (
                   <button
@@ -190,6 +199,7 @@ export default function IntakePage() {
               })}
             </div>
           </fieldset>
+          )}
         </div>
 
         {error && (

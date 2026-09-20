@@ -17,7 +17,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import { DEPARTMENTS, type ConsultationDetail, type ConsultationListItem, type Department } from "@/lib/types/core";
+import { type ConsultationDetail, type ConsultationListItem, type Department } from "@/lib/types/core";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_LABEL, formatDate } from "@/lib/format";
 import type { QueuedPatient } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ function waitedFor(registeredAt: string): string {
 }
 
 export function IntakeQueue() {
+  const { departments } = useModules();
   const toast = useToast();
 
   const [queue, setQueue] = useState<QueuedPatient[] | null>(null);
@@ -176,7 +178,7 @@ export function IntakeQueue() {
       <div className="flex flex-wrap items-center gap-2">
         {[
           { value: "all" as const, label: "Everyone" },
-          ...DEPARTMENTS.map((d) => ({ value: d, label: DEPARTMENT_LABEL[d] ?? d })),
+          ...departments.map((d) => ({ value: d, label: DEPARTMENT_LABEL[d] ?? d })),
         ].map((option) => (
           <button
             key={option.value}

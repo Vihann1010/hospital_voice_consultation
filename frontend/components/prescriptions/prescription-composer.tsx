@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { useModules } from "@/components/dashboard/modules-provider";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -65,6 +66,11 @@ export function PrescriptionComposer({
   onCreated: (prescription: Prescription) => void;
 }) {
   const dictation = useDictation();
+  // True while this department's drafted formulary is still withheld; see
+  // APPROVED_FORMULARY in the backend configuration.
+  const { formularyPendingSignoff } = useModules();
+  const formularyPending =
+    department !== undefined && formularyPendingSignoff.includes(department);
 
   const [rows, setRows] = useState<MedicineRow[]>([emptyRow()]);
   const [diagnosis, setDiagnosis] = useState("");
@@ -402,6 +408,18 @@ export function PrescriptionComposer({
                   <Plus /> Add medicine
                 </Button>
               </div>
+
+              {formularyPending && (
+                // Otherwise a doctor searching a near-empty formulary concludes
+                // the system is broken. It is not: this speciality's medicine
+                // list is drafted and withheld until a consultant of that
+                // speciality has been through it.
+                <p className="mb-2 rounded-lg border border-ochre/30 bg-ochre/5 px-3 py-2 text-xs text-ink-muted">
+                  This department&apos;s medicine list and regimen templates are
+                  awaiting a specialist&apos;s review, so they are not offered
+                  here yet. Type any medicine by name to prescribe it as usual.
+                </p>
+              )}
 
               <div className="space-y-2">
                 <AnimatePresence initial={false}>

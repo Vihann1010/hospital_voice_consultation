@@ -92,6 +92,12 @@ ENABLED_MODULES=all
 ENABLED_MODULES=theatre
 ```
 
+`ENABLED_DEPARTMENTS` is the list the registration screens offer. Empty (the
+default) means every department the build knows. A single-speciality clinic
+names its own, and the screens follow: the counter's dropdown holds one entry,
+the patient kiosk stops asking a question with one answer, and the line under
+the logo says what this site actually does.
+
 `DEFAULT_DEPARTMENT` belongs with this: it is where a clinician's prescriptions
 and investigation orders are filed when their account names no department. It
 defaults to `orthopedics`, which is what the code did before it was a setting;

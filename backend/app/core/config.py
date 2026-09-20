@@ -181,6 +181,14 @@ class Settings(BaseSettings):
     # orders under a department it does not have. One setting, named once.
     DEFAULT_DEPARTMENT: str = Department.ORTHOPEDICS.value
 
+    # The departments this site actually runs, offered on the registration
+    # screens. Empty means every configured department, which is what an
+    # existing hospital gets by setting nothing. A single-speciality clinic
+    # names its own: a patient at the door of a gastroenterology clinic should
+    # not be asked to choose between three specialities, two of which are not
+    # in the building.
+    ENABLED_DEPARTMENTS: str = ""
+
     # Departments whose drafted prescribing content a consultant of that
     # speciality has reviewed and signed off. Drafted medicines and regimen
     # templates are withheld from the prescribing screens until the department
@@ -277,6 +285,18 @@ class Settings(BaseSettings):
             ) from None
         return v.strip().lower()
 
+    @field_validator("ENABLED_DEPARTMENTS")
+    @classmethod
+    def _enabled_departments_must_exist(cls, v: str) -> str:
+        for name in [part.strip().lower() for part in v.split(",") if part.strip()]:
+            try:
+                Department(name)
+            except ValueError:
+                raise ValueError(
+                    f"ENABLED_DEPARTMENTS names '{name}', which is not a department."
+                ) from None
+        return v
+
     @field_validator("THEATRE_VOCABULARY")
     @classmethod
     def _vocabulary_must_be_known(cls, v: str) -> str:
@@ -332,6 +352,16 @@ class Settings(BaseSettings):
     @property
     def default_department(self) -> Department:
         return Department(self.DEFAULT_DEPARTMENT)
+
+    @property
+    def enabled_departments(self) -> List[Department]:
+        """In enum order, so the screens list them the same way every time."""
+        named = {
+            Department(part.strip().lower())
+            for part in self.ENABLED_DEPARTMENTS.split(",")
+            if part.strip()
+        }
+        return [d for d in Department if not named or d in named]
 
     @property
     def approved_formulary_departments(self) -> FrozenSet[Department]:

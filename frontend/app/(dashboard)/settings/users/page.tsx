@@ -12,8 +12,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
-import { DEPARTMENTS, type Department, type StaffRole, type User } from "@/lib/types/core";
+import { type Department, type StaffRole, type User } from "@/lib/types/core";
 import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,7 @@ function RoleCard({
 }
 
 export default function StaffAccountsPage() {
+  const { departments, defaultDepartment } = useModules();
   const toast = useToast();
   const { user: me } = useAuth();
 
@@ -111,7 +113,7 @@ export default function StaffAccountsPage() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [department, setDepartment] = useState<Department>("orthopedics");
+  const [department, setDepartment] = useState<Department>(defaultDepartment);
   const [creating, setCreating] = useState(false);
 
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -367,7 +369,7 @@ export default function StaffAccountsPage() {
                   value={department}
                   onChange={(e) => setDepartment(e.target.value as Department)}
                 >
-                  {DEPARTMENTS.map((d) => (
+                  {departments.map((d) => (
                     <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
                   ))}
                   <option value="gynecology">Maternity &amp; Gynecology</option>

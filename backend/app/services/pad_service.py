@@ -154,7 +154,10 @@ class PadService:
         # They go through the same validation as a saved layout so every
         # switch is filled in: without it, a section with no `visible_in_pad`
         # reached the browser as undefined and the pad rendered nothing.
-        builtin = default_layout(document_type)
+        # A department may ship its own starting shape for this document — the
+        # same sections in the order that speciality works in. Still only a
+        # default: a saved layout above has already won if there is one.
+        builtin = default_layout(document_type, department)
         return None, rules.validate_layout(builtin) if builtin else [], "default"
 
     async def save_layout(

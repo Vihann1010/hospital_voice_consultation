@@ -16,6 +16,7 @@
  */
 import { createContext, useContext, useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
+import { DEPARTMENTS as ALL_DEPARTMENTS, type Department } from "@/lib/types/core";
 
 export const MODULES = [
   "laboratory",
@@ -61,6 +62,17 @@ interface ModuleState {
   has: (module: ModuleName) => boolean;
   /** The site's words for the theatre module; "theatre" until told otherwise. */
   words: (typeof THEATRE_WORDS)[TheatreVocabulary];
+  /** The departments this site runs, in the order to offer them.
+   *
+   * Every department until the API answers: a registration screen showing one
+   * department too many for a moment is a nuisance, showing none is a screen
+   * nobody can use. */
+  departments: readonly Department[];
+  /** Where a screen should start when it must pick a department. */
+  defaultDepartment: Department;
+  /** Departments whose drafted prescribing content is still withheld, so the
+   *  prescribing screen can say why its medicine list looks short. */
+  formularyPendingSignoff: readonly string[];
 }
 
 const ModuleContext = createContext<ModuleState>({
@@ -68,6 +80,9 @@ const ModuleContext = createContext<ModuleState>({
   hospitalName: null,
   has: () => false,
   words: THEATRE_WORDS.theatre,
+  departments: ALL_DEPARTMENTS,
+  defaultDepartment: ALL_DEPARTMENTS[0],
+  formularyPendingSignoff: [],
 });
 
 export function useModules() {
@@ -78,6 +93,9 @@ function readCache(): {
   modules: ModuleName[];
   hospital_name: string;
   theatre_vocabulary?: TheatreVocabulary;
+  departments?: Department[];
+  default_department?: Department;
+  formulary_pending_signoff?: string[];
 } | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -97,6 +115,15 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   const [vocabulary, setVocabulary] = useState<TheatreVocabulary>(
     cached?.theatre_vocabulary ?? "theatre"
   );
+  const [departments, setDepartments] = useState<readonly Department[]>(
+    cached?.departments?.length ? cached.departments : ALL_DEPARTMENTS
+  );
+  const [defaultDepartment, setDefaultDepartment] = useState<Department>(
+    cached?.default_department ?? ALL_DEPARTMENTS[0]
+  );
+  const [formularyPendingSignoff, setPending] = useState<readonly string[]>(
+    cached?.formulary_pending_signoff ?? []
+  );
 
   useEffect(() => {
     let active = true;
@@ -107,6 +134,11 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         setEnabled(data.modules ?? []);
         setHospitalName(data.hospital_name ?? null);
         setVocabulary(data.theatre_vocabulary === "procedures" ? "procedures" : "theatre");
+        if (Array.isArray(data.departments) && data.departments.length > 0) {
+          setDepartments(data.departments);
+        }
+        if (data.default_department) setDefaultDepartment(data.default_department);
+        setPending(data.formulary_pending_signoff ?? []);
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
         } catch {
@@ -129,6 +161,9 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         hospitalName,
         has: (module) => enabled !== null && enabled.includes(module),
         words: THEATRE_WORDS[vocabulary],
+        departments,
+        defaultDepartment,
+        formularyPendingSignoff,
       }}
     >
       {children}

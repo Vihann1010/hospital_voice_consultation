@@ -28,7 +28,8 @@ import { formatINR, rupeesToPaise } from "@/lib/types/emr";
 import type { PaymentMode } from "@/lib/types/emr";
 import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
 import { ADVANCE_MODES, TakeAdvance, openWalletReceipt } from "@/components/ipd/take-advance";
-import { DEPARTMENTS, type Department, type Gender } from "@/lib/types/core";
+import { type Department, type Gender } from "@/lib/types/core";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,7 @@ function AdmitSheet({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const { departments, defaultDepartment } = useModules();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoundPatient[] | null>(null);
   const [chosen, setChosen] = useState<FoundPatient | null>(null);
@@ -79,7 +81,7 @@ function AdmitSheet({
   const [reason, setReason] = useState("");
   const [doctor, setDoctor] = useState("");
   const [department, setDepartment] = useState<Department>(
-    (ward.department as Department) ?? "orthopedics"
+    (ward.department as Department) ?? defaultDepartment
   );
   const [advance, setAdvance] = useState("");
   const [attendantName, setAttendantName] = useState("");
@@ -265,7 +267,7 @@ function AdmitSheet({
           <label className="field-label" htmlFor="ad-dept">Department</label>
           <select id="ad-dept" value={department} className="field-input"
                   onChange={(e) => setDepartment(e.target.value as Department)}>
-            {DEPARTMENTS.map((d) => (
+            {departments.map((d) => (
               <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
             ))}
             <option value="gynecology">Maternity &amp; Gynecology</option>
