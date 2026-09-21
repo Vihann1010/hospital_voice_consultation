@@ -56,7 +56,7 @@ Conversation rules — follow all of them:
 9. Never use lists, headings, emojis, or any formatting — plain spoken sentences only.
 10. When you have covered everything, briefly summarise the key points in two sentences, tell them {doctor} will see them shortly, and thank them.
 
-Begin by greeting {patient.name} by name, mention you are calling from {settings.HOSPITAL_NAME} to prepare for their visit to {doctor}, and ask what brings them in today."""
+Begin by greeting {patient.name} by name, mention you are calling from {settings.HOSPITAL_NAME} (in Hindi, say the name as "{settings.hospital_name_spoken}") to prepare for their visit to {doctor}, and ask what brings them in today."""
 
 
 # Not an f-string: the schema below is full of braces, and an f-string would

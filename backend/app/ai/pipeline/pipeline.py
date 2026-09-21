@@ -44,6 +44,21 @@ def fallback_patient_education(department: Department) -> PatientEducation:
     return PatientEducation(language="hi", general_self_care=instructions)
 
 
+
+def _stage_failed(dossier: ClinicalDossier, cid: str, exc: Exception) -> None:
+    """Record a failed later stage and carry on.
+
+    Once the medical record exists, nothing after it may cost the doctor that
+    record. A stage that fails the ordinary way (StageError: the model's answer
+    would not validate) is noted on the dossier. Anything else is a bug, and is
+    logged with its traceback, but it is still only this stage that is lost.
+    One such bug (a missing import in the risk stage) used to discard every
+    intake's record and summary together.
+    """
+    if not isinstance(exc, StageError):
+        logger.exception("pipeline_stage_crashed", extra={"consultation_id": cid})
+    dossier.pipeline_errors.append(str(exc) or type(exc).__name__)
+
 class ClinicalPipeline:
     def __init__(self, gateway: Optional[LLMGateway] = None) -> None:
         gw = gateway or get_gateway()
@@ -122,8 +137,8 @@ class ClinicalPipeline:
         # 2. Risk detection.
         try:
             dossier.risk_assessment = await self.risk.assess(memory, record)
-        except StageError as exc:
-            dossier.pipeline_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 — see _stage_failed
+            _stage_failed(dossier, cid, exc)
             dossier.risk_assessment.emergency = memory.emergency
             if memory.emergency:
                 dossier.risk_assessment.overall_risk = "high"
@@ -134,32 +149,32 @@ class ClinicalPipeline:
             dossier.clinical_summary = await self.summarizer.summarize(
                 memory, record, dossier.risk_assessment
             )
-        except StageError as exc:
-            dossier.pipeline_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 — see _stage_failed
+            _stage_failed(dossier, cid, exc)
 
         # 4. Differential diagnosis.
         try:
             dossier.differential_diagnosis = await self.differential.generate(
                 memory, record, dossier.risk_assessment, dossier.clinical_summary
             )
-        except StageError as exc:
-            dossier.pipeline_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 — see _stage_failed
+            _stage_failed(dossier, cid, exc)
 
         # 5. Investigations.
         try:
             dossier.investigations = await self.investigations.recommend(
                 memory, record, dossier.risk_assessment, dossier.differential_diagnosis
             )
-        except StageError as exc:
-            dossier.pipeline_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 — see _stage_failed
+            _stage_failed(dossier, cid, exc)
 
         # 6. Patient education.
         try:
             dossier.patient_education = await self.education.generate(
                 memory, record, dossier.risk_assessment
             )
-        except StageError as exc:
-            dossier.pipeline_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 — see _stage_failed
+            _stage_failed(dossier, cid, exc)
             dossier.patient_education = fallback_patient_education(memory.department)
 
         dossier.conversation_meta = memory.meta()

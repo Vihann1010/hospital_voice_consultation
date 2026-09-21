@@ -137,9 +137,13 @@ class Settings(BaseSettings):
     # rather than generated so the patient is always greeted instantly, even if
     # the LLM is rate limited or unavailable — and so the first thing a patient
     # hears is wording the hospital controls, not model output.
+    #
+    # "{hospital}" is replaced with HOSPITAL_NAME_SPOKEN (or HOSPITAL_NAME).
+    # The name was once written into this sentence, and a second site's
+    # patients were greeted in the first hospital's name.
     GREETING_ENABLED: bool = True
     GREETING_TEXT: str = (
-        "नमस्ते, मैं नेहा बोल रही हूँ, सत्या हॉस्पिटल की A I सहायिका। "
+        "नमस्ते, मैं नेहा बोल रही हूँ, {hospital} की A I सहायिका। "
         "डॉक्टर साहब से मिलने से पहले मैं आपकी तकलीफ़ समझना चाहती हूँ। "
         "बताइए, आपको क्या तकलीफ़ हो रही है?"
     )
@@ -216,6 +220,10 @@ class Settings(BaseSettings):
     # hospital's logo at the top of its prescriptions.
     HOSPITAL_LOGO: str = "bundled"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
+    # How the voice assistant says the name, when that differs from how it is
+    # printed: a Hindi voice reads "CN Gastrocare" letter by letter unless it
+    # is written the way it is spoken. Empty means HOSPITAL_NAME.
+    HOSPITAL_NAME_SPOKEN: str = ""
     # The platform's own mark, shown beside the site's on the sign-in screen
     # and in the console. "medicos" for a site running MedicOS under its own
     # name; "none" shows the site's identity alone.
@@ -305,6 +313,15 @@ class Settings(BaseSettings):
         if value not in ("bundled", "none"):
             raise ValueError("HOSPITAL_LOGO must be 'bundled' or 'none'.")
         return value
+
+    @property
+    def hospital_name_spoken(self) -> str:
+        return self.HOSPITAL_NAME_SPOKEN.strip() or self.HOSPITAL_NAME
+
+    @property
+    def greeting(self) -> str:
+        """The opening line, with this site's name in it."""
+        return (self.GREETING_TEXT or "").replace("{hospital}", self.hospital_name_spoken).strip()
 
     @field_validator("PLATFORM_BRAND")
     @classmethod

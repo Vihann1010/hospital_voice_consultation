@@ -12,8 +12,8 @@ from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
 from app.ai.session.memory import ConversationMemory
+from app.core.config import settings
 from app.departments import profile_for
-
 
 
 class RiskDetectionService(BaseAIService[RiskAssessment]):

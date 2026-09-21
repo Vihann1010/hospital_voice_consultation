@@ -210,7 +210,9 @@ finishes.
 
 Before the first patient, a new site also sets its identity in `.env`:
 `HOSPITAL_NAME` and `HOSPITAL_CITY` (printed on every prescription and bill,
-and said aloud by the intake assistant), `DOCUMENT_PREFIX` (three letters at
+and said aloud by the intake assistant), `HOSPITAL_NAME_SPOKEN` (the name as
+the Hindi voice should say it, e.g. `सी एन गैस्ट्रोकेयर`; it fills `{hospital}`
+in `GREETING_TEXT`), `DOCUMENT_PREFIX` (three letters at
 the front of every UHID and invoice number — permanent once patients are
 registered), `PRESCRIPTION_NUMBER_PREFIX` (the front of every prescription
 number), and `ADMIN_EMAIL`. Replace `backend/app/assets` logo files with the
