@@ -35,13 +35,12 @@ const ROLE_ORDER: User["role"][] = [
 
 /** Roles whose whole terminal belongs to a module.
  *
- * A nurse's screen is the ward; a lab technician's is the bench. At a clinic
- * with neither, an account in one of these roles signs in and is sent to a
- * terminal whose every request 404s — so the role is not offered. Anyone who
- * already holds one keeps showing in the list, because hiding an account that
- * exists is worse than showing a role that is switched off. */
+ * A lab technician's screen is the bench. At a clinic without one, a lab
+ * account signs in to a terminal whose every request 404s — so the role is not
+ * offered. Anyone who already holds one keeps showing in the list, because
+ * hiding an account that exists is worse than showing a role that is switched
+ * off. A nurse is not here: without wards, a nurse runs the voice intake. */
 const ROLE_MODULE: Partial<Record<User["role"], ModuleName>> = {
-  nurse: "ipd",
   lab: "laboratory",
 };
 

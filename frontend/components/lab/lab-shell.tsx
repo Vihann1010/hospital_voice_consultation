@@ -11,7 +11,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, BarChart3, ClipboardList, FlaskConical, LogOut } from "lucide-react";
-import { homeFor, useAuth } from "@/components/dashboard/auth-provider";
+import { homeFor, useAuth, useHasWards } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +24,8 @@ export function LabShell({ children }: { children: React.ReactNode }) {
     { href: "/lab/tests", label: "Test list", icon: FlaskConical, active: pathname.startsWith("/lab/tests") },
     { href: "/lab/reports", label: "Reports", icon: BarChart3, active: pathname.startsWith("/lab/reports") },
   ];
-  const home = user && user.role !== "lab" ? homeFor(user.role) : null;
+  const hasWards = useHasWards();
+  const home = user && user.role !== "lab" ? homeFor(user.role, hasWards) : null;
 
   return (
     <div className="h-dvh overflow-hidden bg-mint">

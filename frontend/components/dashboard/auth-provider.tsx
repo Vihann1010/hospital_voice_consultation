@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchCurrentUser, logout as doLogout } from "@/lib/auth";
 import type { User } from "@/lib/types/core";
+import { useModules } from "@/components/dashboard/modules-provider";
 
 type Role = User["role"];
 
@@ -13,9 +14,13 @@ type Role = User["role"];
  * One map rather than a fallback per layout: with a fallback each, a nurse
  * sent from the dashboard to reception was sent straight back again, because
  * neither shell admitted her and each pointed at the other.
+ *
+ * A nurse's home is the ward, where there is one. A clinic with no beds has
+ * its nurse on the voice intake terminal instead, taking vitals and sitting
+ * the patient through the intake.
  */
-export function homeFor(role: Role): string {
-  if (role === "nurse") return "/ward";
+export function homeFor(role: Role, hasWards = true): string {
+  if (role === "nurse") return hasWards ? "/ward" : "/intake";
   if (role === "lab") return "/lab";
   if (role === "reception" || role === "supervisor") return "/reception";
   return "/dashboard";
@@ -25,6 +30,14 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   logout: () => void;
+}
+
+/** Whether this site has wards, for homeFor. Assumed so until the site's
+ *  configuration has answered, so a hospital's nurse is never sent away
+ *  from the ward while it loads. */
+export function useHasWards(): boolean {
+  const { enabled, has } = useModules();
+  return enabled === null || has("ipd");
 }
 
 const AuthContext = createContext<AuthState>({ user: null, loading: true, logout: doLogout });
@@ -45,6 +58,11 @@ export function AuthProvider({
   fallbackPath?: string;
 }) {
   const router = useRouter();
+  // Read through a ref: the answer can arrive after this shell mounts, and
+  // it should not re-run the sign-in check when it does.
+  const hasWards = useHasWards();
+  const hasWardsRef = useRef(hasWards);
+  hasWardsRef.current = hasWards;
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,7 +79,7 @@ export function AuthProvider({
         // request. This only keeps someone from landing on a shell whose
         // every panel would return 403.
         if (allow && !allow.includes(value.role)) {
-          const home = homeFor(value.role);
+          const home = homeFor(value.role, hasWardsRef.current);
           // The role's own home, unless that is this very shell — then the
           // layout's fallback, so a misconfigured allow list cannot loop.
           router.replace(

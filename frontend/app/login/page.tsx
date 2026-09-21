@@ -1,6 +1,6 @@
 "use client";
 
-import { homeFor } from "@/components/dashboard/auth-provider";
+import { homeFor, useHasWards } from "@/components/dashboard/auth-provider";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 
 function LoginForm() {
   const router = useRouter();
+  const hasWards = useHasWards();
   const params = useSearchParams();
   // An explicit ?next wins — it is how the middleware returns someone to
   // the page they were trying to reach. Otherwise the landing page depends
@@ -37,7 +38,7 @@ function LoginForm() {
       let destination = nextPath;
       if (!destination) {
         const user = await fetchCurrentUser();
-        destination = user ? homeFor(user.role) : "/dashboard";
+        destination = user ? homeFor(user.role, hasWards) : "/dashboard";
       }
       router.replace(destination);
       router.refresh();
