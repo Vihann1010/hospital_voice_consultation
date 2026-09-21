@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules } from "@/components/dashboard/modules-provider";
 import type { Surgery } from "@/lib/types/theatre";
 import {
   SURGERY_STATUS_LABEL,
@@ -31,7 +32,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 30000;
-const UNASSIGNED = "No theatre assigned";
 
 function shiftDay(day: string, by: number): string {
   const moment = new Date(`${day}T12:00:00Z`);
@@ -57,6 +57,8 @@ function Readiness({ surgery }: { surgery: Surgery }) {
 
 export function TheatreBoard({ basePath }: { basePath: string }) {
   const { user } = useAuth();
+  const { words } = useModules();
+  const unassigned = `No ${words.roomOne.toLowerCase()} assigned`;
   const router = useRouter();
   const [day, setDay] = useState(hospitalToday());
   const [cases, setCases] = useState<Surgery[] | null>(null);
@@ -82,13 +84,13 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
   const groups = useMemo(() => {
     const byRoom = new Map<string, Surgery[]>();
     for (const item of cases ?? []) {
-      const key = item.room_name ?? UNASSIGNED;
+      const key = item.room_name ?? unassigned;
       byRoom.set(key, [...(byRoom.get(key) ?? []), item]);
     }
     return [...byRoom.entries()].sort(([a], [b]) =>
-      a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : a.localeCompare(b)
+      a === unassigned ? 1 : b === unassigned ? -1 : a.localeCompare(b)
     );
-  }, [cases]);
+  }, [cases, unassigned]);
 
   const count = (status: Surgery["status"]) => (cases ?? []).filter((item) => item.status === status).length;
 
@@ -113,7 +115,7 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
         )}
         {cases && (
           <p className="text-sm text-ink-muted">
-            {cases.length} case{cases.length === 1 ? "" : "s"} · {count("in_theatre")} in theatre ·{" "}
+            {cases.length} case{cases.length === 1 ? "" : "s"} · {count("in_theatre")} {words.inRoom.toLowerCase()} ·{" "}
             {count("completed")} done{count("cancelled") ? ` · ${count("cancelled")} cancelled` : ""}
           </p>
         )}
@@ -162,7 +164,9 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">
                       {item.operation_name}{" "}
-                      <span className="font-semibold uppercase text-clay">· {item.laterality}</span>
+                      {(words.askSide || item.laterality !== "Not applicable") && (
+                        <span className="font-semibold uppercase text-clay">· {item.laterality}</span>
+                      )}
                     </p>
                     <p className="text-sm text-ink-muted">
                       {item.patient?.name ?? "—"} · {item.ip_number ?? "Day case"} · {item.surgeon_name}
@@ -174,7 +178,7 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
                     <div className="flex gap-1">
                       {item.priority === "emergency" && <Badge variant="danger" size="sm">Emergency</Badge>}
                       <Badge variant={SURGERY_STATUS_VARIANT[item.status]} size="sm">
-                        {SURGERY_STATUS_LABEL[item.status]}
+                        {item.status === "in_theatre" ? words.inRoom : SURGERY_STATUS_LABEL[item.status]}
                       </Badge>
                     </div>
                     <Readiness surgery={item} />

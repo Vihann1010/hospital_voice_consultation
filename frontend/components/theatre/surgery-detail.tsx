@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules } from "@/components/dashboard/modules-provider";
 import type { Milestone, Surgery, TheatreDocumentStatus, TheatreRoom } from "@/lib/types/theatre";
 import {
   MILESTONES,
@@ -84,6 +85,7 @@ function RescheduleDialog({
   onClose: () => void;
   onDone: (surgery: Surgery) => void;
 }) {
+  const { words } = useModules();
   const [rooms, setRooms] = useState<TheatreRoom[]>([]);
   const [when, setWhen] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -142,7 +144,7 @@ function RescheduleDialog({
             <Input type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-ink-muted">Theatre</span>
+            <span className="text-xs font-medium text-ink-muted">{words.roomOne}</span>
             <select className={SELECT} value={roomId} onChange={(event) => setRoomId(event.target.value)}>
               <option value="">Not assigned</option>
               {rooms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -191,6 +193,7 @@ function TheatreTimes({
   mayRecord: boolean;
   onRecorded: (surgery: Surgery) => void;
 }) {
+  const { words } = useModules();
   const [busy, setBusy] = useState<Milestone | null>(null);
   const [editing, setEditing] = useState<Milestone | null>(null);
   const [value, setValue] = useState("");
@@ -214,17 +217,18 @@ function TheatreTimes({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2"><Clock className="h-4 w-4" /> Theatre times</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Clock className="h-4 w-4" /> {words.times}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {gated && mayRecord && (
           <p className="flex items-start gap-1.5 rounded-md bg-marigold/15 px-2.5 py-1.5 text-xs text-marigold-deep">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            The pre-op checklist must be signed before the patient is wheeled in. For an emergency,
+            The {words.checklist} must be signed before the patient is wheeled in. For an emergency,
             change the booking&apos;s priority first.
           </p>
         )}
-        {MILESTONES.map(({ key, label }) => {
+        {MILESTONES.filter(({ key }) => !words.skipMilestones.includes(key)).map(({ key, label: base }) => {
+          const label = key === "anaesthesia_start_at" ? `${words.anaesthesia} started` : base;
           const at = surgery[key];
           const open =
             !at &&
@@ -274,9 +278,9 @@ function TheatreTimes({
         {surgery.status === "completed" && (
           <div className="grid grid-cols-3 gap-2 pt-1 text-center">
             {([
-              ["In theatre", surgery.durations.theatre_minutes],
-              ["Surgery", surgery.durations.surgery_minutes],
-              ["Anaesthesia", surgery.durations.anaesthesia_minutes],
+              [words.durations[0], surgery.durations.theatre_minutes],
+              [words.durations[1], surgery.durations.surgery_minutes],
+              [words.durations[2], surgery.durations.anaesthesia_minutes],
             ] as const).map(([label, minutes]) => (
               <div key={label} className="rounded-lg bg-mint px-2 py-1.5">
                 <p className="tabular text-sm font-semibold text-pine">{minutesLabel(minutes)}</p>
@@ -303,6 +307,7 @@ export function SurgeryDetail({
   boardPath: string;
 }) {
   const { user } = useAuth();
+  const { words } = useModules();
   const [surgery, setSurgery] = useState<Surgery | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -348,7 +353,7 @@ export function SurgeryDetail({
 
   return (
     <div className="space-y-4">
-      <Link href={boardPath} className="text-sm text-pine hover:underline">← Theatre list</Link>
+      <Link href={boardPath} className="text-sm text-pine hover:underline">← {words.board}</Link>
 
       <Card>
         <CardContent className="flex flex-wrap items-start gap-x-6 gap-y-3 p-4">
@@ -356,7 +361,7 @@ export function SurgeryDetail({
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-xl font-semibold text-pine">{surgery.patient?.name}</h1>
               <Badge variant={SURGERY_STATUS_VARIANT[surgery.status]} size="sm">
-                {SURGERY_STATUS_LABEL[surgery.status]}
+                {surgery.status === "in_theatre" ? words.inRoom : SURGERY_STATUS_LABEL[surgery.status]}
               </Badge>
               {surgery.priority === "emergency" && <Badge variant="danger" size="sm">Emergency</Badge>}
             </div>
@@ -373,9 +378,11 @@ export function SurgeryDetail({
             </p>
             <div className="mt-2 rounded-lg bg-mint px-3 py-2">
               <p className="text-base font-semibold text-ink">{surgery.operation_name}</p>
-              <p className={cn("font-display text-lg font-bold tracking-wide", sided ? "text-clay" : "text-ink")}>
-                SIDE: {side}
-              </p>
+              {(sided || words.askSide) && (
+                <p className={cn("font-display text-lg font-bold tracking-wide", sided ? "text-clay" : "text-ink")}>
+                  SIDE: {side}
+                </p>
+              )}
             </div>
           </div>
 
@@ -396,7 +403,7 @@ export function SurgeryDetail({
                         catch (err) { setNotice(err instanceof Error ? err.message : "The slip could not be printed."); }
                         finally { setPrinting(false); }
                       }}>
-                <Printer className="h-4 w-4" /> Surgery slip
+                <Printer className="h-4 w-4" /> {words.slip}
               </Button>
               {mayBook && surgery.status === "scheduled" && (
                 <>
@@ -443,14 +450,14 @@ export function SurgeryDetail({
           <CardContent className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
             {([
               ["Scheduled", `${formatHospitalDate(surgery.scheduled_at)}, ${formatHospitalTime(surgery.scheduled_at)} · ${minutesLabel(surgery.expected_minutes)}`],
-              ["Theatre", surgery.room_name ?? "Not assigned"],
+              [words.roomOne, surgery.room_name ?? "Not assigned"],
               ["Diagnosis", surgery.diagnosis ?? "—"],
-              ["Surgeon", surgery.surgeon_name],
+              [words.operator, surgery.surgeon_name],
               ["Assistants", surgery.assistants.join(", ") || "—"],
-              ["Anaesthetist", surgery.anaesthetist_name ?? "—"],
-              ["Anaesthesia", surgery.anaesthesia_type ?? "Not decided"],
+              [words.anaesthetist, surgery.anaesthetist_name ?? "—"],
+              [words.anaesthesia, surgery.anaesthesia_type ?? "Not decided"],
               ["Booked by", `${surgery.booked_by_name ?? "—"} · ${formatDateTime(surgery.created_at)}`],
-              ["Billing", surgery.charge_reference ? `Charged to the admission (${surgery.charge_reference})` : surgery.status === "completed" ? "Not charged — add to the bill by hand" : "Charged when the patient is wheeled out"],
+              ["Billing", surgery.charge_reference ? `Charged to the ${surgery.admission_id ? "admission" : "visit"} (${surgery.charge_reference})` : surgery.status === "completed" ? "Not charged — add to the bill by hand" : "Charged when the patient is wheeled out"],
               ["Notes", surgery.notes ?? "—"],
             ] as const).map(([label, value]) => (
               <p key={label}><span className="text-ink-muted">{label}: </span>{value}</p>

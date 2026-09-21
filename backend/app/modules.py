@@ -33,6 +33,7 @@ class Module(str, Enum):
     THEATRE = "theatre"
     INSURANCE = "insurance"
     ROOM_CHARGES = "room_charges"
+    RADIOLOGY = "radiology"
 
 
 # What each module answers for, in the words the hospital would use. Shown in
@@ -44,6 +45,7 @@ MODULE_SUMMARY: Dict[Module, str] = {
     Module.THEATRE: "Operations and procedures, their rooms, consent and notes.",
     Module.INSURANCE: "Insurers, TPAs and employers, and the claims raised against them.",
     Module.ROOM_CHARGES: "The nightly room-charge run for admitted patients. Needs admissions.",
+    Module.RADIOLOGY: "The radiology worklist: imaging studies waiting for an in-house report.",
 }
 
 # Modules that cannot stand on their own: a diet order belongs to an

@@ -38,7 +38,7 @@ export function AdmissionSurgeries({
 
   const load = useCallback(async () => {
     try {
-      setCases(await staffApi.surgeries({ admission_id: patient.admission_id }));
+      setCases(await staffApi.surgeries({ admission_id: patient.admission_id ?? undefined }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Theatre cases could not be loaded.");
     }

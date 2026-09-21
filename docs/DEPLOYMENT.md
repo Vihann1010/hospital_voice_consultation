@@ -78,6 +78,7 @@ from the sidebar and the Settings page.
 | `room_charges` | The nightly bed-charge run — needs `ipd` |
 | `theatre` | Operations and procedures, rooms, consent, notes |
 | `insurance` | Insurers, TPAs, employers and their claims |
+| `radiology` | The radiology worklist, for studies reported in-house |
 
 Registration, billing, consultations, prescriptions, ordering investigations,
 patient uploads and the Visit Pad are not switchable. A clinic without them is
@@ -211,9 +212,12 @@ Before the first patient, a new site also sets its identity in `.env`:
 `HOSPITAL_NAME` and `HOSPITAL_CITY` (printed on every prescription and bill,
 and said aloud by the intake assistant), `DOCUMENT_PREFIX` (three letters at
 the front of every UHID and invoice number — permanent once patients are
-registered), and `ADMIN_EMAIL`. Replace `backend/app/assets` logo files with
-the site's own; the prescription falls back to printing `HOSPITAL_NAME` when
-there is no logo.
+registered), `PRESCRIPTION_NUMBER_PREFIX` (the front of every prescription
+number), and `ADMIN_EMAIL`. Replace `backend/app/assets` logo files with the
+site's own, or set `HOSPITAL_LOGO=none` to print `HOSPITAL_NAME` as a wordmark
+until it has some. `PLATFORM_BRAND=medicos` shows the MedicOS mark beside the
+site's own on the sign-in screen and in the console, and names the browser tab
+"<site> · MedicOS"; `none` (the default) shows the site alone.
 
 **Upgrading an existing deployment** that was created by the old `create_all`
 path — adopt the baseline instead of re-creating tables:

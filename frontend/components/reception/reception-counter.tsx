@@ -697,12 +697,20 @@ export function ReceptionCounter() {
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="field-label" htmlFor="rc-dept">Department</label>
-              <select id="rc-dept" value={department} className="field-input"
-                      onChange={(e) => setDepartment(e.target.value as Department)}>
-                {departments.map((d) => (
-                  <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
-                ))}
-              </select>
+              {/* A clinic with one department has nothing to choose. A
+                  dropdown of one invites the question of what else is in it. */}
+              {departments.length === 1 ? (
+                <p id="rc-dept" className="field-input flex items-center bg-mint/40">
+                  {DEPARTMENT_FULL_LABEL[department] ?? department}
+                </p>
+              ) : (
+                <select id="rc-dept" value={department} className="field-input"
+                        onChange={(e) => setDepartment(e.target.value as Department)}>
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="field-label" htmlFor="rc-type">Visit type</label>

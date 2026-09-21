@@ -216,6 +216,10 @@ class Settings(BaseSettings):
     # hospital's logo at the top of its prescriptions.
     HOSPITAL_LOGO: str = "bundled"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
+    # The platform's own mark, shown beside the site's on the sign-in screen
+    # and in the console. "medicos" for a site running MedicOS under its own
+    # name; "none" shows the site's identity alone.
+    PLATFORM_BRAND: str = "none"             # medicos | none
     PRESCRIPTION_NUMBER_PREFIX: str = "ST"
     # Public origin used for QR verification links and signed document URLs.
     PUBLIC_BASE_URL: str = "http://localhost:3000"
@@ -300,6 +304,14 @@ class Settings(BaseSettings):
         value = v.strip().lower()
         if value not in ("bundled", "none"):
             raise ValueError("HOSPITAL_LOGO must be 'bundled' or 'none'.")
+        return value
+
+    @field_validator("PLATFORM_BRAND")
+    @classmethod
+    def _platform_choice(cls, v: str) -> str:
+        value = v.strip().lower()
+        if value not in ("medicos", "none"):
+            raise ValueError("PLATFORM_BRAND must be 'medicos' or 'none'.")
         return value
 
     @field_validator("DOCUMENT_PREFIX")

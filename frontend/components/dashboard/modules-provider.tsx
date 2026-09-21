@@ -25,11 +25,12 @@ export const MODULES = [
   "theatre",
   "insurance",
   "room_charges",
+  "radiology",
 ] as const;
 
 export type ModuleName = (typeof MODULES)[number];
 
-const CACHE_KEY = "satya_modules";
+const CACHE_KEY = "medicos_site";
 
 /** What this site calls the theatre module. A hospital operates in a theatre;
  *  a clinic doing fifteen-minute scopes does procedures in a suite, and calling
@@ -37,20 +38,84 @@ const CACHE_KEY = "satya_modules";
  *  have. Only the words differ — the records and the rules are identical. */
 export type TheatreVocabulary = "theatre" | "procedures";
 
-export const THEATRE_WORDS: Record<TheatreVocabulary, {
-  board: string; setup: string; room: string; caseWord: string;
-}> = {
+export interface TheatreWords {
+  board: string;
+  setup: string;
+  room: string;
+  caseWord: string;
+  /** The booking dialog and the case screen. */
+  bookTitle: string;
+  operation: string;
+  operationPlaceholder: string;
+  operationHint: string;
+  roomOne: string;
+  operator: string;
+  anaesthetist: string;
+  anaesthesia: string;
+  times: string;
+  slip: string;
+  notes: string;
+  checklist: string;
+  durations: readonly [string, string, string];
+  /** Whether the booking asks for a side. A scope has none, and asking
+   *  invites a click on "Left" to get past the form. When it is not asked the
+   *  booking records "Not applicable", said by the site's configuration. */
+  askSide: boolean;
+  /** The anaesthesia choices offered, or null for the whole list. */
+  anaesthesiaChoices: readonly string[] | null;
+  /** The status a case has between wheel-in and wheel-out. */
+  inRoom: string;
+  /** Times this kind of case never has. A scope has no incision and no
+   *  closure; offering the buttons invites times that mean nothing. */
+  skipMilestones: readonly string[];
+}
+
+export const THEATRE_WORDS: Record<TheatreVocabulary, TheatreWords> = {
   theatre: {
     board: "Theatre",
     setup: "Operation list",
     room: "Theatres",
     caseWord: "operation",
+    bookTitle: "Book for theatre",
+    operation: "Operation",
+    operationPlaceholder: "Total knee replacement…",
+    operationHint: "Search the operation list, or type a procedure not on it",
+    roomOne: "Theatre",
+    operator: "Surgeon",
+    anaesthetist: "Anaesthetist",
+    anaesthesia: "Anaesthesia",
+    times: "Theatre times",
+    slip: "Surgery slip",
+    notes: "Notes for theatre",
+    checklist: "pre-op checklist",
+    durations: ["In theatre", "Surgery", "Anaesthesia"],
+    askSide: true,
+    anaesthesiaChoices: null,
+    inRoom: "In theatre",
+    skipMilestones: [],
   },
   procedures: {
     board: "Procedures",
     setup: "Procedure list",
     room: "Procedure rooms",
     caseWord: "procedure",
+    bookTitle: "Book a procedure",
+    operation: "Procedure",
+    operationPlaceholder: "Colonoscopy, upper GI endoscopy…",
+    operationHint: "Search the procedure list, or type one not on it",
+    roomOne: "Procedure room",
+    operator: "Doctor performing it",
+    anaesthetist: "Sedation given by",
+    anaesthesia: "Sedation",
+    times: "Procedure times",
+    slip: "Procedure slip",
+    notes: "Notes for the procedure room",
+    checklist: "day-procedure checklist",
+    durations: ["In the room", "Procedure", "Sedation"],
+    askSide: false,
+    anaesthesiaChoices: ["Sedation", "Local", "General"],
+    inRoom: "In the room",
+    skipMilestones: ["incision_at", "closure_at"],
   },
 };
 
@@ -61,7 +126,7 @@ interface ModuleState {
   /** False while unknown, so nothing is offered that may not exist. */
   has: (module: ModuleName) => boolean;
   /** The site's words for the theatre module; "theatre" until told otherwise. */
-  words: (typeof THEATRE_WORDS)[TheatreVocabulary];
+  words: TheatreWords;
   /** The departments this site runs, in the order to offer them.
    *
    * Every department until the API answers: a registration screen showing one
@@ -77,6 +142,10 @@ interface ModuleState {
    *  site's name, for a site that has not supplied artwork yet. Null until
    *  the API answers, so neither is flashed on the wrong site. */
   logo: "bundled" | "none" | null;
+  hospitalCity: string | null;
+  /** The platform this site runs, shown beside its own identity: "medicos",
+   *  or null for a site that shows only its own. */
+  platform: "medicos" | null;
 }
 
 const ModuleContext = createContext<ModuleState>({
@@ -88,6 +157,8 @@ const ModuleContext = createContext<ModuleState>({
   defaultDepartment: ALL_DEPARTMENTS[0],
   formularyPendingSignoff: [],
   logo: null,
+  hospitalCity: null,
+  platform: null,
 });
 
 export function useModules() {
@@ -126,6 +197,8 @@ function readCache(): {
   default_department?: Department;
   formulary_pending_signoff?: string[];
   hospital_logo?: "bundled" | "none";
+  hospital_city?: string;
+  platform_brand?: string;
 } | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -155,12 +228,16 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
     cached?.formulary_pending_signoff ?? []
   );
   const [logo, setLogo] = useState<"bundled" | "none" | null>(cached?.hospital_logo ?? null);
+  const [hospitalCity, setHospitalCity] = useState<string | null>(cached?.hospital_city ?? null);
+  const [platform, setPlatform] = useState<"medicos" | null>(
+    cached?.platform_brand === "medicos" ? "medicos" : null
+  );
 
   // The tab title is the site's own name. It used to be written into the
   // root layout as one hospital's name, and every other site inherited it.
   useEffect(() => {
-    if (hospitalName) document.title = hospitalName;
-  }, [hospitalName]);
+    if (hospitalName) document.title = platform ? `${hospitalName} · MedicOS` : hospitalName;
+  }, [hospitalName, platform]);
 
   useEffect(() => {
     let active = true;
@@ -177,6 +254,8 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         if (data.default_department) setDefaultDepartment(data.default_department);
         setPending(data.formulary_pending_signoff ?? []);
         setLogo(data.hospital_logo === "none" ? "none" : "bundled");
+        setHospitalCity(data.hospital_city ?? null);
+        setPlatform(data.platform_brand === "medicos" ? "medicos" : null);
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
         } catch {
@@ -203,6 +282,8 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         defaultDepartment,
         formularyPendingSignoff,
         logo,
+        hospitalCity,
+        platform,
       }}
     >
       {children}

@@ -7,6 +7,12 @@
  * "Left" books left knees, and the slip, the checklist and the operation
  * note all copy whatever was chosen here.
  *
+ * A site without wards books against the patient's visit instead of an
+ * admission — a day case is billed to the visit, and nobody here is ever
+ * admitted to choose from. Such a site (the "procedures" vocabulary) is not
+ * asked for a side either: a scope has none, and a side question on every
+ * booking trains the desk to click "Left" to get past it.
+ *
  * A room that is already taken is refused by the server; the message says
  * which case holds it, and the doctor can book anyway when two lists sharing
  * a theatre is deliberate.
@@ -15,8 +21,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules } from "@/components/dashboard/modules-provider";
 import type { Consultant } from "@/lib/types/appointments";
 import type { BedOccupant } from "@/lib/types/ipd";
+import type { Visit } from "@/lib/types/emr";
 import type { Operation, Surgery, TheatreOptions, TheatreRoom } from "@/lib/types/theatre";
 import { fromHospitalInput } from "@/lib/types/theatre";
 import { hospitalToday } from "@/lib/format";
@@ -33,11 +41,16 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export interface BookingPatient {
-  admission_id: string;
+  /** One or the other: an inpatient's admission, or a day case's visit. */
+  admission_id?: string | null;
+  visit_id?: string | null;
   patient_name: string;
+  /** The IP number, or the visit number for a day case. */
   ip_number: string;
   diagnosis?: string | null;
 }
+
+const NOT_APPLICABLE = "Not applicable";
 
 const SELECT =
   "h-9 w-full rounded-md border border-border bg-white px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-pine/30";
@@ -65,10 +78,14 @@ export function BookSurgeryDialog({
   patient?: BookingPatient;
 }) {
   const { user } = useAuth();
+  const { has, words } = useModules();
+  // No wards: the patients to choose from are today's visits, not inpatients.
+  const dayCase = !has("ipd");
   const [options, setOptions] = useState<TheatreOptions | null>(null);
   const [rooms, setRooms] = useState<TheatreRoom[]>([]);
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [inpatients, setInpatients] = useState<BedOccupant[]>([]);
+  const [visits, setVisits] = useState<Visit[]>([]);
 
   const [patient, setPatient] = useState<BookingPatient | null>(preset ?? null);
   const [operationQuery, setOperationQuery] = useState("");
@@ -95,7 +112,7 @@ export function BookSurgeryDialog({
     setPatient(preset ?? null);
     setOperationQuery("");
     setOperation(null);
-    setSide("");
+    setSide(words.askSide ? "" : NOT_APPLICABLE);
     setDiagnosis(preset?.diagnosis ?? "");
     setSurgeon(user?.role === "doctor" ? user.full_name : "");
     setAssistants("");
@@ -112,7 +129,12 @@ export function BookSurgeryDialog({
     void staffApi.theatreOptions().then(setOptions).catch(() => undefined);
     void staffApi.theatreRooms().then(setRooms).catch(() => undefined);
     void staffApi.consultants({ active_only: true }).then(setConsultants).catch(() => undefined);
-    if (!preset) {
+    if (!preset && dayCase) {
+      void staffApi
+        .todaysVisits()
+        .then((items) => setVisits(items.filter((item) => item.status !== "cancelled")))
+        .catch(() => undefined);
+    } else if (!preset) {
       void staffApi
         .wardBoard()
         .then(({ wards }) =>
@@ -124,7 +146,7 @@ export function BookSurgeryDialog({
         )
         .catch(() => undefined);
     }
-  }, [open, preset, user]);
+  }, [open, preset, user, dayCase, words.askSide]);
 
   useEffect(() => {
     const term = operationQuery.trim();
@@ -150,16 +172,17 @@ export function BookSurgeryDialog({
     setError(null);
     if (!patient) return setError("Choose the patient.");
     if (!operation && !operationQuery.trim()) {
-      return setError("Choose an operation from the list, or type what is being done.");
+      return setError(`Choose a ${words.caseWord} from the list, or type what is being done.`);
     }
     if (!side) return setError("Choose the side.");
-    if (!surgeon.trim()) return setError("Name the operating surgeon.");
+    if (!surgeon.trim()) return setError(`Name the ${words.operator.toLowerCase()}.`);
     if (!when) return setError("Choose the date and time.");
 
     setBusy(true);
     try {
       const surgery = await staffApi.bookSurgery({
-        admission_id: patient.admission_id,
+        admission_id: patient.admission_id ?? null,
+        visit_id: patient.visit_id ?? null,
         operation_id: operation?.id ?? null,
         operation_name: operation ? null : operationQuery.trim(),
         laterality: side,
@@ -193,16 +216,49 @@ export function BookSurgeryDialog({
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
       <DialogContent className="max-h-[92dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Book for theatre</DialogTitle>
+          <DialogTitle>{words.bookTitle}</DialogTitle>
           <DialogDescription>
             {patient
               ? `${patient.patient_name} · ${patient.ip_number}`
-              : "Choose the inpatient, the operation and the side."}
+              : dayCase
+                ? `Choose the patient from today's visits, then the ${words.caseWord}.`
+                : "Choose the inpatient, the operation and the side."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {!preset && (
+          {!preset && dayCase && (
+            <div className="sm:col-span-2">
+              <Field
+                label="Patient"
+                hint={visits.length === 0
+                  ? "Nobody has been registered today. Register the patient at the counter first: the procedure is billed to that visit."
+                  : undefined}
+              >
+                <select
+                  className={SELECT}
+                  value={patient?.visit_id ?? ""}
+                  onChange={(event) => {
+                    const found = visits.find((item) => item.id === event.target.value);
+                    setPatient(
+                      found
+                        ? { visit_id: found.id, patient_name: found.patient_name, ip_number: found.visit_number }
+                        : null
+                    );
+                  }}
+                >
+                  <option value="">Choose from today&apos;s visits…</option>
+                  {visits.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.token_number ? `#${item.token_number} · ` : ""}
+                      {item.patient_name} · {item.visit_number} · {item.doctor_name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+          {!preset && !dayCase && (
             <div className="sm:col-span-2">
               <Field label="Patient">
                 <select
@@ -231,10 +287,10 @@ export function BookSurgeryDialog({
           )}
 
           <div className="relative sm:col-span-2">
-            <Field label="Operation" hint={operation ? `${operation.code} · about ${operation.default_minutes} min` : "Search the operation list, or type a procedure not on it"}>
+            <Field label={words.operation} hint={operation ? `${operation.code} · about ${operation.default_minutes} min` : words.operationHint}>
               <Input
                 value={operationQuery}
-                placeholder="Total knee replacement…"
+                placeholder={words.operationPlaceholder}
                 onChange={(event) => {
                   setOperationQuery(event.target.value);
                   setOperation(null);
@@ -264,6 +320,7 @@ export function BookSurgeryDialog({
             )}
           </div>
 
+          {words.askSide && (
           <div className="sm:col-span-2">
             <span className="text-xs font-medium text-ink-muted">Side</span>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -284,6 +341,7 @@ export function BookSurgeryDialog({
               ))}
             </div>
           </div>
+          )}
 
           <div className="sm:col-span-2">
             <Field label="Diagnosis">
@@ -291,7 +349,7 @@ export function BookSurgeryDialog({
             </Field>
           </div>
 
-          <Field label="Surgeon">
+          <Field label={words.operator}>
             <Input list="theatre-surgeons" value={surgeon} onChange={(event) => setSurgeon(event.target.value)} />
             <datalist id="theatre-surgeons">
               {consultants.map((item) => (
@@ -302,13 +360,15 @@ export function BookSurgeryDialog({
           <Field label="Assistants" hint="Separate names with commas">
             <Input value={assistants} onChange={(event) => setAssistants(event.target.value)} />
           </Field>
-          <Field label="Anaesthetist">
+          <Field label={words.anaesthetist}>
             <Input value={anaesthetist} onChange={(event) => setAnaesthetist(event.target.value)} />
           </Field>
-          <Field label="Anaesthesia">
+          <Field label={words.anaesthesia}>
             <select className={SELECT} value={anaesthesia} onChange={(event) => setAnaesthesia(event.target.value)}>
               <option value="">Not decided yet</option>
-              {(options?.anaesthesia_types ?? []).map((item) => (
+              {(options?.anaesthesia_types ?? [])
+                .filter((item) => !words.anaesthesiaChoices || words.anaesthesiaChoices.includes(item))
+                .map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
@@ -318,10 +378,10 @@ export function BookSurgeryDialog({
             <Input type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} />
           </Field>
           <Field label="Expected duration (minutes)">
-            <Input type="number" min={5} max={1440} value={minutes} placeholder="From the operation list"
+            <Input type="number" min={5} max={1440} value={minutes} placeholder={`From the ${words.setup.toLowerCase()}`}
                    onChange={(event) => setMinutes(event.target.value)} />
           </Field>
-          <Field label="Theatre">
+          <Field label={words.roomOne}>
             <select className={SELECT} value={roomId} onChange={(event) => setRoomId(event.target.value)}>
               <option value="">Not assigned yet</option>
               {rooms.map((item) => (
@@ -329,14 +389,14 @@ export function BookSurgeryDialog({
               ))}
             </select>
           </Field>
-          <Field label="Priority" hint={priority === "emergency" ? "An emergency may go in before the pre-op checklist is signed." : undefined}>
+          <Field label="Priority" hint={priority === "emergency" ? `An emergency may go in before the ${words.checklist} is signed.` : undefined}>
             <select className={SELECT} value={priority} onChange={(event) => setPriority(event.target.value)}>
               <option value="elective">Elective</option>
               <option value="emergency">Emergency</option>
             </select>
           </Field>
           <div className="sm:col-span-2">
-            <Field label="Notes for theatre">
+            <Field label={words.notes}>
               <Input value={notes} onChange={(event) => setNotes(event.target.value)} />
             </Field>
           </div>

@@ -23,6 +23,7 @@ const MODULE_LABEL: Record<ModuleName, string> = {
   theatre: "the operation theatre",
   insurance: "insurance claims",
   room_charges: "room charges",
+  radiology: "radiology reporting",
 };
 
 export function ModuleGate({

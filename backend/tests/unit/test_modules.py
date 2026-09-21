@@ -150,3 +150,17 @@ def test_default_department_must_be_a_real_department():
 
     with pytest.raises(ValidationError):
         Settings(DEFAULT_DEPARTMENT="pediatrics")
+
+
+def test_radiology_worklist_is_behind_its_module():
+    """The worklist lives in the pads router, so it is switched by dependency,
+    not by leaving the router out. A clinic with no radiologist gets a 404."""
+    from app.api.v1.routes import pads
+
+    route = next(r for r in pads.router.routes if r.path.endswith("/radiology/worklist"))
+    checkers = [d.call for d in route.dependant.dependencies]
+    assert any(getattr(c, "__qualname__", "").startswith("require_module") for c in checkers)
+
+
+def test_clinic_setting_leaves_radiology_off():
+    assert Module.RADIOLOGY not in resolve(parse_enabled("theatre"))

@@ -30,6 +30,7 @@ import { initials } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { useModules, type ModuleName } from "@/components/dashboard/modules-provider";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { Button } from "@/components/ui/button";
 
 /** Grouped so the front desk's work and the clinician's work are visually
@@ -57,7 +58,7 @@ const NAV: {
   // "Procedures" in a clinic whose list is fifteen-minute scopes.
   { href: "/theatre", label: "Theatre", icon: Scissors, group: "ward", module: "theatre" },
   { href: "/diet", label: "Diet sheet", icon: UtensilsCrossed, group: "ward", module: "diet" },
-  { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward" },
+  { href: "/radiology", label: "Radiology", icon: FileImage, group: "ward", module: "radiology" },
   // The laboratory runs in its own terminal; doctors verify results there.
   { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward",
     roles: ["admin", "doctor"], module: "laboratory" },
@@ -155,6 +156,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         >
           <LogOut className="h-4 w-4" /> Sign out
         </Button>
+        <PlatformMark variant="credit" width={72} className="mt-3" />
       </div>
     </div>
   );

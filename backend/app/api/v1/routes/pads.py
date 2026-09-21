@@ -9,11 +9,12 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from app.api.deps import CurrentUser, get_pad_service, require_permission
+from app.api.deps import CurrentUser, get_pad_service, require_module, require_permission
 from app.core.audit import client_ip, record as audit_record
 from app.core.permissions import Permission, has_permission
 from app.models.enums import AuditAction, Department, PadStatus
 from app.models.patient import Patient
+from app.modules import Module
 from app.pads.defaults import DOCUMENT_TYPES, PROTECTED_SECTIONS, document_type as type_spec
 from app.pads import forms
 from app.pads.forms_pdf import render_form_pdf
@@ -308,7 +309,8 @@ async def open_patient_document(
     return PadDocumentOut.model_validate(document)
 
 
-@router.get("/radiology/worklist", dependencies=[Depends(READ)])
+@router.get("/radiology/worklist",
+            dependencies=[Depends(READ), Depends(require_module(Module.RADIOLOGY))])
 async def radiology_worklist(
     service: Service,
     include_reported: bool = Query(default=False),

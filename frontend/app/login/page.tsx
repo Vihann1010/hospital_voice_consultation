@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { Loader2, Lock } from "lucide-react";
 import { fetchCurrentUser, login } from "@/lib/auth";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { SiteDepartments } from "@/components/brand/site-departments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +88,12 @@ function LoginForm() {
   );
 }
 
+function SiteCity({ className }: { className?: string }) {
+  const { hospitalCity } = useModules();
+  // Read from the site's configuration; it used to say one hospital's city.
+  return hospitalCity ? <p className={className}>{hospitalCity}</p> : null;
+}
+
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
@@ -97,7 +105,7 @@ export default function LoginPage() {
           <div className="inline-block rounded-xl bg-white px-6 py-5 shadow-lift">
             <Logo width={200} priority />
           </div>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-mint/45">Kanpur</p>
+          <SiteCity className="mt-3 text-[11px] uppercase tracking-[0.18em] text-mint/45" />
         </div>
 
         <motion.div
@@ -116,7 +124,10 @@ export default function LoginPage() {
 
         {/* Read from the site's configuration. It used to name one hospital's
             two consultants, on every site's sign-in page. */}
-        <SiteDepartments className="text-xs text-mint/35" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <SiteDepartments className="text-xs text-mint/35" />
+          <PlatformMark variant="credit" width={96} />
+        </div>
       </div>
 
       {/* Form panel */}
@@ -130,10 +141,11 @@ export default function LoginPage() {
           <div className="mb-8 lg:hidden">
             <Logo width={180} priority />
           </div>
+          <PlatformMark width={150} className="mb-6 hidden lg:inline-block" />
 
           <h1 className="font-display text-2xl font-semibold text-pine">Clinical console</h1>
           <p className="mb-6 mt-1 text-sm text-ink-muted">
-            Sign in with your hospital account to view today&apos;s patients.
+            Sign in with your staff account to view today&apos;s patients.
           </p>
 
           <Suspense fallback={<div className="h-64" />}>
