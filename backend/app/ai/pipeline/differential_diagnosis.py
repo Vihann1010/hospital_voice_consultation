@@ -7,6 +7,7 @@ Never shown to the patient; the disclaimer travels inside the schema.
 import json
 from typing import Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import ClinicalSummary, DifferentialDiagnosis, MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
@@ -30,7 +31,8 @@ class DifferentialDiagnosisService(BaseAIService[DifferentialDiagnosis]):
         ledger: Optional[CostLedger] = None,
     ) -> DifferentialDiagnosis:
         system = (
-            "You are a clinical decision-support model assisting a specialist at Satya "
+            f"You are a clinical decision-support model assisting a specialist at "
+            f"{settings.HOSPITAL_NAME}"
             f"Hospital ({memory.department.value}). Produce 3-5 differentials appropriate to "
             "this department and patient demographics, ordered by likelihood. Ground every "
             "supporting/contradicting feature in the record — cite the actual finding, not a "

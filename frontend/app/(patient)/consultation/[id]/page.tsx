@@ -6,7 +6,7 @@ import { useConsultation, type SessionPhase } from "@/lib/hooks/useConsultation"
 import { PreviousReportsUpload } from "@/components/patient/previous-reports-upload";
 
 const PHASE_COPY: Record<SessionPhase, { title: string; hint: string }> = {
-  connecting: { title: "Connecting…", hint: "Setting up your voice line to Satya Hospital." },
+  connecting: { title: "Connecting…", hint: "Setting up your voice line." },
   listening: { title: "Listening", hint: "Speak whenever you're ready. Take your time." },
   thinking: { title: "One moment", hint: "The assistant is noting what you said." },
   speaking: { title: "Assistant speaking", hint: "Start talking any time — it will stop for you." },

@@ -9,6 +9,7 @@ number cannot flip a normal result to abnormal or the reverse.
 import json
 from typing import Any, Dict, List, Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import ReportSummary
 from app.ai.providers.base import CostLedger
@@ -33,7 +34,8 @@ class ReportSummaryService(BaseAIService[ReportSummary]):
         tag: str = "-",
     ) -> ReportSummary:
         system = (
-            "You summarise laboratory and imaging reports for a specialist at Satya "
+            f"You summarise laboratory and imaging reports for a specialist at "
+            f"{settings.HOSPITAL_NAME}"
             f"Hospital ({department}). Audience: the treating doctor.\n\n"
             "CRITICAL RULE: the abnormal/normal classification of every numeric value has "
             "ALREADY been decided arithmetically against reference ranges and is given to "

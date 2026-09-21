@@ -1,4 +1,4 @@
-"""Satya Hospital AI Platform — API entrypoint.
+"""The API entrypoint.
 
 Startup order matters and is deliberate:
   1. validate configuration (refuse to boot production with shipped defaults,
@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.config import settings
 from app.ai.llm_client import llm_client
 from app.ai.providers.factory import close_gateway
 from app.ai.session.manager import session_manager
@@ -36,7 +37,7 @@ from app.core.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.db.session import AsyncSessionLocal, engine
-from app.departments import validate_department_config
+from app.departments import label_for, validate_department_config
 from app.modules import Module, dropped_for_missing_parent, parse_enabled
 from app.prescriptions.formulary import unapproved_departments
 from app.messaging.factory import close_provider, get_provider
@@ -141,9 +142,10 @@ app = FastAPI(
     title=settings.APP_NAME,
     version="5.0.0",
     description=(
-        "Backend for Satya Hospital's AI voice intake platform.\n\n"
-        "Departments: Orthopedics (Dr. A K Agarwal) and Gynecology "
-        "(Dr. Manisha Agarwal).\n\n"
+        f"Backend for {settings.HOSPITAL_NAME}'s AI voice intake platform.\n\n"
+        "Departments: "
+        + ", ".join(label_for(d) for d in settings.enabled_departments)
+        + ".\n\n"
         "All clinical endpoints require a bearer token from `/auth/login`. "
         "AI output is advisory throughout; the treating doctor is the final "
         "authority on every clinical decision."

@@ -43,9 +43,8 @@ DEBUG=false
 
 JWT_SECRET_KEY=<64 hex characters from above>
 POSTGRES_PASSWORD=<strong password>
+ADMIN_EMAIL=<the administrator's email>
 ADMIN_PASSWORD=<strong password>
-DR_AK_AGARWAL_PASSWORD=<strong password>
-DR_MANISHA_AGARWAL_PASSWORD=<strong password>
 
 SARVAM_API_KEY=<your key>
 
@@ -172,11 +171,49 @@ sudo crontab -e
 Migrations run first — the API deliberately refuses to boot against an
 unmigrated database rather than silently creating tables.
 
+**A brand-new, empty database** cannot be built by running the chain from the
+start. Migration `0001_initial` creates its tables with `create_all` over the
+*current* models, so it already makes every table the later migrations add, and
+`0007` then fails on a `consultants` table that exists. Until the chain is
+repaired, build the schema from `0001` and record it as current:
+
 ```bash
 docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml run --rm migrate
+docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade 0001_initial
+docker compose -f docker-compose.prod.yml run --rm backend alembic stamp head
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+This is correct, not a shortcut: `0001` produces the schema the models describe
+today, enum values included. It was checked against a fresh database — the
+`gastroenterology` department, the `endoscopy` investigation category and
+`surgeries.visit_id` from migrations 0031–0033 are all present afterwards.
+
+**An existing database** that is already migrated takes new migrations the
+normal way:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm migrate
+```
+
+**A new site's own data.** For the gastroenterology clinic:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.seed_gastro_clinic
+```
+
+It creates the price list, the endoscopy suite and recovery bay, and the
+procedure list — all at placeholder rates. It creates no staff logins and no
+consultants; those are the clinic's to enter, and the script says so when it
+finishes.
+
+Before the first patient, a new site also sets its identity in `.env`:
+`HOSPITAL_NAME` and `HOSPITAL_CITY` (printed on every prescription and bill,
+and said aloud by the intake assistant), `DOCUMENT_PREFIX` (three letters at
+the front of every UHID and invoice number — permanent once patients are
+registered), and `ADMIN_EMAIL`. Replace `backend/app/assets` logo files with
+the site's own; the prescription falls back to printing `HOSPITAL_NAME` when
+there is no logo.
 
 **Upgrading an existing deployment** that was created by the old `create_all`
 path — adopt the baseline instead of re-creating tables:
@@ -213,19 +250,26 @@ what it created.
 
 ---
 
-## 6. Seeded accounts
+## 6. The first account
 
-Created on first boot from `.env`. **Change these passwords immediately.**
+One account is created on first boot, from `ADMIN_EMAIL` and `ADMIN_PASSWORD`
+in `.env`. **Change that password immediately**, at Settings → Staff accounts.
 
-| Account | Role | Department |
-|---|---|---|
-| `admin@satyahospital.in` | admin | — |
-| `ak.agarwal@satyahospital.in` | doctor | Orthopedics |
-| `manisha.agarwal@satyahospital.in` | doctor | Gynecology |
+Everyone else — doctors, reception, nurses — is created by the administrator
+from that same screen, which records who created each account. Named
+consultants used to be seeded here too, which meant every site that installed
+this build got logins for two doctors who did not work there, each with a
+shipped default password.
 
-Front-desk staff accounts are created by an administrator; the `staff` role can
-read records and upload reports but holds **no clinical authority** — it cannot
-prescribe, order investigations, sign off consultations or use the copilot.
+Front-desk staff hold **no clinical authority**: reception can read records and
+upload reports but cannot prescribe, order investigations, sign off
+consultations or use the copilot. The full matrix is in `docs/ROLES.txt`.
+
+A consultant is not a login. Doctors who see patients are also entered in
+Settings → Consultants, which is where their OPD hours, fees and registration
+number live, and where the intake assistant reads the name it says to patients.
+A visiting endoscopist who never touches the software needs a consultant entry
+and no account at all.
 
 ---
 

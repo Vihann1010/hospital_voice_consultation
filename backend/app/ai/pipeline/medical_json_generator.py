@@ -7,6 +7,7 @@ the call (cost optimization) and once at finalization.
 import json
 from typing import Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import MedicalRecord
 from app.ai.providers.base import CostLedger
@@ -26,7 +27,7 @@ class MedicalJSONGeneratorService(BaseAIService[MedicalRecord]):
     ) -> MedicalRecord:
         profile = profile_for(memory.department)
         system = (
-            "You are the clinical documentation model of Satya Hospital "
+            f"You are the clinical documentation model of {settings.HOSPITAL_NAME} "
             f"({profile.label} department). Build the patient's structured medical "
             "record from the collected data below. Rules: never invent facts; use null/empty "
             "for anything not stated; convert weight to kilograms and height to centimeters "

@@ -13,6 +13,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from app.core.config import settings
 from app.core.clock import to_local
 from app.printing.layout import DEFAULT_LAYOUT, PageLayout, draw_letterhead, resolve_fonts
 
@@ -39,7 +40,7 @@ def render_surgery_slip(
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Surgery slip {surgery.ot_number}")
-    pdf.setAuthor("Satya Hospital")
+    pdf.setAuthor(settings.HOSPITAL_NAME)
     draw_letterhead(pdf, layout)
 
     y = layout.content_top - 4

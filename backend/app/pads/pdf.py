@@ -28,6 +28,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.core.config import settings
 from app.core.clock import to_local
 from app.pads import sections as rules
 from app.printing.layout import (
@@ -175,7 +176,7 @@ def render_pad_pdf(
         output,
         pagesize=A4,
         title=f"{document.title} — {patient.name}",
-        author="Satya Hospital",
+        author=settings.HOSPITAL_NAME,
     )
     template.addPageTemplates([PageTemplate(id="pad", frames=[frame], onPage=decorate)])
 

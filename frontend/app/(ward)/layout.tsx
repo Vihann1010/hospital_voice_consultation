@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/components/dashboard/auth-provider";
+import { ModuleGate } from "@/components/dashboard/module-gate";
 import { WardShell } from "@/components/ward/ward-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -15,7 +16,12 @@ export default function WardLayout({ children }: { children: React.ReactNode }) 
     <AuthProvider allow={["admin", "doctor", "supervisor", "reception", "nurse"]} fallbackPath="/dashboard">
       <ToastProvider>
         <TooltipProvider delayDuration={200}>
-          <WardShell>{children}</WardShell>
+          {/* This whole terminal belongs to a module. At a site that does
+              not run it, every request behind these screens 404s, so say
+              which it is rather than rendering a shell that cannot work. */}
+          <ModuleGate module="ipd">
+            <WardShell>{children}</WardShell>
+          </ModuleGate>
         </TooltipProvider>
       </ToastProvider>
     </AuthProvider>

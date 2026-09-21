@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService, StageError
 from app.core.logging import get_logger
 
@@ -69,7 +70,7 @@ class HandoverDraft(BaseModel):
 logger = get_logger(__name__)
 
 
-DISCHARGE_SYSTEM = """You are a clinical documentation assistant at Satya Hospital, \
+DISCHARGE_SYSTEM = f"""You are a clinical documentation assistant at {settings.HOSPITAL_NAME}, \
 drafting a discharge summary from an inpatient record for a doctor to review and sign.
 
 Absolute rules:
@@ -105,7 +106,7 @@ sentences. "warning_signs" are the specific things that should bring the patient
 back urgently, in plain language a family member can act on."""
 
 
-HANDOVER_SYSTEM = """You are preparing a nursing shift handover at Satya Hospital.
+HANDOVER_SYSTEM = f"""You are preparing a nursing shift handover at {settings.HOSPITAL_NAME}.
 
 Use only the record provided. The incoming nurse has ninety seconds and needs to \
 know what changed and what to watch, not the full history.

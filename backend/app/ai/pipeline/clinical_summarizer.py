@@ -6,6 +6,7 @@ and produces the HPI-style summary shown at the top of the doctor's view.
 import json
 from typing import Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import ClinicalSummary, MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
@@ -34,7 +35,7 @@ class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
         label = label_for(memory.department)
         doctor = f"{memory.doctor_name} ({label})" if memory.doctor_name else f"the {label} consultant"
         system = (
-            f"You write pre-consultation clinical summaries for {doctor} at Satya Hospital. "
+            f"You write pre-consultation clinical summaries for {doctor} at {settings.HOSPITAL_NAME}. "
             "Audience: the treating doctor, seconds before walking in. Style: precise clinical "
             "prose, standard abbreviations fine, no hedging filler, no invented findings. "
             "one_liner: age/gender + chief complaint + duration in one sentence. "

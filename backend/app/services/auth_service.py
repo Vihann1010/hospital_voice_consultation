@@ -25,35 +25,31 @@ class AuthService:
 
 
 async def seed_default_users(session: AsyncSession) -> None:
-    """Idempotently create the admin and the two consulting doctors."""
+    """Idempotently create the one account a fresh install needs: the admin.
+
+    This used to seed two named consultants as well — the hospital's own
+    orthopaedic surgeon and gynaecologist, written into Python. A different
+    clinic installing the same build got two logins for doctors who do not
+    work there, each with a shipped default password, and had to be told to
+    ignore them.
+
+    Staff belong in the Staff accounts screen, which exists, knows about roles
+    and departments, and records who created the account. So the seed creates
+    the administrator who will use that screen, and stops. Existing
+    deployments are unaffected: this only ever creates what is missing, and
+    their accounts are already there.
+    """
     users = UserRepository(session)
-    defaults = [
-        (settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD, "Administrator", UserRole.ADMIN, None),
-        (
-            settings.DR_AK_AGARWAL_EMAIL,
-            settings.DR_AK_AGARWAL_PASSWORD,
-            "Dr. A K Agarwal",
-            UserRole.DOCTOR,
-            Department.ORTHOPEDICS,
-        ),
-        (
-            settings.DR_MANISHA_AGARWAL_EMAIL,
-            settings.DR_MANISHA_AGARWAL_PASSWORD,
-            "Dr. Manisha Agarwal",
-            UserRole.DOCTOR,
-            Department.GYNECOLOGY,
-        ),
-    ]
-    for email, password, full_name, role, department in defaults:
-        if await users.get_by_email(email) is None:
-            await users.add(
-                User(
-                    email=email.lower(),
-                    full_name=full_name,
-                    hashed_password=hash_password(password),
-                    role=role,
-                    department=department,
-                )
+    if await users.get_by_email(settings.ADMIN_EMAIL) is None:
+        await users.add(
+            User(
+                email=settings.ADMIN_EMAIL.lower(),
+                full_name="Administrator",
+                hashed_password=hash_password(settings.ADMIN_PASSWORD),
+                role=UserRole.ADMIN,
+                department=None,
             )
-            logger.info("seeded_user", extra={"email": email, "role": role.value})
+        )
+        logger.info("seeded_user", extra={"email": settings.ADMIN_EMAIL,
+                                          "role": UserRole.ADMIN.value})
     await session.commit()

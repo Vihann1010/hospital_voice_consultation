@@ -17,6 +17,7 @@ import re
 from datetime import date
 from typing import Optional
 
+from app.core.config import settings
 from app.core.financial_year import label_for
 from app.core.clock import local_today
 
@@ -30,7 +31,13 @@ from app.core.clock import local_today
 # misheard or mistyped character has a single unambiguous correction.
 UHID_ALPHABET = "ACDEFGHKLMNPRTUVWXY34679"
 
-UHID_PATTERN = re.compile(r"^SAT(\d{2})([A-Z0-9]{6})$")
+# The site's three letters, at the front of every UHID and invoice number. It
+# was "SAT", written here, so a second site printed another hospital's name on
+# its patients' cards and its bills. Three letters exactly: the UHID is sized
+# to be read over a counter, and existing numbers are matched by this pattern.
+PREFIX = settings.DOCUMENT_PREFIX
+
+UHID_PATTERN = re.compile(rf"^{PREFIX}(\d{{2}})([A-Z0-9]{{6}})$")
 
 
 def financial_year(on: Optional[date] = None) -> str:
@@ -45,7 +52,7 @@ def financial_year(on: Optional[date] = None) -> str:
 
 
 def build_uhid(sequence: int, on: Optional[date] = None) -> str:
-    """A patient's permanent number: SAT26A4K7QM.
+    """A patient's permanent number, e.g. SAT26A4K7QM for the prefix SAT.
 
     The year prefix makes the registration era obvious at a glance; the
     encoded suffix keeps it short enough to say over a counter.
@@ -65,7 +72,7 @@ def build_uhid(sequence: int, on: Optional[date] = None) -> str:
         # Beyond ~594 million patients per year. Fail rather than silently
         # truncate into a collision.
         raise ValueError("UHID sequence has exceeded the encodable range.")
-    return f"SAT{year:02d}{encoded}"
+    return f"{PREFIX}{year:02d}{encoded}"
 
 
 def is_valid_uhid(value: str) -> bool:
@@ -95,7 +102,7 @@ def normalise_uhid(value: str) -> str:
         "B": "8", "8": "H",
         "Z": "2", "2": "7",
     }
-    if cleaned.startswith("SAT") and len(cleaned) == 11:
+    if cleaned.startswith(PREFIX) and len(cleaned) == 11:
         prefix, suffix = cleaned[:5], cleaned[5:]
         suffix = "".join(substitutions.get(c, c) if c not in UHID_ALPHABET else c
                          for c in suffix)
@@ -105,7 +112,7 @@ def normalise_uhid(value: str) -> str:
 
 def build_invoice_number(sequence: int, on: Optional[date] = None) -> str:
     """SAT/26-27/000041 — sequential within the financial year."""
-    return f"SAT/{financial_year(on)}/{sequence:06d}"
+    return f"{PREFIX}/{financial_year(on)}/{sequence:06d}"
 
 
 def build_receipt_number(sequence: int, on: Optional[date] = None) -> str:

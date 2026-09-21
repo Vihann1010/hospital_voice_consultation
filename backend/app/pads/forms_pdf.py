@@ -29,6 +29,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.core.config import settings
 from app.core.clock import local_today, to_local
 from app.pads import forms
 from app.pads.defaults import document_type as type_spec
@@ -302,7 +303,7 @@ def render_form_pdf(
             stamp_watermark(canvas, watermark)
 
     template = BaseDocTemplate(output, pagesize=A4, title=f"{spec.label} — {patient.name}",
-                               author="Satya Hospital")
+                               author=settings.HOSPITAL_NAME)
     template.addPageTemplates([PageTemplate(id="form", frames=[frame], onPage=decorate)])
 
     story = _header(document, spec, styles, width, hindi)

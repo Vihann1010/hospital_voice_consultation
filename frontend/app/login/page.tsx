@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Loader2, Lock } from "lucide-react";
 import { fetchCurrentUser, login } from "@/lib/auth";
 import { Logo } from "@/components/brand/logo";
+import { SiteDepartments } from "@/components/brand/site-departments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +55,7 @@ function LoginForm() {
           autoComplete="username"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="doctor@satyahospital.in"
+          placeholder="name@your-clinic.in"
           required
         />
       </div>
@@ -113,9 +114,9 @@ export default function LoginPage() {
           </p>
         </motion.div>
 
-        <p className="text-xs text-mint/35">
-          Trauma &amp; Orthopedics · Dr. A K Agarwal &nbsp;&nbsp;|&nbsp;&nbsp; Maternity &amp; Gynecology · Dr. Manisha Agarwal
-        </p>
+        {/* Read from the site's configuration. It used to name one hospital's
+            two consultants, on every site's sign-in page. */}
+        <SiteDepartments className="text-xs text-mint/35" />
       </div>
 
       {/* Form panel */}

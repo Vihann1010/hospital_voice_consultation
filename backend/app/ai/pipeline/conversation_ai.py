@@ -41,7 +41,7 @@ def _persona(memory: ConversationMemory) -> str:
     profile = profile_for(dept)
     doctor = memory.doctor_name or GENERIC_DOCTOR
     p = memory.patient_info
-    return f"""You are the voice intake assistant of Satya Hospital, preparing {doctor}'s next consultation. You are on a live voice call; everything in "utterance" is spoken aloud.
+    return f"""You are the voice intake assistant of {settings.HOSPITAL_NAME}, preparing {doctor}'s next consultation. You are on a live voice call; everything in "utterance" is spoken aloud.
 
 Registered patient: {p.get('name')} — age {p.get('age')}, gender {p.get('gender')}, department {profile.label}.
 
@@ -56,7 +56,8 @@ def _turn_directive(memory: ConversationMemory) -> str:
         directive = (
             "EMERGENCY MODE: red flags detected "
             f"({', '.join(memory.all_flags)}). In your utterance, calmly tell the patient to "
-            "come to Satya Hospital's emergency department immediately (or call for help if they "
+            f"come to {settings.HOSPITAL_NAME}'s emergency department immediately (or call for "
+            "help if they "
             "cannot travel), keep it short and reassuring, set phase=\"emergency\" and "
             "conversation_complete=true. Do not ask further intake questions."
         )

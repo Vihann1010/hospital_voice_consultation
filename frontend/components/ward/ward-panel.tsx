@@ -275,7 +275,7 @@ function AdmitSheet({
         </div>
         <div>
           <label className="field-label" htmlFor="ad-doc">Under doctor</label>
-          <Input id="ad-doc" value={doctor} placeholder="Dr A K Agarwal"
+          <Input id="ad-doc" value={doctor} placeholder="Treating doctor"
                  onChange={(e) => setDoctor(e.target.value)} />
         </div>
       </div>

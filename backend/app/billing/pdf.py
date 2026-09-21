@@ -7,6 +7,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from app.core.config import settings
 from app.models.emr import Invoice
 from app.models.enums import InvoiceStatus
 from app.models.patient import Patient
@@ -59,7 +60,7 @@ def render_invoice_pdf(
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Invoice {invoice.invoice_number}")
-    pdf.setAuthor("Satya Hospital")
+    pdf.setAuthor(settings.HOSPITAL_NAME)
 
     draw_letterhead(pdf, layout)
 
@@ -80,7 +81,7 @@ def render_invoice_pdf(
 
     # Letterhead
     y = layout.content_top
-    text(left, y, "SATYA HOSPITAL", 20, BLUE, True)
+    text(left, y, settings.HOSPITAL_NAME.upper(), 20, BLUE, True)
     text(left, y - 17, "Trauma & Maternity Center", 9, MUTED)
     right(right_x, y, "TAX INVOICE / RECEIPT", 11, BLUE, True)
     right(right_x, y - 17, invoice.invoice_number, 9, MUTED)
@@ -190,10 +191,11 @@ def render_invoice_pdf(
         text(left, y, f"Discount note: {invoice.discount_reason}", 8, MUTED)
         y -= 14
     text(left, y, "This is a computer-generated invoice. Please retain it for your records.", 8, MUTED)
-    text(left, y - 14, "Thank you for choosing Satya Hospital.", 8, MUTED)
+    text(left, y - 14, f"Thank you for choosing {settings.HOSPITAL_NAME}.", 8, MUTED)
     right(right_x, y - 14, "Authorized signature", 8, MUTED)
     line(layout.content_bottom + 3, BLUE, 0.8)
-    text(left, layout.content_bottom - 11, "Satya Hospital | Patient billing desk", 7.5, MUTED)
+    text(left, layout.content_bottom - 11,
+         f"{settings.HOSPITAL_NAME} | Patient billing desk", 7.5, MUTED)
     right(right_x, layout.content_bottom - 11, invoice.status.value.upper(), 7.5, BLUE, True)
 
     stamp = "CANCELLED" if invoice.status is InvoiceStatus.CANCELLED else watermark

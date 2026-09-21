@@ -48,6 +48,7 @@ from app.billing.identifiers import (
     normalise_uhid,
 )
 from app.core.clock import day_bounds, local_today
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.emr import (
     CashSession,
@@ -162,7 +163,7 @@ class ReceptionService:
             return []
 
         candidate = normalise_uhid(term)
-        if candidate.startswith("SAT"):
+        if candidate.startswith(settings.DOCUMENT_PREFIX):
             result = await self.session.execute(
                 select(Patient).where(Patient.uhid == candidate)
             )

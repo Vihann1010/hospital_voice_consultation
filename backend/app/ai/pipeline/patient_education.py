@@ -7,6 +7,7 @@ mean 'come back immediately'. Cached — common presentations reuse output.
 import json
 from typing import Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import MedicalRecord, PatientEducation, RiskAssessment
 from app.ai.providers.base import CostLedger
@@ -29,7 +30,7 @@ class PatientEducationService(BaseAIService[PatientEducation]):
         ledger: Optional[CostLedger] = None,
     ) -> PatientEducation:
         system = (
-            "You write patient education for Satya Hospital. Audience: the patient and their "
+            f"You write patient education for {settings.HOSPITAL_NAME}. Audience: the patient and their "
             f"family; write in language '{memory.language}' (hi = simple Hindi in Devanagari, "
             "mixed = natural Hinglish, en = simple Indian English at an 8th-grade level). "
             "STRICT rules: do NOT name a diagnosis or imply one; do NOT recommend medicines, "

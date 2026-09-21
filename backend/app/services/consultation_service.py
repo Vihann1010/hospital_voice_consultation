@@ -297,7 +297,7 @@ class ConsultationService:
     def build_transcript(turns: List[ConversationTurn]) -> str:
         lines = []
         for turn in turns:
-            speaker = "Patient" if turn.role == TurnRole.PATIENT else "Satya Assistant"
+            speaker = "Patient" if turn.role == TurnRole.PATIENT else "Assistant"
             suffix = " [interrupted]" if turn.interrupted else ""
             lines.append(f"{speaker}: {turn.content}{suffix}")
         return "\n".join(lines)

@@ -11,6 +11,7 @@ Nothing here is authoritative. Every item is rendered in the UI under an
 import json
 from typing import Dict, List, Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import CopilotAIOutput
 from app.ai.providers.base import CostLedger
@@ -36,7 +37,7 @@ class CopilotAIService(BaseAIService[CopilotAIOutput]):
         tag: str = "-",
     ) -> CopilotAIOutput:
         system = (
-            "You are a clinical copilot assisting a specialist at Satya Hospital "
+            f"You are a clinical copilot assisting a specialist at {settings.HOSPITAL_NAME} "
             f"({department}). You assist — you never decide. The doctor examines the "
             "patient and holds final authority.\n\n"
             "Produce three things:\n"

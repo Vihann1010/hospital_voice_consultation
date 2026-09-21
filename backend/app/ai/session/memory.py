@@ -227,7 +227,7 @@ class ConversationMemory:
     def transcript_text(self) -> str:
         lines = []
         for turn in self.turns:
-            speaker = "Patient" if turn.role == "user" else "Satya Assistant"
+            speaker = "Patient" if turn.role == "user" else "Assistant"
             suffix = " [interrupted]" if turn.interrupted else ""
             lines.append(f"{speaker}: {turn.content}{suffix}")
         return "\n".join(lines)

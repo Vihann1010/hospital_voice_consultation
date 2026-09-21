@@ -14,7 +14,7 @@ import { KeyRound, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { type Department, type StaffRole, type User } from "@/lib/types/core";
 import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
-import { useModules } from "@/components/dashboard/modules-provider";
+import { useModules, type ModuleName } from "@/components/dashboard/modules-provider";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,18 @@ const ROLE_ORDER: User["role"][] = [
   "nurse",
   "lab",
 ];
+
+/** Roles whose whole terminal belongs to a module.
+ *
+ * A nurse's screen is the ward; a lab technician's is the bench. At a clinic
+ * with neither, an account in one of these roles signs in and is sent to a
+ * terminal whose every request 404s — so the role is not offered. Anyone who
+ * already holds one keeps showing in the list, because hiding an account that
+ * exists is worse than showing a role that is switched off. */
+const ROLE_MODULE: Partial<Record<User["role"], ModuleName>> = {
+  nurse: "ipd",
+  lab: "laboratory",
+};
 
 /** Permission strings are for the API; this is for the person assigning them. */
 const PERMISSION_LABELS: Record<string, string> = {
@@ -101,7 +113,13 @@ function RoleCard({
 }
 
 export default function StaffAccountsPage() {
-  const { departments, defaultDepartment } = useModules();
+  const { departments, defaultDepartment, has } = useModules();
+  // Offered when creating an account. A role whose terminal does not exist
+  // here is not offered; one already in use stays visible in the list below.
+  const offeredRoles = ROLE_ORDER.filter((r) => {
+    const needed = ROLE_MODULE[r];
+    return needed === undefined || has(needed);
+  });
   const toast = useToast();
   const { user: me } = useAuth();
 
@@ -331,7 +349,7 @@ export default function StaffAccountsPage() {
                 value={email}
                 inputMode="email"
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="sunita@satyahospital.in"
+                placeholder="name@your-clinic.in"
               />
             </div>
             <div>
@@ -342,7 +360,7 @@ export default function StaffAccountsPage() {
                 value={role}
                 onChange={(e) => setRole(e.target.value as User["role"])}
               >
-                {ROLE_ORDER.map((r) => (
+                {offeredRoles.map((r) => (
                   <option key={r} value={r} className="capitalize">
                     {r}
                   </option>
@@ -432,7 +450,10 @@ export default function StaffAccountsPage() {
                 onChange={(e) => void changeRole(u, e.target.value as User["role"])}
                 aria-label={`Role for ${u.full_name}`}
               >
-                {ROLE_ORDER.map((r) => (
+                {/* The person's current role is always in the list, even if
+                    its terminal is switched off here — otherwise the select
+                    would silently show somebody else's role as theirs. */}
+                {ROLE_ORDER.filter((r) => offeredRoles.includes(r) || r === u.role).map((r) => (
                   <option key={r} value={r} className="capitalize">
                     {r}
                   </option>

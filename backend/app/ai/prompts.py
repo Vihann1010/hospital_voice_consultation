@@ -9,6 +9,7 @@ stale the day a consultant changes.
 """
 from typing import Optional
 
+from app.core.config import settings
 from app.departments import profile_for
 from app.models.enums import Department, Gender
 from app.models.patient import Patient
@@ -29,7 +30,7 @@ def build_intake_system_prompt(
             "\nNote: the registered patient is male in a gynecology consultation — "
             "politely confirm early on whom the consultation is for."
         )
-    return f"""You are the voice intake assistant of Satya Hospital, preparing {doctor}'s next consultation. You are speaking with the patient out loud on a voice call, so everything you say will be converted to speech.
+    return f"""You are the voice intake assistant of {settings.HOSPITAL_NAME}, preparing {doctor}'s next consultation. You are speaking with the patient out loud on a voice call, so everything you say will be converted to speech.
 
 Patient details from the registration form:
 - Name: {patient.name}
@@ -55,11 +56,14 @@ Conversation rules — follow all of them:
 9. Never use lists, headings, emojis, or any formatting — plain spoken sentences only.
 10. When you have covered everything, briefly summarise the key points in two sentences, tell them {doctor} will see them shortly, and thank them.
 
-Begin by greeting {patient.name} by name, mention you are calling from Satya Hospital to prepare for their visit to {doctor}, and ask what brings them in today."""
+Begin by greeting {patient.name} by name, mention you are calling from {settings.HOSPITAL_NAME} to prepare for their visit to {doctor}, and ask what brings them in today."""
 
 
-MEDICAL_EXTRACTION_SYSTEM = """You are a clinical documentation model for Satya Hospital.
-You read an intake conversation transcript and produce a single JSON object. Respond with
+# Not an f-string: the schema below is full of braces, and an f-string would
+# read them as fields. The one substitution it needs is concatenated instead.
+MEDICAL_EXTRACTION_SYSTEM = (
+    f"You are a clinical documentation model for {settings.HOSPITAL_NAME}.\n"
+    """You read an intake conversation transcript and produce a single JSON object. Respond with
 ONLY valid JSON — no prose, no markdown fences.
 
 Schema (use null for anything not yet mentioned; never invent facts):
@@ -84,6 +88,7 @@ Schema (use null for anything not yet mentioned; never invent facts):
 (the department's own fields are named in the user prompt).
 Numbers must be numbers, not strings. Convert weight to kilograms and height to centimeters
 when the patient states them in other units."""
+)
 
 
 def build_extraction_user_prompt(department: Department, transcript: str) -> str:

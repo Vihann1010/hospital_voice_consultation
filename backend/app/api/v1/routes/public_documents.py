@@ -11,6 +11,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 
+from app.core.config import settings
 from app.api.deps import get_prescription_service
 from app.services.prescription_service import PrescriptionService
 
@@ -48,6 +49,6 @@ async def verify_prescription(
         "issued_on": prescription.issued_at.isoformat() if prescription.issued_at else None,
         "doctor": prescription.doctor_name,
         "department": prescription.department.value,
-        "hospital": "Satya Hospital, Kanpur",
+        "hospital": f"{settings.HOSPITAL_NAME}, {settings.HOSPITAL_CITY}",
         "medicine_count": len(prescription.medicines),
     }

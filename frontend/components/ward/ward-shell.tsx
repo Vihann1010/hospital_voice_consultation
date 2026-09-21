@@ -15,6 +15,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
+import { useModules } from "@/components/dashboard/modules-provider";
 import { Logo } from "@/components/brand/logo";
 import { staffApi } from "@/lib/staffApi";
 import type { Census } from "@/lib/types/ipd";
@@ -48,6 +49,7 @@ function Figure({
 
 export function WardShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const { has, words } = useModules();
   const pathname = usePathname();
   const [census, setCensus] = useState<Census | null>(null);
 
@@ -82,14 +84,15 @@ export function WardShell({ children }: { children: React.ReactNode }) {
 
           <nav aria-label="Ward terminal" className="flex items-center gap-1">
             {[
-              { href: "/ward", label: "Beds", icon: BedDouble,
+              { href: "/ward", label: "Beds", icon: BedDouble, module: null,
                 active: pathname === "/ward" || pathname.startsWith("/ward/admissions") },
-              { href: "/ward/theatre", label: "Theatre", icon: Scissors,
+              { href: "/ward/theatre", label: words.board, icon: Scissors, module: "theatre" as const,
                 active: pathname.startsWith("/ward/theatre") },
-              { href: "/ward/diet", label: "Diet", icon: UtensilsCrossed,
+              { href: "/ward/diet", label: "Diet", icon: UtensilsCrossed, module: "diet" as const,
                 active: pathname.startsWith("/ward/diet") },
-              { href: "/lab", label: "Lab", icon: FlaskConical, active: false },
-            ].map((link) => (
+              { href: "/lab", label: "Lab", icon: FlaskConical, module: "laboratory" as const,
+                active: false },
+            ].filter((link) => link.module === null || has(link.module)).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

@@ -103,3 +103,46 @@ def test_the_default_is_a_fresh_copy_each_time():
     first = default_layout("opd_visit", GASTRO)
     first[0]["title"] = "Mutated"
     assert default_layout("opd_visit", GASTRO)[0]["title"] != "Mutated"
+
+
+# ------------------------------------------------------------ site identity
+
+
+def test_document_prefix_is_three_letters_and_upper_cased():
+    from pydantic import ValidationError
+
+    assert Settings(DOCUMENT_PREFIX="gcc").DOCUMENT_PREFIX == "GCC"
+    for bad in ("GC", "GCCC", "G1C"):
+        with pytest.raises(ValidationError):
+            Settings(DOCUMENT_PREFIX=bad)
+
+
+def test_the_default_prefix_keeps_existing_numbers_valid():
+    """Satya's patients already carry SAT… UHIDs on their cards."""
+    from app.billing import identifiers
+
+    assert Settings().DOCUMENT_PREFIX == "SAT"
+    uhid = identifiers.build_uhid(41)
+    assert uhid.startswith(identifiers.PREFIX)
+    assert identifiers.is_valid_uhid(uhid)
+    assert identifiers.build_invoice_number(41).startswith(f"{identifiers.PREFIX}/")
+
+
+def test_logo_choice_is_bundled_or_none():
+    from pydantic import ValidationError
+
+    assert Settings().HOSPITAL_LOGO == "bundled"
+    assert Settings(HOSPITAL_LOGO="None").HOSPITAL_LOGO == "none"
+    with pytest.raises(ValidationError):
+        Settings(HOSPITAL_LOGO="satya.png")
+
+
+def test_only_the_administrator_is_seeded():
+    """Named consultants used to be seeded, on every site that installed this."""
+    import inspect
+
+    from app.services import auth_service
+
+    source = inspect.getsource(auth_service.seed_default_users)
+    assert "Agarwal" not in source
+    assert not hasattr(Settings(), "DR_AK_AGARWAL_EMAIL")

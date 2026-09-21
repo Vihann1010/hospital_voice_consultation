@@ -7,6 +7,7 @@ same structured inputs yield the same plan, so repeat runs are free.
 import json
 from typing import Optional
 
+from app.core.config import settings
 from app.ai.pipeline.base_service import BaseAIService
 from app.ai.pipeline.schemas import DifferentialDiagnosis, InvestigationPlan, MedicalRecord, RiskAssessment
 from app.ai.providers.base import CostLedger
@@ -30,7 +31,8 @@ class InvestigationEngineService(BaseAIService[InvestigationPlan]):
         ledger: Optional[CostLedger] = None,
     ) -> InvestigationPlan:
         system = (
-            "You recommend pre-consultation investigations for a specialist at Satya Hospital "
+            f"You recommend pre-consultation investigations for a specialist at "
+            f"{settings.HOSPITAL_NAME} "
             f"({memory.department.value}). Suggest only investigations a district Indian "
             "hospital can realistically perform (X-ray, USG, standard labs, ECG; MRI/CT only "
             "when clearly indicated). Map each test to the differentials/risk it serves in "

@@ -26,6 +26,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.core.config import settings
 from app.core.clock import to_local
 from app.printing.fonts import SHAPE, SHAPING, devanagari_fonts
 from app.printing.layout import DEFAULT_LAYOUT, PageLayout, draw_letterhead
@@ -115,7 +116,7 @@ def _build(story: List[Any], *, title: str, patient: Any, admission: Any, layout
         canvas.restoreState()
 
     template = BaseDocTemplate(output, pagesize=size, title=f"{title} — {patient.name}",
-                               author="Satya Hospital")
+                               author=settings.HOSPITAL_NAME)
     template.addPageTemplates([PageTemplate(id="page", frames=[frame], onPage=decorate)])
     template.build(story)
     return output.getvalue()

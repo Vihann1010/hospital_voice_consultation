@@ -73,6 +73,10 @@ interface ModuleState {
   /** Departments whose drafted prescribing content is still withheld, so the
    *  prescribing screen can say why its medicine list looks short. */
   formularyPendingSignoff: readonly string[];
+  /** "bundled" shows the logo that ships with the build; "none" shows the
+   *  site's name, for a site that has not supplied artwork yet. Null until
+   *  the API answers, so neither is flashed on the wrong site. */
+  logo: "bundled" | "none" | null;
 }
 
 const ModuleContext = createContext<ModuleState>({
@@ -83,6 +87,7 @@ const ModuleContext = createContext<ModuleState>({
   departments: ALL_DEPARTMENTS,
   defaultDepartment: ALL_DEPARTMENTS[0],
   formularyPendingSignoff: [],
+  logo: null,
 });
 
 export function useModules() {
@@ -96,6 +101,7 @@ function readCache(): {
   departments?: Department[];
   default_department?: Department;
   formulary_pending_signoff?: string[];
+  hospital_logo?: "bundled" | "none";
 } | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -124,6 +130,13 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   const [formularyPendingSignoff, setPending] = useState<readonly string[]>(
     cached?.formulary_pending_signoff ?? []
   );
+  const [logo, setLogo] = useState<"bundled" | "none" | null>(cached?.hospital_logo ?? null);
+
+  // The tab title is the site's own name. It used to be written into the
+  // root layout as one hospital's name, and every other site inherited it.
+  useEffect(() => {
+    if (hospitalName) document.title = hospitalName;
+  }, [hospitalName]);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +152,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         }
         if (data.default_department) setDefaultDepartment(data.default_department);
         setPending(data.formulary_pending_signoff ?? []);
+        setLogo(data.hospital_logo === "none" ? "none" : "bundled");
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
         } catch {
@@ -164,6 +178,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         departments,
         defaultDepartment,
         formularyPendingSignoff,
+        logo,
       }}
     >
       {children}

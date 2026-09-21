@@ -46,7 +46,8 @@ class TwilioWhatsAppProvider(MessagingProvider):
                 data={
                     "From": f"whatsapp:+{self.from_number.lstrip('+')}",
                     "To": f"whatsapp:+{to.lstrip('+')}",
-                    "Body": document.caption or "Your prescription from Satya Hospital",
+                    "Body": document.caption
+                    or f"Your prescription from {settings.HOSPITAL_NAME}",
                     "MediaUrl": document.public_url,
                 },
             )

@@ -47,13 +47,12 @@ class Settings(BaseSettings):
     CONSULTATION_TOKEN_EXPIRE_MINUTES: int = 120        # patient voice sessions
     FINANCE_PIN: str = "4827"
 
-    # --- Seed users (created on first boot) --------------------------------
-    ADMIN_EMAIL: str = "admin@satyahospital.in"
+    # --- Seed user (created on first boot) ---------------------------------
+    # One account: the administrator who creates the rest from the Staff
+    # accounts screen. Named consultants used to be seeded here too, which
+    # gave every other site two logins for doctors who do not work there.
+    ADMIN_EMAIL: str = "admin@example.invalid"
     ADMIN_PASSWORD: str = "ChangeMe@123"
-    DR_AK_AGARWAL_EMAIL: str = "ak.agarwal@satyahospital.in"
-    DR_AK_AGARWAL_PASSWORD: str = "ChangeMe@123"
-    DR_MANISHA_AGARWAL_EMAIL: str = "manisha.agarwal@satyahospital.in"
-    DR_MANISHA_AGARWAL_PASSWORD: str = "ChangeMe@123"
 
     # --- Sarvam AI (speech) -------------------------------------------------
     SARVAM_API_KEY: str = ""
@@ -206,6 +205,16 @@ class Settings(BaseSettings):
 
     # --- Prescriptions ---------------------------------------------------------
     HOSPITAL_NAME: str = "Satya Trauma & Maternity Center"
+    # Three capital letters at the front of every UHID and invoice number.
+    # Permanent once patients are registered: a UHID is on their card, and an
+    # invoice number is in the books. A new site sets its own before the first
+    # patient; an existing one never changes it.
+    DOCUMENT_PREFIX: str = "SAT"
+    # "bundled" prints the logo that ships in app/assets (Satya's own mark).
+    # "none" prints HOSPITAL_NAME as a wordmark instead — the right choice for
+    # a site that has not supplied its artwork yet, rather than another
+    # hospital's logo at the top of its prescriptions.
+    HOSPITAL_LOGO: str = "bundled"
     HOSPITAL_CITY: str = "Kanpur, Uttar Pradesh"
     PRESCRIPTION_NUMBER_PREFIX: str = "ST"
     # Public origin used for QR verification links and signed document URLs.
@@ -284,6 +293,22 @@ class Settings(BaseSettings):
                 + ", ".join(d.value for d in Department)
             ) from None
         return v.strip().lower()
+
+    @field_validator("HOSPITAL_LOGO")
+    @classmethod
+    def _logo_choice(cls, v: str) -> str:
+        value = v.strip().lower()
+        if value not in ("bundled", "none"):
+            raise ValueError("HOSPITAL_LOGO must be 'bundled' or 'none'.")
+        return value
+
+    @field_validator("DOCUMENT_PREFIX")
+    @classmethod
+    def _prefix_must_be_three_letters(cls, v: str) -> str:
+        value = v.strip().upper()
+        if len(value) != 3 or not value.isalpha():
+            raise ValueError("DOCUMENT_PREFIX must be exactly three letters, e.g. SAT.")
+        return value
 
     @field_validator("ENABLED_DEPARTMENTS")
     @classmethod
@@ -383,8 +408,6 @@ class Settings(BaseSettings):
 INSECURE_DEFAULTS = {
     "JWT_SECRET_KEY": "change-me-in-production",
     "ADMIN_PASSWORD": "ChangeMe@123",
-    "DR_AK_AGARWAL_PASSWORD": "ChangeMe@123",
-    "DR_MANISHA_AGARWAL_PASSWORD": "ChangeMe@123",
     "POSTGRES_PASSWORD": "satya",
 }
 

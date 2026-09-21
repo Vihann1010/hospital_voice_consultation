@@ -16,6 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -168,6 +169,10 @@ def _logo_image():
     if _LOGO_CACHE["loaded"]:
         return _LOGO_CACHE["image"]
     _LOGO_CACHE["loaded"] = True
+    if settings.HOSPITAL_LOGO == "none":
+        # The bundled mark belongs to one hospital. A site without its own
+        # artwork prints its name instead (the typographic fallback below).
+        return None
     try:
         path = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
         if path.exists():
@@ -201,7 +206,7 @@ class _Renderer:
         self.buffer = io.BytesIO()
         self.canvas = pdf_canvas.Canvas(self.buffer, pagesize=A4)
         self.canvas.setTitle(f"Prescription {document.prescription_number}")
-        self.canvas.setAuthor("Satya Hospital")
+        self.canvas.setAuthor(settings.HOSPITAL_NAME)
         self.canvas.setSubject(f"Prescription for {document.patient_name}")
         self.y = PAGE_HEIGHT - MARGIN
         self.page = 1
@@ -270,14 +275,12 @@ class _Renderer:
             self.canvas.drawImage(logo, MARGIN, PAGE_HEIGHT - 78, width=132, height=64,
                                   preserveAspectRatio=True, anchor="sw", mask="auto")
         else:   # asset missing: fall back to a typographic wordmark
-            self._text(MARGIN, PAGE_HEIGHT - 52, "Satya",
-                       font=FONT_BOLD, size=20, color=PINE)
-            self._text(MARGIN, PAGE_HEIGHT - 66, "Trauma & Maternity Center",
-                       font=FONT_BOLD, size=8, color=INK)
+            self._text(MARGIN, PAGE_HEIGHT - 54, settings.HOSPITAL_NAME,
+                       font=FONT_BOLD, size=14, color=PINE)
 
         self._text(MARGIN + 144, PAGE_HEIGHT - 56, f"Department of {doc.department_label}",
                    font=FONT_BOLD, size=9, color=PINE)
-        self._text(MARGIN + 144, PAGE_HEIGHT - 68, "Kanpur, Uttar Pradesh",
+        self._text(MARGIN + 144, PAGE_HEIGHT - 68, settings.HOSPITAL_CITY,
                    font=FONT_REGULAR, size=7.5, color=INK_FAINT)
 
         self._right_text(PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 46, doc.doctor_name,

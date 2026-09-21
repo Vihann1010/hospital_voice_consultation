@@ -22,6 +22,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from app.core.config import settings
 from app.billing.payment_modes import summarise
 from app.core.clock import to_local
 from app.models.emr import Invoice
@@ -118,7 +119,7 @@ def render_receipt_pdf(
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Receipt {receipt_number}")
-    pdf.setAuthor("Satya Hospital")
+    pdf.setAuthor(settings.HOSPITAL_NAME)
 
     draw_letterhead(pdf, layout)
 
@@ -138,7 +139,7 @@ def render_receipt_pdf(
         pdf.line(left, y, right_x, y)
 
     y = layout.content_top
-    text(left, y, "SATYA HOSPITAL", 20, BLUE, True)
+    text(left, y, settings.HOSPITAL_NAME.upper(), 20, BLUE, True)
     text(left, y - 17, "Trauma & Maternity Center", 9, MUTED)
     # A refund receipt must not be mistakable for a payment receipt at a
     # glance, so the heading changes rather than a line somewhere below.

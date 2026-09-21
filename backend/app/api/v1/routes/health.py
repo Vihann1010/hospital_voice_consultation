@@ -147,6 +147,7 @@ async def client_config() -> Dict[str, Any]:
     return {
         "hospital_name": settings.HOSPITAL_NAME,
         "hospital_city": settings.HOSPITAL_CITY,
+        "hospital_logo": settings.HOSPITAL_LOGO,
         "modules": sorted(m.value for m in settings.enabled_modules),
         # Departments whose drafted prescribing content is still withheld. A
         # doctor searching a near-empty formulary deserves to be told why
