@@ -474,7 +474,7 @@ export function PrescriptionComposer({
                 <Input
                   id="diagnosis" value={diagnosis}
                   onChange={(event) => setDiagnosis(event.target.value)}
-                  placeholder="e.g. comminuted fracture olecranon right elbow with tendon injury"
+                  placeholder="The working diagnosis, in full"
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <Button type="button" size="sm" variant="accent" onClick={() => void suggestFromDiagnosis()} disabled={assisting}>

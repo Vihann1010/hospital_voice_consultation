@@ -3,7 +3,8 @@ import type { Department } from "@/lib/types/core";
 
 export type InvestigationCategory =
   | "blood" | "urine" | "xray" | "mri" | "ct" | "ultrasound"
-  | "dexa" | "orthopedic" | "gynecology" | "hormonal" | "tumor_markers";
+  | "dexa" | "orthopedic" | "gynecology" | "gastroenterology" | "endoscopy"
+  | "hormonal" | "tumor_markers";
 
 export type InvestigationPriority = "routine" | "urgent" | "stat";
 export type OrderStatus = "draft" | "issued" | "partially_reported" | "completed" | "cancelled";
@@ -245,8 +246,8 @@ export interface ReportVersionHistory {
 }
 
 export const CATEGORY_ORDER: InvestigationCategory[] = [
-  "blood", "urine", "xray", "mri", "ct", "ultrasound",
-  "dexa", "orthopedic", "gynecology", "hormonal", "tumor_markers",
+  "blood", "urine", "xray", "mri", "ct", "ultrasound", "endoscopy",
+  "dexa", "orthopedic", "gynecology", "gastroenterology", "hormonal", "tumor_markers",
 ];
 
 export const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {

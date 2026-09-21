@@ -649,9 +649,21 @@ def _is_available(item) -> bool:
     return bool(departments) and all(d in approved for d in departments)
 
 
+def _runs_here(departments: List[Department]) -> bool:
+    """General medicines always; department ones only where that department runs."""
+    return not departments or any(d in settings.enabled_departments for d in departments)
+
+
 def available_formulary() -> List[Medicine]:
-    """The medicines this installation may actually prescribe today."""
-    return [item for item in FORMULARY if _is_available(item)]
+    """The medicines this installation may actually prescribe today.
+
+    Signed off, and belonging to a department this site runs. Without the
+    second condition an administrator with no department of their own was
+    offered every speciality's list, another hospital's included.
+    """
+    return [
+        item for item in FORMULARY if _is_available(item) and _runs_here(item.departments)
+    ]
 
 
 def unapproved_departments() -> List[Department]:
@@ -726,6 +738,7 @@ def search_templates(
       template for template in MEDICINE_TEMPLATES
       if (department is None or template.department == department)
       and _is_available(template)
+      and _runs_here([template.department])
     ]
     if not query or not query.strip():
       return pool[:limit]

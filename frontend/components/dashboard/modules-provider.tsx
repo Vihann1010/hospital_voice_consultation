@@ -94,6 +94,30 @@ export function useModules() {
   return useContext(ModuleContext);
 }
 
+/**
+ * A department field that can only ever hold a department this site runs.
+ *
+ * A plain `useState(defaultDepartment)` has two ways to go wrong, and both
+ * happened. It captures the default on first render, before the site's
+ * configuration has arrived, so it starts on whatever the build lists first.
+ * And a <select> whose value is not among its options shows the first option
+ * anyway while the state keeps the old value — so the screen said
+ * Gastroenterology, nobody had reason to touch it, and Orthopedics was saved.
+ *
+ * This keeps the state honest: whenever the value is not one the site offers,
+ * it is moved to the site's default. What is on screen is what gets saved.
+ */
+export function useSiteDepartment(initial?: Department | null) {
+  const { departments, defaultDepartment } = useModules();
+  const [department, setDepartment] = useState<Department>(initial ?? defaultDepartment);
+  useEffect(() => {
+    if (!departments.includes(department)) {
+      setDepartment(departments.includes(defaultDepartment) ? defaultDepartment : departments[0]);
+    }
+  }, [departments, defaultDepartment, department]);
+  return [department, setDepartment] as const;
+}
+
 function readCache(): {
   modules: ModuleName[];
   hospital_name: string;

@@ -376,7 +376,15 @@ class Settings(BaseSettings):
 
     @property
     def default_department(self) -> Department:
-        return Department(self.DEFAULT_DEPARTMENT)
+        """DEFAULT_DEPARTMENT if the site runs it, else the first it does run.
+
+        DEFAULT_DEPARTMENT defaults to orthopedics. A site that lists only
+        gastroenterology and forgets to set the default must not have its
+        screens start on a department it does not have.
+        """
+        named = Department(self.DEFAULT_DEPARTMENT)
+        enabled = self.enabled_departments
+        return named if named in enabled else enabled[0]
 
     @property
     def enabled_departments(self) -> List[Department]:

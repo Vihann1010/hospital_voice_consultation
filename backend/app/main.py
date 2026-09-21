@@ -22,7 +22,6 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.config import settings
 from app.ai.llm_client import llm_client
 from app.ai.providers.factory import close_gateway
 from app.ai.session.manager import session_manager
@@ -37,6 +36,7 @@ from app.core.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.db.session import AsyncSessionLocal, engine
+from app.db.department_guard import DepartmentNotRun, install as install_department_guard
 from app.departments import label_for, validate_department_config
 from app.modules import Module, dropped_for_missing_parent, parse_enabled
 from app.prescriptions.formulary import unapproved_departments
@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
     # Before anything else clinical: every department must be fully configured.
     # A half-configured one screens no red flags, and does it silently.
     validate_department_config()
+    install_department_guard()
     await _verify_schema()
 
     async with AsyncSessionLocal() as session:
@@ -174,6 +175,18 @@ app.add_middleware(
 )
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestContextMiddleware)
+
+
+@app.exception_handler(DepartmentNotRun)
+async def department_not_run_handler(request: Request, exc: DepartmentNotRun):
+    # A refusal, not a fault: the request named a department this site does
+    # not run. Said plainly so the screen can show it.
+    logger.warning("department_not_run", extra={"path": request.url.path, "detail": str(exc)})
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc),
+                 "request_id": getattr(request.state, "request_id", None)},
+    )
 
 
 @app.exception_handler(StarletteHTTPException)

@@ -11,6 +11,7 @@ towards orthopedics and gynecology.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from app.core.config import settings
 from app.models.enums import Department, InvestigationCategory as Cat
 
 
@@ -439,6 +440,17 @@ def _haystack(item: Investigation) -> str:
 _SEARCH_INDEX: Dict[str, str] = {item.code: _haystack(item) for item in CATALOG}
 
 
+def runs_here(departments: List[Department]) -> bool:
+    """Whether an item belongs to this site at all.
+
+    General items (no department) always do. A department-tagged item does only
+    if the site runs one of its departments: a gastroenterology clinic's
+    administrator, who has no department of their own, should not be offered
+    a hysterosalpingogram.
+    """
+    return not departments or any(d in settings.enabled_departments for d in departments)
+
+
 def search(
     query: Optional[str] = None,
     *,
@@ -447,7 +459,7 @@ def search(
     limit: int = 200,
 ) -> List[Investigation]:
     """Rank catalog matches: exact code, then name prefix, then substring."""
-    results = CATALOG
+    results = [item for item in CATALOG if runs_here(item.departments)]
     if category is not None:
         results = [item for item in results if item.category == category]
     if department is not None:

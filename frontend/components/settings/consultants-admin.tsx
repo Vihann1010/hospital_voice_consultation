@@ -14,7 +14,7 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { Consultant } from "@/lib/types/appointments";
 import type { ServiceItem } from "@/lib/types/emr";
-import { type Department, type User } from "@/lib/types/core";
+import { DEPARTMENTS, type Department, type User } from "@/lib/types/core";
 import { useModules } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
@@ -46,7 +46,8 @@ interface ConsultantForm {
 }
 
 const EMPTY: ConsultantForm = {
-  full_name: "", department: "orthopedics", qualification: "", registration_number: "", phone_number: "",
+  // Replaced by the site's default department whenever a new form is opened.
+  full_name: "", department: DEPARTMENTS[0], qualification: "", registration_number: "", phone_number: "",
   user_id: "", appointment_minutes: "15", first_consultation_free: false, opd_start_time: "09:00",
   opd_end_time: "17:00", opd_days: ["1", "2", "3", "4", "5", "6"], free_follow_up_days: "0",
   consultation_service_code: "", notes: "", is_active: true,
@@ -69,7 +70,7 @@ function days(value: string): string {
 }
 
 export function ConsultantsAdmin() {
-  const { departments } = useModules();
+  const { departments, defaultDepartment } = useModules();
   const { user } = useAuth();
   const editable = ["admin", "manager"].includes(user?.role ?? "");
   const [consultants, setConsultants] = useState<Consultant[]>([]);
@@ -136,6 +137,19 @@ export function ConsultantsAdmin() {
 
   const set = (patch: Partial<ConsultantForm>) => form && setForm({ ...form, ...patch });
 
+  // The department on the form is always one this site runs. The form used to
+  // start on Orthopedics; where the dropdown offers only Gastroenterology the
+  // browser showed that, nobody touched it, and Orthopedics was saved. See
+  // useSiteDepartment for the same guard on the other forms.
+  useEffect(() => {
+    if (form && !departments.includes(form.department)) {
+      setForm({
+        ...form,
+        department: departments.includes(defaultDepartment) ? defaultDepartment : departments[0],
+      });
+    }
+  }, [form, departments, defaultDepartment]);
+
   return (
     <div className="space-y-4">
       {error && <p className="text-sm text-clay">{error}</p>}
@@ -162,7 +176,7 @@ export function ConsultantsAdmin() {
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-ink-muted">Qualification (printed under the signature)</span>
-                <Input value={form.qualification} placeholder="MBBS, MS (Ortho)" onChange={(e) => set({ qualification: e.target.value })} />
+                <Input value={form.qualification} placeholder="e.g. MBBS, MD, DM" onChange={(e) => set({ qualification: e.target.value })} />
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-ink-muted">Medical registration number</span>
@@ -182,7 +196,7 @@ export function ConsultantsAdmin() {
                     )}
                   </select>
                 ) : (
-                  <Input value={form.consultation_service_code} placeholder="e.g. OPD-ORTHO-NEW"
+                  <Input value={form.consultation_service_code} placeholder="e.g. OPD-NEW"
                          onChange={(e) => set({ consultation_service_code: e.target.value.toUpperCase() })} />
                 )}
               </label>
@@ -279,7 +293,7 @@ export function ConsultantsAdmin() {
               Show not in use
             </label>
             {editable && !form && (
-              <Button size="sm" variant="outline" onClick={() => setForm({ ...EMPTY })}>
+              <Button size="sm" variant="outline" onClick={() => setForm({ ...EMPTY, department: defaultDepartment })}>
                 <Plus className="h-4 w-4" /> Add consultant
               </Button>
             )}

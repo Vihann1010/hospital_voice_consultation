@@ -121,7 +121,7 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1">
                 <span className="text-xs text-ink-muted">Code</span>
-                <Input value={form.code} disabled={form.existing} placeholder="OPD-ORTHO-NEW"
+                <Input value={form.code} disabled={form.existing} placeholder="e.g. OPD-NEW"
                        onChange={(event) => set({ code: event.target.value.toUpperCase() })} />
               </label>
               <label className="space-y-1 sm:col-span-2">

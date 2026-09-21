@@ -14,7 +14,7 @@ import { KeyRound, Loader2, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
 import { type Department, type StaffRole, type User } from "@/lib/types/core";
 import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
-import { useModules, type ModuleName } from "@/components/dashboard/modules-provider";
+import { useModules, useSiteDepartment, type ModuleName } from "@/components/dashboard/modules-provider";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,7 @@ export default function StaffAccountsPage() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [department, setDepartment] = useState<Department>(defaultDepartment);
+  const [department, setDepartment] = useSiteDepartment();
   const [creating, setCreating] = useState(false);
 
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -339,7 +339,7 @@ export default function StaffAccountsPage() {
                 id="su-name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Sunita Verma"
+                placeholder="Full name"
               />
             </div>
             <div>
@@ -390,7 +390,6 @@ export default function StaffAccountsPage() {
                   {departments.map((d) => (
                     <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
                   ))}
-                  <option value="gynecology">Maternity &amp; Gynecology</option>
                 </select>
               </div>
             )}

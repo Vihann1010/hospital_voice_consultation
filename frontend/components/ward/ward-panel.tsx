@@ -29,7 +29,7 @@ import type { PaymentMode } from "@/lib/types/emr";
 import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
 import { ADVANCE_MODES, TakeAdvance, openWalletReceipt } from "@/components/ipd/take-advance";
 import { type Department, type Gender } from "@/lib/types/core";
-import { useModules } from "@/components/dashboard/modules-provider";
+import { useModules, useSiteDepartment } from "@/components/dashboard/modules-provider";
 import { DEPARTMENT_FULL_LABEL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,9 +80,7 @@ function AdmitSheet({
   const [diagnosis, setDiagnosis] = useState("");
   const [reason, setReason] = useState("");
   const [doctor, setDoctor] = useState("");
-  const [department, setDepartment] = useState<Department>(
-    (ward.department as Department) ?? defaultDepartment
-  );
+  const [department, setDepartment] = useSiteDepartment(ward.department as Department | null);
   const [advance, setAdvance] = useState("");
   const [attendantName, setAttendantName] = useState("");
   const [attendantPhone, setAttendantPhone] = useState("");
@@ -270,7 +268,6 @@ function AdmitSheet({
             {departments.map((d) => (
               <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
             ))}
-            <option value="gynecology">Maternity &amp; Gynecology</option>
           </select>
         </div>
         <div>

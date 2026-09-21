@@ -83,9 +83,12 @@ async def get_catalog(
     counts: dict = {}
     for item in visible:
         counts[item.category.value] = counts.get(item.category.value, 0) + 1
+    # Only categories with something in them: an "Orthopedic" tab with nothing
+    # under it at a gastroenterology clinic is a trace of another hospital.
     categories = [
-        CategoryOut(value=value, label=label, count=counts.get(value, 0))
+        CategoryOut(value=value, label=label, count=counts[value])
         for value, label in catalog.CATEGORY_LABELS.items()
+        if counts.get(value)
     ]
 
     panels = [
@@ -99,7 +102,8 @@ async def get_catalog(
             ],
         )
         for panel in catalog.PANELS
-        if not panel.departments or department is None or department in panel.departments
+        if catalog.runs_here(panel.departments)
+        and (not panel.departments or department is None or department in panel.departments)
     ]
 
     return CatalogOut(

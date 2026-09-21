@@ -31,7 +31,7 @@ import {
 import { WalletPanel } from "@/components/finance/wallet-panel";
 import { type Department, type Gender } from "@/lib/types/core";
 import { DEPARTMENT_CODE, DEPARTMENT_FULL_LABEL } from "@/lib/format";
-import { useModules } from "@/components/dashboard/modules-provider";
+import { useModules, useSiteDepartment } from "@/components/dashboard/modules-provider";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -105,9 +105,8 @@ export function ReceptionCounter() {
   const [city, setCity] = useState("");
 
   // Visit
-  // Starts on the site's own department, which in a single-speciality clinic
-  // is the only one there is.
-  const [department, setDepartment] = useState<Department>(defaultDepartment);
+  // Always one of the departments this site runs — see useSiteDepartment.
+  const [department, setDepartment] = useSiteDepartment();
   const [visitType, setVisitType] = useState<VisitType>("new");
   // The counter used to send no doctor at all, which left every visit with a
   // blank doctor name on the queue board and meant the consultant's own
@@ -703,7 +702,6 @@ export function ReceptionCounter() {
                 {departments.map((d) => (
                   <option key={d} value={d}>{DEPARTMENT_FULL_LABEL[d] ?? d}</option>
                 ))}
-                <option value="gynecology">Maternity &amp; Gynecology</option>
               </select>
             </div>
             <div>
