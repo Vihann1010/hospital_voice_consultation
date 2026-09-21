@@ -1,5 +1,6 @@
 /** Chrome for the patient-facing intake app. */
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { SiteDepartments } from "@/components/brand/site-departments";
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
@@ -7,7 +8,10 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="border-b border-pine/10 bg-mint-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <Logo width={172} priority />
+          <div className="flex items-center gap-3">
+            <Logo width={172} priority />
+            <PlatformMark variant="inline" width={92} />
+          </div>
           <SiteDepartments className="hidden text-sm text-ink-muted sm:block" />
         </div>
       </header>

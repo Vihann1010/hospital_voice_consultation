@@ -17,6 +17,7 @@ import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors, UtensilsCrossed }
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { useModules } from "@/components/dashboard/modules-provider";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { staffApi } from "@/lib/staffApi";
 import type { Census } from "@/lib/types/ipd";
 import { cn } from "@/lib/utils";
@@ -72,8 +73,9 @@ export function WardShell({ children }: { children: React.ReactNode }) {
     <div className="h-dvh overflow-hidden bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white print-hidden">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
-          <div className="rounded bg-white">
+          <div className="flex items-center gap-3 rounded bg-white">
             <Logo className="h-8 w-auto" />
+            <PlatformMark variant="inline" width={92} />
           </div>
           <div className="hidden border-l border-pine/10 pl-4 sm:block">
             <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-pine">

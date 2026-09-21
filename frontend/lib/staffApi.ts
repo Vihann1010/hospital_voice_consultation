@@ -138,6 +138,11 @@ import type {
   PatientListItem,
 } from "@/lib/types/core";
 
+/** Where the finance unlock is kept, for the rest of this browser tab. */
+export const FINANCE_UNLOCK_KEY = "finance_unlock";
+/** Fired when the server refuses the stored unlock, so the PIN is asked again. */
+export const FINANCE_LOCKED_EVENT = "finance-locked";
+
 export class ApiError extends Error {
   /** `requestId` finds the matching server log lines: `docker logs satya-backend | grep <id>`. */
   constructor(public status: number, message: string, public requestId: string | null = null) {
@@ -148,7 +153,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const financeUnlock =
-    typeof window !== "undefined" ? sessionStorage.getItem("finance_unlock") : null;
+    typeof window !== "undefined" ? sessionStorage.getItem(FINANCE_UNLOCK_KEY) : null;
   const method = init.method ?? "GET";
   let response: Response;
   try {
@@ -193,6 +198,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     );
     // A server fault gives staff a reference to quote; a refusal already explains itself.
     if (response.status >= 500 && requestId) detail = `${detail} (reference ${requestId})`;
+    // The unlock lasts thirty minutes. Once the server stops accepting it,
+    // forget it and say so, so the screen asks for the PIN again instead of
+    // showing "Finance PIN required" with nowhere to type one.
+    if (response.status === 403 && detail === "Finance PIN required" && typeof window !== "undefined") {
+      sessionStorage.removeItem(FINANCE_UNLOCK_KEY);
+      window.dispatchEvent(new Event(FINANCE_LOCKED_EVENT));
+    }
     throw new ApiError(response.status, detail, requestId);
   }
   return response.json();

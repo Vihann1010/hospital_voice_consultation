@@ -127,8 +127,9 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           that the letterform disappears against it, and putting a stroke on
           the mark would mean altering the hospital's logo. A white panel
           keeps the brand colours exact and the contrast unambiguous. */}
-      <div className="shrink-0 bg-white px-5 py-4">
-        <Logo width={150} priority />
+      <div className="flex shrink-0 flex-wrap items-center gap-3 bg-white px-5 py-4">
+        <Logo width={132} priority />
+        <PlatformMark variant="inline" width={72} />
       </div>
       <p className="shrink-0 px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
         Clinical console
@@ -156,7 +157,6 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         >
           <LogOut className="h-4 w-4" /> Sign out
         </Button>
-        <PlatformMark variant="credit" width={72} className="mt-3" />
       </div>
     </div>
   );
@@ -171,7 +171,10 @@ export function Sidebar() {
       </aside>
 
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-white px-4 py-2.5 lg:hidden">
-        <Logo width={116} />
+        <span className="flex items-center gap-2">
+          <Logo width={116} />
+          <PlatformMark variant="inline" width={64} />
+        </span>
         <button
           onClick={() => setOpen((v) => !v)}
           className="rounded-md p-2 text-pine transition hover:bg-mint"
