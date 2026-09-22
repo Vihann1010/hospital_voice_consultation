@@ -115,6 +115,7 @@ export const DEPARTMENT_LABEL: Record<string, string> = {
   orthopedics: "Orthopedics",
   gynecology: "Gynecology",
   gastroenterology: "Gastroenterology",
+  dentistry: "Dentistry",
 };
 
 /** The hospital's own name for the department, used on the dropdowns where
@@ -124,6 +125,7 @@ export const DEPARTMENT_FULL_LABEL: Record<string, string> = {
   orthopedics: "Trauma & Orthopedics",
   gynecology: "Maternity & Gynecology",
   gastroenterology: "Gastroenterology",
+  dentistry: "Dentistry",
 };
 
 /** Three letters used in visit and prescription numbers.
@@ -135,6 +137,7 @@ export const DEPARTMENT_CODE: Record<string, string> = {
   orthopedics: "ORT",
   gynecology: "GYN",
   gastroenterology: "GAS",
+  dentistry: "DEN",
 };
 
 /** Doctor names are NOT listed here. They belong to the consultant register,

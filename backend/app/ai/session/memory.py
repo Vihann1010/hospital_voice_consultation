@@ -67,6 +67,13 @@ DEPARTMENT_SLOTS: Dict[Department, List[SlotSpec]] = {
         SlotSpec("appetite_weight", "Appetite, and any unintended weight loss", False),
         SlotSpec("endoscopy_history", "Previous endoscopy, colonoscopy, USG or liver tests", False),
     ],
+    Department.DENTISTRY: [
+        SlotSpec("tooth_or_area", "Which tooth or area: jaw, side, front or back", False),
+        SlotSpec("pain_triggers", "Hot, cold, sweet or biting; lingering; night pain", False),
+        SlotSpec("swelling", "Gum, face or jaw swelling, pus, fever", False),
+        SlotSpec("gum_bleeding", "Bleeding gums, loose teeth", False),
+        SlotSpec("dental_history", "Last visit; fillings, RCT, extractions, crowns, dentures", False),
+    ],
 }
 
 

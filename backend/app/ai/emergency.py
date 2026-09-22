@@ -166,6 +166,51 @@ DEPARTMENT_FLAGS = {
             r"|(swallow|nigal|निगल)\w*\s*.{0,15}(pain|dard|दर्द|mushkil|मुश्किल)",
         ),
     ],
+    Department.DENTISTRY: [
+        (
+            "spreading_facial_swelling",
+            r"(swelling|swollen|sooj\w*|सूज\w*)\s*.{0,30}"
+            r"(spread\w*|increas\w*|bigger|badh\w*|बढ़\w*|eye|aankh|आंख|आँख|neck|gala|gale|गल[ाे])"
+            r"|(face|cheek|jaw|chehr\w*|gaal|jabd\w*|चेहर\w*|गाल|जबड़\w*)\s*.{0,20}"
+            r"(swelling|swollen|sooj\w*|सूज\w*)\s*.{0,20}(spread\w*|increas\w*|badh\w*|बढ़\w*)"
+            r"|(eye|aankh|आंख|आँख)\s*.{0,20}(clos\w*|band|बंद)\s*.{0,25}(swell\w*|sooj\w*|सूज\w*)",
+        ),
+        (
+            "swallowing_or_breathing_with_infection",
+            r"(swell\w*|sooj\w*|सूज\w*|infection|pus|pus|मवाद)\s*.{0,35}"
+            r"(can'?t|cannot|unable\s+to|difficult\w*|trouble|nahi|mushkil|नहीं|मुश्किल)\s*.{0,15}"
+            r"(swallow|breath\w*|nigal|saans|निगल|सांस|साँस)"
+            r"|(under|below)\s+(the\s+)?tongue\s*.{0,20}(swell\w*|raised)"
+            r"|जीभ\s*के\s*नीचे\s*.{0,15}सूज\w*",
+        ),
+        (
+            "trismus",
+            r"(can'?t|cannot|unable\s+to|not\s+able\s+to)\s+open\s+(my\s+)?mouth"
+            r"|(mouth|munh|muh|मुंह|मुँह)\s*.{0,12}(not\s+open\w*|nahi\s+khul|नहीं\s+खुल)"
+            r"|(munh|muh|मुंह|मुँह)\s*.{0,6}(khul|खुल)\s*.{0,6}(nahi|नहीं)",
+        ),
+        (
+            "post_extraction_bleeding",
+            r"(extract\w*|pulled|removed|tooth\s+out|nikal\w*|निकल\w*|उखाड़\w*)\s*.{0,40}"
+            r"(bleed\w*|blood|khoon|खून)\s*.{0,25}(not\s+stop\w*|won'?t\s+stop|band\s+nahi|रुक\s*नहीं|बंद\s*नहीं|still|continu\w*)"
+            r"|(bleed\w*|blood|khoon|खून)\s*.{0,20}(not\s+stop\w*|won'?t\s+stop|band\s+nahi|रुक\s*नहीं|बंद\s*नहीं)\s*.{0,40}"
+            r"(extract\w*|tooth|daant|दांत|दाँत)",
+        ),
+        (
+            "knocked_out_tooth",
+            r"(tooth|teeth|daant|दांत|दाँत)\s*.{0,25}(knocked\s+out|fell\s+out|came\s+out|nikal\s+gay\w*|gir\s+gay\w*|निकल\s*गय\w*|गिर\s*गय\w*)"
+            r"\s*.{0,40}(fall|fell|hit|accident|injur\w*|chot|gir|चोट|गिर)"
+            r"|(fall|fell|hit|accident|injur\w*|chot|चोट)\s*.{0,40}(tooth|teeth|daant|दांत|दाँत)\s*.{0,25}"
+            r"(knocked\s+out|fell\s+out|came\s+out|nikal\s+gay\w*|gir\s+gay\w*|निकल\s*गय\w*|गिर\s*गय\w*)"
+            r"|knocked\s+out\s+(a\s+|my\s+)?(tooth|teeth)",
+        ),
+        (
+            "jaw_injury",
+            r"(jaw|jabd\w*|जबड़\w*)\s*.{0,25}(broke\w*|fractur\w*|toot\w*|टूट\w*|out\s+of\s+place|dislocat\w*)"
+            r"|(teeth|daant|दांत|दाँत)\s*.{0,25}(don'?t|do\s+not|not)\s+(meet|fit|close)\s*.{0,30}"
+            r"(fall|fell|hit|accident|injur\w*|chot|चोट)",
+        ),
+    ],
 }
 
 _COMPILED = [(flag, re.compile(pattern, re.IGNORECASE)) for flag, pattern in _FLAGS]

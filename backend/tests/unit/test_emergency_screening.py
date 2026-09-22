@@ -111,3 +111,42 @@ def test_multiple_flags_are_all_reported():
     )
     assert {"chest_pain", "breathlessness"} <= set(result.flags)
     assert result.is_emergency
+
+
+DENTAL = Department.DENTISTRY
+
+
+@pytest.mark.parametrize(
+    "utterance, expected_flag",
+    [
+        ("my face swelling is increasing since morning", "spreading_facial_swelling"),
+        ("gaal ki soojan badh rahi hai", "spreading_facial_swelling"),
+        ("swelling in my jaw and I cannot swallow properly", "swallowing_or_breathing_with_infection"),
+        ("I cannot open my mouth and I have fever", "trismus"),
+        ("muh nahi khul raha", "trismus"),
+        ("tooth was extracted yesterday and bleeding is not stopping", "post_extraction_bleeding"),
+        ("daant nikalwaya tha khoon band nahi ho raha", "post_extraction_bleeding"),
+        ("my son fell and his tooth got knocked out", "knocked_out_tooth"),
+        ("my jaw is broken after an accident", "jaw_injury"),
+    ],
+)
+def test_dental_red_flags(utterance, expected_flag):
+    assert expected_flag in screen_utterance(utterance, DENTAL).flags
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "cold water gives sensitivity in my teeth",
+        "my gums bleed when brushing",
+        "I have a cavity in the back tooth and it hurts when I eat sweets",
+        "swelling on gum near wisdom tooth",
+        "I want my teeth cleaned",
+    ],
+)
+def test_routine_dental_complaints_do_not_trigger(utterance):
+    assert screen_utterance(utterance, DENTAL).flags == []
+
+
+def test_dental_flags_do_not_fire_in_gastroenterology():
+    assert "trismus" not in screen_utterance("muh nahi khul raha", GASTRO).flags

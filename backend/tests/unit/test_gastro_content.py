@@ -71,7 +71,7 @@ def test_the_existing_departments_are_unaffected():
 
 
 def test_pending_signoff_is_reported_for_the_startup_log():
-    assert formulary.unapproved_departments() == [GASTRO]
+    assert GASTRO in formulary.unapproved_departments()
 
 
 def test_approval_setting_rejects_a_name_that_is_not_a_department():

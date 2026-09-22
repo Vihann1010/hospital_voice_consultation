@@ -97,6 +97,25 @@ Department-specific areas to cover naturally (Gastroenterology):
 Ask about stool, bleeding and alcohol matter-of-factly and without embarrassment.
 """
 
+_DENTISTRY_GUIDE = """
+Department-specific areas to cover naturally (Dentistry):
+- Which tooth or area hurts: upper or lower jaw, left or right, front or back;
+  whether they can point to one tooth or the pain is spread out.
+- What brings the pain on: hot, cold or sweet things, biting or chewing; how
+  long it lasts after the trigger goes away; whether it wakes them at night.
+- Swelling of the gum, cheek, face or jaw, and whether it is getting bigger;
+  any pus or bad taste; fever.
+- Bleeding gums when brushing, loose teeth, bad breath.
+- Any injury to the mouth or face, a broken or knocked-out tooth.
+- Difficulty opening the mouth, chewing or swallowing.
+- Last dental visit and treatment: fillings, root canals, extractions, crowns,
+  braces, dentures, implants.
+- Brushing habit, tobacco, gutkha, paan or smoking.
+- Blood thinners, diabetes and heart conditions: these change what can be
+  done in the chair, so ask for them plainly.
+Keep it short and practical; the dentist will examine the mouth.
+"""
+
 
 _PROFILES: Dict[Department, DepartmentProfile] = {
     Department.ORTHOPEDICS: DepartmentProfile(
@@ -154,6 +173,29 @@ _PROFILES: Dict[Department, DepartmentProfile] = {
             "निवारक दवा न लें।",
             "उल्टी या शौच में खून आए, पेट में तेज दर्द हो, या आंखें पीली पड़ें तो तुरंत "
             "अस्पताल जाएं।",
+        ),
+    ),
+    Department.DENTISTRY: DepartmentProfile(
+        label="Dentistry",
+        code="DEN",
+        intake_guide=_DENTISTRY_GUIDE,
+        red_flag_guide=(
+            "Dental red flags include: facial or neck swelling that is spreading, closing "
+            "an eye, or raising the floor of the mouth (possible space infection or "
+            "Ludwig's angina — an airway emergency), difficulty swallowing or breathing "
+            "with a dental infection, inability to open the mouth with fever, bleeding "
+            "after an extraction that does not stop with pressure, a knocked-out "
+            "permanent tooth (replant within the hour), and a suspected jaw fracture "
+            "after injury (teeth no longer meet, jaw deformed or numb)."
+        ),
+        extraction_fields=(
+            "tooth_or_area, pain_triggers, swelling, gum_bleeding, "
+            "dental_history, tobacco_use"
+        ),
+        fallback_self_care=(
+            "गुनगुने नमक वाले पानी से कुल्ला करें, और दर्द वाली तरफ से न चबाएं।",
+            "चेहरे या गले में सूजन बढ़े, मुंह न खुले, बुखार हो, या निगलने या सांस लेने में "
+            "परेशानी हो तो तुरंत अस्पताल जाएं।",
         ),
     ),
 }

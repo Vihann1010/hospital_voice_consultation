@@ -68,3 +68,16 @@ def test_slot_checklist_is_department_specific():
     assert "bowel_habit" not in ortho
     # The common history is asked of everyone.
     assert {"chief_complaint", "allergies"} <= set(gastro)
+
+
+def test_dentistry_is_its_own_department():
+    assert label_for(Department.DENTISTRY) == "Dentistry"
+    assert code_for(Department.DENTISTRY) == "DEN"
+    guide = profile_for(Department.DENTISTRY).intake_guide
+    assert "tooth" in guide and "Gastro" not in guide
+
+
+def test_dentistry_asks_dental_questions():
+    keys = slot_keys_for(Department.DENTISTRY)
+    assert {"tooth_or_area", "pain_triggers", "swelling"} <= set(keys)
+    assert "bowel_habit" not in keys

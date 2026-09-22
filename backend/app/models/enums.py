@@ -37,6 +37,7 @@ class Department(str, enum.Enum):
     ORTHOPEDICS = "orthopedics"
     GYNECOLOGY = "gynecology"
     GASTROENTEROLOGY = "gastroenterology"
+    DENTISTRY = "dentistry"
 
 
 class Gender(str, enum.Enum):
@@ -71,6 +72,9 @@ class InvestigationCategory(str, enum.Enum):
     # are booked and consented like a procedure, not collected like a sample.
     GASTROENTEROLOGY = "gastroenterology"
     ENDOSCOPY = "endoscopy"
+    # Dental radiographs (IOPA, OPG, CBCT) are taken and read at the chair,
+    # not sent to a radiology department, so they are their own category.
+    DENTAL = "dental"
     HORMONAL = "hormonal"
     TUMOR_MARKERS = "tumor_markers"
 

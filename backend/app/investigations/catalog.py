@@ -356,6 +356,36 @@ CATALOG: List[Investigation] = [
       ["rut", "clo test", "rapid urease"], "Antral biopsy",
       "Taken during gastroscopy", "Same day",
       departments=[Department.GASTROENTEROLOGY]),
+
+    # -------------------------------- DENTAL --------------------------------
+    # Taken at the chair or by an outside dental imaging centre, and read by
+    # the dentist; none of them goes to a radiology department.
+    C("DENT_IOPA", "Intraoral Periapical Radiograph (IOPA / RVG)", Cat.DENTAL,
+      ["iopa", "rvg", "periapical x-ray", "tooth x-ray", "dental x-ray"],
+      "Tooth and its root", "Name the tooth (FDI number) on the order", "Same visit",
+      departments=[Department.DENTISTRY]),
+    C("DENT_OPG", "Orthopantomogram (OPG)", Cat.DENTAL,
+      ["opg", "panoramic x-ray", "full mouth x-ray", "orthopantomogram"],
+      "Both jaws and all teeth", "Remove earrings, chains and dentures", "Same day",
+      departments=[Department.DENTISTRY]),
+    C("DENT_BITEWING", "Bitewing Radiograph", Cat.DENTAL,
+      ["bitewing", "bite wing"], "Crowns of the back teeth", None, "Same visit",
+      departments=[Department.DENTISTRY]),
+    C("DENT_CBCT", "CBCT of the Jaw", Cat.DENTAL,
+      ["cbct", "cone beam", "3d dental scan"], "Jaw region named on the order",
+      "Remove metal from the head and neck", "1-2 days", departments=[Department.DENTISTRY],
+      note="Usually done at an outside imaging centre; for implants and impacted teeth."),
+    C("DENT_LATERAL_CEPH", "Lateral Cephalogram", Cat.DENTAL,
+      ["ceph", "lateral ceph", "cephalogram"], "Skull and jaws, side view", None, "Same day",
+      departments=[Department.DENTISTRY], note="For orthodontic assessment."),
+    C("DENT_PULP_VITALITY", "Pulp Vitality Test", Cat.DENTAL,
+      ["vitality test", "pulp test", "cold test", "ept"], "Tooth named on the order", None,
+      "Same visit", departments=[Department.DENTISTRY]),
+    C("DENT_BIOPSY", "Histopathology of Oral Biopsy", Cat.DENTAL,
+      ["oral biopsy", "mouth biopsy", "oral hpe"], "Oral biopsy specimen",
+      "Specimen is sent to an outside laboratory", "5-7 days",
+      departments=[Department.DENTISTRY],
+      note="Reported by the receiving laboratory; the report is filed against this order."),
 ]
 
 PANELS: List[Panel] = [
@@ -408,6 +438,13 @@ PANELS: List[Panel] = [
           "Baseline blood work before a scope under sedation",
           ["CBC", "COAG", "FBS", "VIRAL"],
           departments=[Department.GASTROENTEROLOGY]),
+    Panel("PANEL_DENTAL_SURGERY", "Before Oral Surgery",
+          "Bleeding, sugar and infection screen before extraction or implant surgery",
+          ["CBC", "COAG", "RBS", "VIRAL", "DENT_OPG"],
+          departments=[Department.DENTISTRY]),
+    Panel("PANEL_IMPLANT", "Implant Planning", "Bone and systemic fitness for an implant",
+          ["DENT_CBCT", "DENT_OPG", "HBA1C", "CBC", "VIRAL"],
+          departments=[Department.DENTISTRY]),
 ]
 
 CATALOG_BY_CODE: Dict[str, Investigation] = {item.code: item for item in CATALOG}
@@ -416,6 +453,7 @@ PANELS_BY_CODE: Dict[str, Panel] = {panel.code: panel for panel in PANELS}
 CATEGORY_LABELS: Dict[str, str] = {
     Cat.GASTROENTEROLOGY.value: "Gastroenterology",
     Cat.ENDOSCOPY.value: "Endoscopy",
+    Cat.DENTAL.value: "Dental",
     Cat.BLOOD.value: "Blood",
     Cat.URINE.value: "Urine",
     Cat.XRAY.value: "X-Ray",

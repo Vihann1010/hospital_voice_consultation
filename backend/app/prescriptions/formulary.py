@@ -302,6 +302,43 @@ FORMULARY: List[Medicine] = [
       "QID", "14 days", "before food", "Bismuth salt", [Department.GASTROENTEROLOGY],
       note="Blackens the tongue and stool — tell the patient, or they will think it is bleeding",
       provisional=True),
+
+    # ------------------------------ Dentistry --------------------------------
+    # DRAFTED, NOT YET APPROVED, like the gastroenterology block above: withheld
+    # until a dentist signs it off and dentistry is named in APPROVED_FORMULARY.
+    # The general antibiotics and analgesics above (Augmentin, Mox, Metrogyl,
+    # paracetamol, ibuprofen) stay available to the dentist throughout; these
+    # are the dental courses and the mouth-specific preparations.
+    M("AMOX_DENTAL", "Amoxicillin (dental course)", ["amoxicillin"], "Capsule", ["500 mg"],
+      "TDS", "5 days", "after food", "Penicillin antibiotic", [Department.DENTISTRY],
+      note="Antibiotics do not treat toothache; for spreading infection, alongside drainage",
+      provisional=True),
+    M("METRO_DENTAL", "Metronidazole (dental course)", ["metronidazole"], "Tablet", ["400 mg"],
+      "TDS", "5 days", "after food", "Nitroimidazole", [Department.DENTISTRY],
+      note="No alcohol during the course and for 48 hours after", provisional=True),
+    M("CLINDAMYCIN", "Clindamycin", ["clindamycin"], "Capsule", ["150 mg", "300 mg"], "TDS",
+      "5 days", "after food", "Lincosamide antibiotic", [Department.DENTISTRY],
+      note="For penicillin allergy. Stop and report any diarrhoea", provisional=True),
+    M("KETOROLAC", "Ketorolac", ["ketorolac"], "Tablet", ["10 mg"], "SOS", "2 days",
+      "after food", "NSAID", [Department.DENTISTRY],
+      note="Short courses only, no more than five days; not with another NSAID",
+      provisional=True),
+    M("CHX_MW", "Chlorhexidine Mouthwash 0.2%", ["chlorhexidine"], "Mouthwash", ["0.2%"],
+      "BD", "7 days", "rinse 10 ml for 30 seconds, nothing by mouth for 30 minutes", "Antiseptic",
+      [Department.DENTISTRY], note="Stains teeth with long use; not for more than two weeks", provisional=True),
+    M("BENZYDAMINE_MW", "Benzydamine Mouthwash", ["benzydamine"], "Mouthwash", ["0.15%"], "TDS",
+      "5 days", "rinse 15 ml, spit out", "Topical anti-inflammatory", [Department.DENTISTRY], provisional=True),
+    M("LIGNO_GEL", "Lignocaine Oral Gel 2%", ["lidocaine"], "Gel", ["2%"], "SOS", "3 days",
+      "apply to the sore area", "Topical anaesthetic", [Department.DENTISTRY],
+      note="Not for infants; do not eat until the numbness passes", provisional=True),
+    M("TRIAM_PASTE", "Triamcinolone Oral Paste 0.1%", ["triamcinolone"], "Paste", ["0.1%"], "TDS",
+      "5 days", "dab on the ulcer, do not rub", "Topical corticosteroid", [Department.DENTISTRY],
+      note="An ulcer that has not healed in three weeks needs review, not more paste",
+      provisional=True),
+    M("CLOTRIM_PAINT", "Clotrimazole Mouth Paint 1%", ["clotrimazole"], "Paint", ["1%"], "TDS",
+      "7 days", "apply after meals", "Topical antifungal", [Department.DENTISTRY], provisional=True),
+    M("KNO3_PASTE", "Potassium Nitrate Toothpaste 5%", ["potassium nitrate"], "Toothpaste", ["5%"],
+      "BD", "4 weeks", "brush, spit, do not rinse", "Desensitising agent", [Department.DENTISTRY], provisional=True),
 ]
 
 
@@ -436,6 +473,79 @@ MEDICINE_TEMPLATES: List[MedicineTemplate] = [
     ),
     provisional=True,
   ),
+  # -------------------------------- Dentistry --------------------------------
+  MedicineTemplate(
+    "Toothache — irreversible pulpitis",
+    ["toothache", "pulpitis", "tooth pain", "daant dard"],
+    ["BRUFEN", "PARA"], Department.DENTISTRY,
+    note=(
+      "Dentist review required. Analgesia until the tooth is treated; root canal "
+      "or extraction is the treatment. Antibiotics do not relieve pulpitis."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Dental abscess with spreading infection",
+    ["dental abscess", "periapical abscess", "tooth abscess", "facial swelling"],
+    ["AMOX_DENTAL", "METRO_DENTAL", "BRUFEN"], Department.DENTISTRY,
+    note=(
+      "Dentist review required. Drain the abscess and treat the tooth; antibiotics "
+      "only where infection is spreading or the patient is unwell."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Dental abscess — penicillin allergy",
+    ["abscess penicillin allergy", "allergic to penicillin"],
+    ["CLINDAMYCIN", "BRUFEN"], Department.DENTISTRY,
+    note="Dentist review required. Confirm the allergy history.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "After extraction",
+    ["post extraction", "after extraction", "extraction", "tooth removed"],
+    ["BRUFEN", "PARA", "CHX_MW"], Department.DENTISTRY,
+    note=(
+      "Dentist review required. Mouthwash from the next day, not the day of "
+      "extraction. Bite on gauze for 30 minutes; no spitting or straws for a day."
+    ),
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Pericoronitis",
+    ["pericoronitis", "wisdom tooth", "operculum"],
+    ["METRO_DENTAL", "CHX_MW", "PARA"], Department.DENTISTRY,
+    note="Dentist review required. Irrigate under the flap; review the tooth.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Gingivitis",
+    ["gingivitis", "bleeding gums", "gum bleeding", "gum inflammation"],
+    ["CHX_MW"], Department.DENTISTRY,
+    note="Dentist review required. Scaling and brushing technique are the treatment.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Aphthous ulcer",
+    ["aphthous ulcer", "mouth ulcer", "canker sore", "chhale"],
+    ["TRIAM_PASTE", "BENZYDAMINE_MW"], Department.DENTISTRY,
+    note="Dentist review required. An ulcer present for three weeks needs a biopsy.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Dentine hypersensitivity",
+    ["sensitivity", "sensitive teeth", "dentine hypersensitivity", "cold sensitivity"],
+    ["KNO3_PASTE"], Department.DENTISTRY,
+    note="Dentist review required. Exclude caries and cracked teeth first.",
+    provisional=True,
+  ),
+  MedicineTemplate(
+    "Oral candidiasis",
+    ["oral thrush", "candidiasis", "white patches mouth", "denture stomatitis"],
+    ["CLOTRIM_PAINT"], Department.DENTISTRY,
+    note="Dentist review required. Clean dentures daily and leave them out at night.",
+    provisional=True,
+  ),
 ]
 
 
@@ -458,6 +568,14 @@ INTERACTION_PAIRS: Dict[Tuple[str, str], Tuple[str, str, str]] = {
     ("warfarin", "diclofenac"): (
         "serious", "NSAIDs raise bleeding risk with warfarin.",
         "Prefer paracetamol for analgesia.",
+    ),
+    ("warfarin", "ketorolac"): (
+        "serious", "Ketorolac with warfarin carries a high risk of bleeding.",
+        "Avoid; use paracetamol instead.",
+    ),
+    ("ketorolac", "ibuprofen"): (
+        "serious", "Two NSAIDs together add gastric and kidney harm without more relief.",
+        "Prescribe one NSAID only.",
     ),
     ("warfarin", "metronidazole"): (
         "serious", "Metronidazole potentiates warfarin.",

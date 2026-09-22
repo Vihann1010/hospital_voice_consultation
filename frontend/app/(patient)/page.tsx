@@ -11,6 +11,7 @@ const DEPARTMENT_BLURB: Record<string, string> = {
   orthopedics: "Bones, joints, back pain, injuries",
   gynecology: "Women's health, pregnancy care, cycles",
   gastroenterology: "Stomach, digestion, liver, acidity",
+  dentistry: "Teeth, gums, toothache, dental care",
 };
 
 /** The departments a patient can walk in and pick from.

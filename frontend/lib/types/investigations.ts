@@ -3,7 +3,7 @@ import type { Department } from "@/lib/types/core";
 
 export type InvestigationCategory =
   | "blood" | "urine" | "xray" | "mri" | "ct" | "ultrasound"
-  | "dexa" | "orthopedic" | "gynecology" | "gastroenterology" | "endoscopy"
+  | "dexa" | "orthopedic" | "gynecology" | "gastroenterology" | "endoscopy" | "dental"
   | "hormonal" | "tumor_markers";
 
 export type InvestigationPriority = "routine" | "urgent" | "stat";
@@ -246,7 +246,7 @@ export interface ReportVersionHistory {
 }
 
 export const CATEGORY_ORDER: InvestigationCategory[] = [
-  "blood", "urine", "xray", "mri", "ct", "ultrasound", "endoscopy",
+  "blood", "urine", "xray", "mri", "ct", "ultrasound", "endoscopy", "dental",
   "dexa", "orthopedic", "gynecology", "gastroenterology", "hormonal", "tumor_markers",
 ];
 

@@ -6,7 +6,7 @@
  * dropdown maps over it. Screens used to spell the pair out inline, which is
  * why a third department had to be added in fourteen files and was silently
  * missing from the ones nobody remembered. Labels live in lib/format.ts. */
-export const DEPARTMENTS = ["orthopedics", "gynecology", "gastroenterology"] as const;
+export const DEPARTMENTS = ["orthopedics", "gynecology", "gastroenterology", "dentistry"] as const;
 export type Department = (typeof DEPARTMENTS)[number];
 export type Gender = "male" | "female" | "other";
 export type ConsultationStatus = "in_progress" | "completed" | "abandoned";
