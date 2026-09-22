@@ -41,6 +41,7 @@ class AdmitRequest(BaseModel):
     department: Department
     admitting_doctor_id: Optional[uuid.UUID] = None
     admitting_doctor_name: str = ""
+    other_consultant_name: Optional[str] = Field(default=None, max_length=255)
     admission_type: AdmissionType = AdmissionType.PLANNED
     provisional_diagnosis: Optional[str] = None
     reason_for_admission: Optional[str] = None
@@ -48,6 +49,7 @@ class AdmitRequest(BaseModel):
     attendant_name: Optional[str] = Field(default=None, max_length=255)
     attendant_phone: Optional[str] = Field(default=None, max_length=20)
     attendant_relation: Optional[str] = Field(default=None, max_length=64)
+    attendant_address: Optional[str] = Field(default=None, max_length=512)
     organisation_id: Optional[uuid.UUID] = None
     # Taken as a receipted deposit into the patient's wallet, tagged to the stay.
     advance_paid_paise: int = Field(default=0, ge=0)
@@ -70,6 +72,7 @@ class AdmissionOut(BaseModel):
     patient_id: uuid.UUID
     department: Department
     admitting_doctor_name: str
+    other_consultant_name: Optional[str] = None
     admission_type: AdmissionType
     status: AdmissionStatus
     admitted_at: datetime
@@ -80,6 +83,7 @@ class AdmissionOut(BaseModel):
     allergies: Optional[List[str]] = []
     attendant_name: Optional[str] = None
     attendant_phone: Optional[str] = None
+    attendant_address: Optional[str] = None
     organisation_id: Optional[uuid.UUID] = None
     # Only advances recorded before receipts existed; see advance_position.
     advance_paid_paise: int = 0

@@ -246,6 +246,7 @@ class IPDService:
         department: Department,
         admitting_doctor_id: Optional[uuid.UUID],
         admitting_doctor_name: str,
+        other_consultant_name: Optional[str] = None,
         admission_type: AdmissionType = AdmissionType.PLANNED,
         provisional_diagnosis: Optional[str] = None,
         reason_for_admission: Optional[str] = None,
@@ -253,6 +254,7 @@ class IPDService:
         attendant_name: Optional[str] = None,
         attendant_phone: Optional[str] = None,
         attendant_relation: Optional[str] = None,
+        attendant_address: Optional[str] = None,
         organisation_id: Optional[uuid.UUID] = None,
         advance_paid_paise: int = 0,
         advance_mode: str = "cash",
@@ -309,6 +311,7 @@ class IPDService:
             department=department,
             admitting_doctor_id=admitting_doctor_id,
             admitting_doctor_name=admitting_doctor_name,
+            other_consultant_name=other_consultant_name,
             admission_type=admission_type,
             status=AdmissionStatus.ADMITTED,
             admitted_at=now,
@@ -324,6 +327,7 @@ class IPDService:
             attendant_name=attendant_name,
             attendant_phone=attendant_phone,
             attendant_relation=attendant_relation,
+            attendant_address=attendant_address,
             organisation_id=organisation_id,
             # Holds only advances recorded before they were receipted. A new
             # advance is taken below as a deposit with a receipt.

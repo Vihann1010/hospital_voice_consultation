@@ -167,6 +167,12 @@ class Admission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     attendant_name: Mapped[Optional[str]] = mapped_column(String(255))
     attendant_phone: Mapped[Optional[str]] = mapped_column(String(20))
     attendant_relation: Mapped[Optional[str]] = mapped_column(String(64))
+    attendant_address: Mapped[Optional[str]] = mapped_column(Text)
+    # A second doctor involved in the stay — an anaesthetist, a referring
+    # specialist — alongside the admitting doctor. Free text like
+    # admitting_doctor_name, not a Consultant FK: the second doctor is often
+    # a visiting specialist who has no register entry at all.
+    other_consultant_name: Mapped[Optional[str]] = mapped_column(String(255))
     organisation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="SET NULL")
     )

@@ -19,7 +19,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle, ArrowRight, BedDouble, Check, Droplet, FileText, IndianRupee,
-  Loader2, LogOut, Plus, Printer, Search, Stethoscope, UserPlus, X,
+  Loader2, LogOut, Plus, Printer, Search, Stethoscope, Undo2, UserPlus, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { BedCell, Census, DeterioratingPatient, DischargeType, WardBoard } from "@/lib/types/ipd";
@@ -81,8 +81,10 @@ function AdmitSheet({
     (ward.department as Department) ?? "orthopedics"
   );
   const [advance, setAdvance] = useState("");
+  const [otherConsultant, setOtherConsultant] = useState("");
   const [attendantName, setAttendantName] = useState("");
   const [attendantPhone, setAttendantPhone] = useState("");
+  const [attendantAddress, setAttendantAddress] = useState("");
   const [allergies, setAllergies] = useState("");
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [organisationId, setOrganisationId] = useState("");
@@ -136,6 +138,7 @@ function AdmitSheet({
         bed_id: bed.id,
         department,
         admitting_doctor_name: doctor.trim(),
+        other_consultant_name: otherConsultant.trim() || null,
         provisional_diagnosis: diagnosis.trim() || null,
         reason_for_admission: reason.trim() || null,
         advance_paid_paise: rupeesToPaise(advance || "0"),
@@ -143,6 +146,7 @@ function AdmitSheet({
         advance_mode_details: Object.keys(advanceDetails).length ? advanceDetails : null,
         attendant_name: attendantName.trim() || null,
         attendant_phone: attendantPhone.trim() || null,
+        attendant_address: attendantAddress.trim() || null,
         organisation_id: organisationId || null,
         allergies: allergies
           .split(",")
@@ -280,6 +284,11 @@ function AdmitSheet({
           <Input id="ad-doc" value={doctor} placeholder="Dr A K Agarwal"
                  onChange={(e) => setDoctor(e.target.value)} />
         </div>
+        <div>
+          <label className="field-label" htmlFor="ad-other-doc">Other consultant (optional)</label>
+          <Input id="ad-other-doc" value={otherConsultant}
+                 onChange={(e) => setOtherConsultant(e.target.value)} />
+        </div>
         {organisations.length > 0 && (
           <div>
             <label className="field-label" htmlFor="ad-org">Paid by</label>
@@ -336,6 +345,11 @@ function AdmitSheet({
                  onChange={(e) => setAttendantPhone(e.target.value)} />
         </div>
       </div>
+      <div>
+        <label className="field-label" htmlFor="ad-att-addr">Attendant address (optional)</label>
+        <Input id="ad-att-addr" value={attendantAddress}
+               onChange={(e) => setAttendantAddress(e.target.value)} />
+      </div>
 
       {rupeesToPaise(advance || "0") > 0 && (
         <PaymentModeFields mode={advanceMode} values={advanceDetails} onChange={setAdvanceDetails} />
@@ -361,10 +375,11 @@ function AdmitSheet({
 
 // ----------------------------------------------------------- bedside sheet
 function BedSheet({
-  bed, ward, onChanged, onClose,
+  bed, ward, wards, onChanged, onClose,
 }: {
   bed: BedCell;
   ward: WardBoard;
+  wards: WardBoard[];
   onChanged: () => void;
   onClose: () => void;
 }) {
@@ -372,7 +387,32 @@ function BedSheet({
   const occupant = bed.occupant!;
   const [bill, setBill] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"charges" | "discharge">("charges");
+  const [tab, setTab] = useState<"charges" | "discharge" | "room">("charges");
+
+  // room change
+  const [toBedId, setToBedId] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+  const vacantBeds = wards.flatMap((w) =>
+    w.beds.filter((b) => b.status === "vacant").map((b) => ({ ward: w, bed: b }))
+  );
+
+  async function moveRoom() {
+    if (!toBedId) return;
+    setBusy(true);
+    try {
+      const result = await staffApi.transferBed(occupant.admission_id, {
+        to_bed_id: toBedId,
+        reason: transferReason.trim() || null,
+      }) as { ward: string; bed: string };
+      toast.success("Moved", `${result.ward} — ${result.bed}`);
+      onChanged();
+    } catch (err) {
+      toast.error("Could not move the patient",
+        err instanceof Error ? err.message : undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // charge entry
   const [category, setCategory] = useState("procedure");
@@ -506,7 +546,7 @@ function BedSheet({
       </div>
 
       <div className="flex gap-1 rounded-lg bg-mint p-1">
-        {(["charges", "discharge"] as const).map((t) => (
+        {(["charges", "discharge", "room"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
                   className={cn(
                     "flex-1 rounded-md px-3 py-1.5 text-sm font-medium capitalize transition",
@@ -614,10 +654,19 @@ function BedSheet({
                     leaves.
                   </p>
                 )}
-                <Button variant="outline" size="sm" className="mt-2"
-                        onClick={() => window.print()}>
-                  <Printer /> Print bill
-                </Button>
+                <div className="mt-2 flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => window.print()}>
+                    <Printer /> Print bill
+                  </Button>
+                  {invoice.paid_paise > 0 && (
+                    <a href={`/reception/bills?q=${encodeURIComponent(invoice.invoice_number)}`}
+                       target="_blank" rel="noreferrer">
+                      <Button variant="outline" size="sm">
+                        <Undo2 /> Refund
+                      </Button>
+                    </a>
+                  )}
+                </div>
               </div>
             ) : (
               <Button className="mt-2 w-full" size="sm" onClick={raiseInvoice}
@@ -678,6 +727,42 @@ function BedSheet({
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "room" && (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-muted">
+            Currently {ward.name} — {bed.label}.
+          </p>
+          {vacantBeds.length === 0 ? (
+            <p className="text-sm text-ink-muted">No vacant beds anywhere right now.</p>
+          ) : (
+            <>
+              <div>
+                <label className="field-label" htmlFor="rc-to-bed">Move to</label>
+                <select id="rc-to-bed" value={toBedId} className="field-input"
+                        onChange={(e) => setToBedId(e.target.value)}>
+                  <option value="">—</option>
+                  {vacantBeds.map(({ ward: w, bed: b }) => (
+                    <option key={b.id} value={b.id}>
+                      {w.name} — {b.label} ({formatINR(b.rate_paise)}/day)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="rc-reason">Reason (optional)</label>
+                <Input id="rc-reason" value={transferReason}
+                       onChange={(e) => setTransferReason(e.target.value)} />
+              </div>
+              <Button className="w-full" size="sm" onClick={() => void moveRoom()}
+                      disabled={busy || !toBedId}>
+                {busy ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                Move patient
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -865,7 +950,7 @@ export function WardPanel() {
                             onClose={() => setSheet(null)}
                             onDone={() => { setSheet(null); void load(); }} />
               ) : (
-                <BedSheet bed={sheet.bed} ward={sheet.ward}
+                <BedSheet bed={sheet.bed} ward={sheet.ward} wards={wards ?? []}
                           onClose={() => setSheet(null)}
                           onChanged={() => { setSheet(null); void load(); }} />
               )}

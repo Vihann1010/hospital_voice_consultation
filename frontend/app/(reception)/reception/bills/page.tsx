@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { BillCorrections } from "@/components/reception/bill-corrections";
 import { useAuth } from "@/components/dashboard/auth-provider";
 
@@ -19,7 +20,9 @@ export default function BillsPage() {
           Find a past bill to reprint it, or to correct what was entered.
         </p>
       </div>
-      <BillCorrections canCorrect={canCorrect} />
+      <Suspense>
+        <BillCorrections canCorrect={canCorrect} />
+      </Suspense>
     </div>
   );
 }

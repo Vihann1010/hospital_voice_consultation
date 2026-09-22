@@ -12,7 +12,8 @@
  * bill before its registration. What this screen does is make the order
  * visible, so a clerk meets an explanation rather than a refusal.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Banknote,
@@ -685,11 +686,16 @@ function BillDetail({
 }
 
 export function BillCorrections({ canCorrect }: { canCorrect: boolean }) {
-  const [term, setTerm] = useState("");
+  // A link from elsewhere (the ward's discharge tab, say) can jump straight
+  // to a bill by number: /reception/bills?q=SAT/26-27/000002
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
+  const [term, setTerm] = useState(initialQuery);
   const [items, setItems] = useState<InvoiceSummary[] | null>(null);
   const [total, setTotal] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoOpened = useRef(false);
 
   const load = useCallback(async (q: string) => {
     try {
@@ -706,6 +712,14 @@ export function BillCorrections({ canCorrect }: { canCorrect: boolean }) {
     const timer = setTimeout(() => void load(term), term ? 250 : 0);
     return () => clearTimeout(timer);
   }, [term, load]);
+
+  // Landed here via a bill-number link and it resolved to exactly one bill:
+  // open it directly rather than making the clerk click it too.
+  useEffect(() => {
+    if (autoOpened.current || !initialQuery || !items || items.length !== 1) return;
+    autoOpened.current = true;
+    setOpenId(items[0].id);
+  }, [initialQuery, items]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
