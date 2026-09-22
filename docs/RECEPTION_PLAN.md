@@ -36,7 +36,7 @@ outside the repo, since they show real patient data).
 | Invoice List report | **Have, confirmed** | Columns: Date, Bill, Patient, UHID, Consultant, From, Visit, Gross, Discount, Net, Paid, Balance, Status. Close to Onito's, but no payer/empanelment column and no separate cancelled-amount column |
 | Daily Summary report | **Have, confirmed** | "Daily closing" report exists in the picker |
 | Ledger report | **Have, confirmed** | "Day-wise receipts and refunds" in the same report picker, alongside Cash ledger, Collection summary, Consultant-wise and Department-wise billing |
-| Service master | **Partial, confirmed** | Add-service form: Code, Name, Kind, Department, Rate, GST %, HSN/SAC, Offered-at-counter. **Missing: IPD rate, unit, rate-editable / discount-allowed / consultant-selection flags, per-consultant rows, per-organisation rows.** (Result grouping for lab tests, e.g. biochemistry/clinical pathology, lives separately in the Lab test list, not here — matches Onito's medical-type idea reasonably well) |
+| Service master | **Have** (item 4) | Add-service form now has: Code, Name, Kind, Department, Rate, **IPD rate, unit**, GST %, HSN/SAC, Offered-at-counter, **rate-editable, discount-allowed, requires-consultant flags**. Per-organisation rate rows already existed (separate Organisations screen, not the form itself) and per-consultant rows now exist too (separate Consultants screen, "Rates" button), both wired into the pricing engine and verified live. (Lab result grouping still lives separately in the Lab test list, matching Onito's medical-type idea reasonably well) |
 | Consultant master | **Partial, confirmed** | Add-consultant form: Name, Department, Phone, Qualification (printed under signature), Registration number, Consultation fee, OPD days, OPD from/until, Minutes per appointment, Free follow-up days, Login, Notes, First-consultation-free, In-use. **Missing: sex, display-in-OPD/IPD/Diagnostics flags, sort order, "is primary".** |
 | Payer / organisation master | **Partial, confirmed — real gap** | Add-payer form: Short code, Name, Kind (TPA etc.), Contact, Phone, Email, Address, **one flat Standard discount %**, Credit days, In-use. **No per-service rate table, no service codes per payer** — this is the opposite of v2's "Have, verify" and needs your answer to question 3 |
 | IPD admitted list, ward board | **Have, confirmed** | Two views: a read-only Ward board on the clinical dashboard, and a working **Ward terminal** (`/ward`) with its own Admit action per bed |
@@ -80,14 +80,23 @@ outside the repo, since they show real patient data).
    Discharged/Referred/DOPR; LAMA/DAMA/Expired skip it — a judgement call (Onito's DAMA is
    consented so arguably could require it too), flag if the hospital wants it different.
    Verified end-to-end (admission `IP26-00002`, discharge_type `lama`, bed released).
-4. **Service master parity.** IPD rate, unit, flags, per-consultant and per-organisation rate
-   rows (needs a migration and to feed the existing pricing engine) — this is also #2's
-   per-service payer rate table. **Scope note (found while building item 2):** a
-   per-organisation rate table (`negotiated_rates`: organisation_id, service_item_id,
-   rate_paise) already exists from migration `0014` — check whether the pricing engine
-   (`app/billing/pricing.py`) already reads it before assuming this needs building from
-   scratch. Per-consultant rates and the service-master admin UI to edit either table still
-   need checking/building regardless.
+4. ~~**Service master parity.**~~ **Done, small scope** (user chose this over also rebuilding
+   IPD charge-entry — see below). Migration `0033_service_master_parity`: `ServiceItem` gets
+   `ipd_rate_paise`, `unit`, `rate_editable`, `discount_allowed`, `requires_consultant`
+   (data only — `rate_editable`/`discount_allowed` are **not enforced** by `pricing.py`,
+   deliberately, matching that module's own stated design that an explicit counter price
+   always wins; `requires_consultant` is likewise captured but not validated anywhere yet).
+   New `consultant_rates` table (mirrors the pre-existing `negotiated_rates`), wired into
+   `pricing.py` with precedence **negotiated org rate > consultant's own rate > org's flat
+   discount % > tariff** — a judgement call (documented in the module), flag if the hospital
+   wants payer agreements to lose to a doctor's own rate instead. New "Rates" screen per
+   consultant (Consultants settings), mirroring the existing per-organisation one. Verified
+   end-to-end: a consultant's own rate (₹450 vs tariff ₹500) applied live on a real quote,
+   with the correct on-screen note.
+   **Deliberately NOT done:** IPD charge-entry (ward "Add a charge") still free-types
+   Kind/Description/Rate — it does not read the service catalog, so `ipd_rate_paise` and
+   these new consultant/org rates do not yet apply there automatically. Rebuilding that flow
+   to pick services from the catalog is a separate, larger piece; ask before starting it.
 5. **Consultant master parity.** Missing display flags, sort order, sex.
 6. ~~Diagnostics dept on the counter~~ — dropped, keeping the separate Lab module (question 7).
 7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.

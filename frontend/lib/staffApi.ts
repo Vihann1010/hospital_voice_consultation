@@ -80,6 +80,7 @@ import type {
   ServiceItem,
   Visit,
   InvoiceList,
+  ConsultantRate,
   NegotiatedRate,
   Organisation,
   PatientDiary,
@@ -684,6 +685,13 @@ export const staffApi = {
     request<Consultant>(id ? `/masters/consultants/${id}` : "/masters/consultants", {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
+    }),
+  consultantRates: (id: string) =>
+    request<ConsultantRate[]>(`/masters/consultants/${id}/rates`),
+  saveConsultantRates: (id: string, rates: { service_item_id: string; rate_paise: number; notes?: string | null }[]) =>
+    request<ConsultantRate[]>(`/masters/consultants/${id}/rates`, {
+      method: "PUT",
+      body: JSON.stringify(rates),
     }),
 
   serviceItems: (activeOnly = true) =>

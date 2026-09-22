@@ -88,10 +88,25 @@ class ServiceItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         SAEnum(Department, name="department", values_callable=_VALUES), index=True
     )
     rate_paise: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # NULL means "same as rate_paise" — most services cost the same whoever
+    # is charging it; only room-adjacent things (a dressing done on the ward
+    # vs at the counter) tend to differ.
+    ipd_rate_paise: Mapped[Optional[int]] = mapped_column(Integer)
+    # Free text on the bill and the service master screen: "per day",
+    # "per test", "each". Not enforced anywhere, purely informational.
+    unit: Mapped[Optional[str]] = mapped_column(String(32))
     # Most clinical services are GST-exempt; retail items are not.
     tax_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     hsn_sac_code: Mapped[Optional[str]] = mapped_column(String(16))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    # Data only, not enforced by pricing.py: an explicit rate at the counter
+    # always wins there by deliberate design (see that module's docstring).
+    # These exist so the service master screen can flag which services a
+    # hospital does NOT want reception overriding, for staff training and a
+    # future UI guard, without changing that standing policy today.
+    rate_editable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    discount_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    requires_consultant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
 

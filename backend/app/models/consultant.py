@@ -16,11 +16,13 @@ than as constants in three different places.
 """
 import uuid
 from datetime import time
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import Boolean, Enum as SAEnum, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import (
+    Boolean, Enum as SAEnum, ForeignKey, Integer, String, Text, Time, UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import Department
@@ -97,6 +99,39 @@ class Consultant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Boolean, nullable=False, default=True, index=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    rates: Mapped[List["ConsultantRate"]] = relationship(
+        back_populates="consultant", cascade="all, delete-orphan"
+    )
+
+
+class ConsultantRate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """What one consultant charges for one service, instead of the tariff.
+
+    Mirrors NegotiatedRate: a senior consultant's own procedure rate differs
+    from the hospital's standard one, and averaging that into a single number
+    loses the agreement the same way a blanket discount would.
+    """
+
+    __tablename__ = "consultant_rates"
+    __table_args__ = (
+        UniqueConstraint(
+            "consultant_id", "service_item_id", name="uq_rate_consultant_service"
+        ),
+    )
+
+    consultant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("consultants.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    service_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("service_items.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    rate_paise: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    consultant: Mapped["Consultant"] = relationship(back_populates="rates")
 
 
 class ReferralProvider(Base, UUIDPrimaryKeyMixin, TimestampMixin):

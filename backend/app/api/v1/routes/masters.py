@@ -21,7 +21,7 @@ from app.api.deps import CurrentUser, DbSession, require_permission
 from app.core import financial_year
 from app.core.audit import client_ip, record as audit_record
 from app.core.permissions import Permission
-from app.models.consultant import Consultant, ReferralProvider
+from app.models.consultant import Consultant, ConsultantRate, ReferralProvider
 from app.models.user import User
 from app.models.emr import ServiceItem
 from app.models.organisation import NegotiatedRate, Organisation
@@ -398,6 +398,75 @@ async def update_consultant(
     if changed:
         await _audit_consultant(user, request, consultant, False, changed)
     return ConsultantOut.model_validate(consultant)
+
+
+class ConsultantRateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    service_item_id: uuid.UUID
+    rate_paise: int
+    notes: Optional[str] = None
+
+
+class ConsultantRateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    service_item_id: uuid.UUID
+    rate_paise: int = Field(ge=0)
+    notes: Optional[str] = Field(default=None, max_length=255)
+
+
+@router.get("/consultants/{consultant_id}/rates",
+            response_model=List[ConsultantRateOut],
+            dependencies=[Depends(READ_MASTERS)])
+async def list_consultant_rates(
+    consultant_id: uuid.UUID, session: DbSession
+) -> List[ConsultantRateOut]:
+    result = await session.execute(
+        select(ConsultantRate).where(ConsultantRate.consultant_id == consultant_id)
+    )
+    return [ConsultantRateOut.model_validate(row) for row in result.scalars()]
+
+
+@router.put("/consultants/{consultant_id}/rates",
+            response_model=List[ConsultantRateOut],
+            dependencies=[Depends(MANAGE_MASTERS)])
+async def replace_consultant_rates(
+    consultant_id: uuid.UUID, payload: List[ConsultantRateIn], session: DbSession
+) -> List[ConsultantRateOut]:
+    """Replace a consultant's whole rate card. See replace_rates — same reasoning."""
+    consultant = await session.get(Consultant, consultant_id)
+    if consultant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such consultant.")
+
+    seen: set = set()
+    for entry in payload:
+        if entry.service_item_id in seen:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "The same service appears twice in this rate card.",
+            )
+        seen.add(entry.service_item_id)
+        if await session.get(ServiceItem, entry.service_item_id) is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "That service is not on the price list.",
+            )
+
+    await session.execute(
+        delete(ConsultantRate).where(ConsultantRate.consultant_id == consultant_id)
+    )
+    for entry in payload:
+        session.add(
+            ConsultantRate(consultant_id=consultant_id, **entry.model_dump())
+        )
+    await session.commit()
+
+    result = await session.execute(
+        select(ConsultantRate).where(ConsultantRate.consultant_id == consultant_id)
+    )
+    return [ConsultantRateOut.model_validate(row) for row in result.scalars()]
 
 
 # ------------------------------------------------------- referral providers

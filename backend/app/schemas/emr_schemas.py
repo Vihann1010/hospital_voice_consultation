@@ -127,9 +127,14 @@ class ServiceItemOut(BaseModel):
     category: ServiceCategory
     department: Optional[Department] = None
     rate_paise: int
+    ipd_rate_paise: Optional[int] = None
+    unit: Optional[str] = None
     tax_percent: int
     hsn_sac_code: Optional[str] = None
     is_active: bool
+    rate_editable: bool = True
+    discount_allowed: bool = True
+    requires_consultant: bool = False
 
 
 class ServiceItemUpsert(BaseModel):
@@ -138,9 +143,14 @@ class ServiceItemUpsert(BaseModel):
     category: ServiceCategory
     department: Optional[Department] = None
     rate_paise: int = Field(ge=0)
+    ipd_rate_paise: Optional[int] = Field(default=None, ge=0)
+    unit: Optional[str] = Field(default=None, max_length=32)
     tax_percent: int = Field(default=0, ge=0, le=28)
     hsn_sac_code: Optional[str] = Field(default=None, max_length=16)
     is_active: bool = True
+    rate_editable: bool = True
+    discount_allowed: bool = True
+    requires_consultant: bool = False
 
 
 # ------------------------------------------------------------------ billing

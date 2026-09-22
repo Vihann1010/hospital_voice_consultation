@@ -57,8 +57,13 @@ export interface ServiceItem {
   category: ServiceCategory;
   department?: Department | null;
   rate_paise: number;
+  ipd_rate_paise?: number | null;
+  unit?: string | null;
   tax_percent: number;
   is_active: boolean;
+  rate_editable: boolean;
+  discount_allowed: boolean;
+  requires_consultant: boolean;
 }
 
 export interface InvoiceLine {
@@ -379,6 +384,14 @@ export interface Quote {
 
 /** A rate this organisation has agreed for one service, overriding the price list. */
 export interface NegotiatedRate {
+  id: string;
+  service_item_id: string;
+  rate_paise: number;
+  notes?: string | null;
+}
+
+/** A rate this consultant charges for one service, overriding the price list. */
+export interface ConsultantRate {
   id: string;
   service_item_id: string;
   rate_paise: number;

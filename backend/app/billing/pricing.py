@@ -13,9 +13,12 @@ and a clerk who sees an unexpected zero needs to be able to tell the
 difference between a rule and a bug.
 
 **Rules are applied in a fixed order, and the first that hits wins.**
-Negotiated rate, then free follow-up, then first-consultation-free. They are
-not combined: applying a free-follow-up to a negotiated rate is still free,
-and stacking a discount on a waiver is how a bill goes negative.
+Negotiated organisation rate, then the consultant's own rate for that
+service, then the organisation's blanket discount, then free follow-up, then
+first-consultation-free. A specific figure — negotiated or the consultant's
+own — always beats a generic percentage; they are not combined: applying a
+free-follow-up to a negotiated rate is still free, and stacking a discount
+on a waiver is how a bill goes negative.
 
 **Nothing here overrides an explicit price.** If the caller states a rate, it
 is used and marked as an override. Reception sometimes has to charge what the
@@ -31,7 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import local_today, to_local
-from app.models.consultant import Consultant
+from app.models.consultant import Consultant, ConsultantRate
 from app.models.emr import Invoice, InvoiceLine, ServiceItem
 from app.models.enums import InvoiceStatus, ServiceCategory
 from app.models.organisation import NegotiatedRate, Organisation
@@ -63,6 +66,8 @@ class PricingContext:
     organisation: Optional[Organisation] = None
     #: service_item_id -> negotiated rate in paise
     negotiated: Dict[uuid.UUID, int] = None  # type: ignore[assignment]
+    #: service_item_id -> this consultant's own rate in paise
+    consultant_rates: Dict[uuid.UUID, int] = None  # type: ignore[assignment]
     #: The consultant's own last consultation with this patient, if any.
     last_consultation_on: Optional[Any] = None
     had_any_consultation: bool = False
@@ -70,6 +75,8 @@ class PricingContext:
     def __post_init__(self) -> None:
         if self.negotiated is None:
             self.negotiated = {}
+        if self.consultant_rates is None:
+            self.consultant_rates = {}
 
 
 async def build_context(
@@ -100,6 +107,14 @@ async def build_context(
             )
         )
     context.consultant = consultant
+    if consultant is not None:
+        result = await session.execute(
+            select(ConsultantRate.service_item_id, ConsultantRate.rate_paise)
+            .where(ConsultantRate.consultant_id == consultant.id)
+        )
+        context.consultant_rates = {
+            service_id: rate for service_id, rate in result.all()
+        }
 
     if organisation_id is not None:
         organisation = await session.get(Organisation, organisation_id)
@@ -180,20 +195,32 @@ def decide(
     rule = "tariff"
     note = ""
 
-    if context.organisation is not None:
-        negotiated = context.negotiated.get(service.id)
-        if negotiated is not None:
-            base = negotiated
-            rule = "negotiated"
-            note = f"{context.organisation.name} agreed rate"
-        elif context.organisation.default_discount_percent:
-            percent = context.organisation.default_discount_percent
-            # Rounded down to the paisa in the patient's favour. Rounding up
-            # means the hospital charges a rupee more than the agreement says
-            # on exactly the lines nobody checks.
-            base = base - (base * percent) // 100
-            rule = "org_discount"
-            note = f"{context.organisation.name} {percent}% agreed discount"
+    negotiated = (
+        context.negotiated.get(service.id) if context.organisation is not None else None
+    )
+    consultant_rate = (
+        context.consultant_rates.get(service.id) if context.consultant is not None else None
+    )
+
+    if negotiated is not None:
+        base = negotiated
+        rule = "negotiated"
+        note = f"{context.organisation.name} agreed rate"
+    elif consultant_rate is not None:
+        # A specific figure someone entered for this doctor and this service
+        # beats a generic across-the-board percentage — same reasoning as
+        # negotiated beating default_discount_percent below.
+        base = consultant_rate
+        rule = "consultant_rate"
+        note = f"{context.consultant.full_name}'s own rate"
+    elif context.organisation is not None and context.organisation.default_discount_percent:
+        percent = context.organisation.default_discount_percent
+        # Rounded down to the paisa in the patient's favour. Rounding up
+        # means the hospital charges a rupee more than the agreement says
+        # on exactly the lines nobody checks.
+        base = base - (base * percent) // 100
+        rule = "org_discount"
+        note = f"{context.organisation.name} {percent}% agreed discount"
 
     consultant = context.consultant
     if consultant is not None and _is_consultation(service, context):

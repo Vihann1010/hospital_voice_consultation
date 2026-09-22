@@ -14,6 +14,7 @@ import { Loader2, Pencil, Plus } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { Consultant } from "@/lib/types/appointments";
 import type { ServiceItem } from "@/lib/types/emr";
+import { formatINR, rupeesToPaise } from "@/lib/types/emr";
 import type { Department, User } from "@/lib/types/core";
 import { DEPARTMENT_LABEL } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
@@ -75,6 +76,7 @@ export function ConsultantsAdmin() {
   const [services, setServices] = useState<ServiceItem[] | null>(null);
   const [logins, setLogins] = useState<User[] | null>(null);
   const [form, setForm] = useState<ConsultantForm | null>(null);
+  const [rateCardFor, setRateCardFor] = useState<Consultant | null>(null);
   const [search, setSearch] = useState("");
   const [showRetired, setShowRetired] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -327,6 +329,7 @@ export function ConsultantsAdmin() {
                       <td className="py-2 pr-3 font-mono text-xs">{c.consultation_service_code || "Standard"}</td>
                       <td className="py-2 pr-3">{c.payout_share_percent}%</td>
                       <td className="py-2 text-right">
+                        <Button size="sm" variant="ghost" onClick={() => setRateCardFor(c)}>Rates</Button>
                         {editable && (
                           <Button size="sm" variant="ghost" aria-label={`Edit ${c.full_name}`} onClick={() => setForm(toForm(c))}>
                             <Pencil className="h-3.5 w-3.5" />
@@ -341,6 +344,111 @@ export function ConsultantsAdmin() {
           )}
         </CardContent>
       </Card>
+
+      {rateCardFor && (
+        <ConsultantRateCard consultant={rateCardFor} canEdit={editable} onClose={() => setRateCardFor(null)} />
+      )}
     </div>
+  );
+}
+
+function ConsultantRateCard({
+  consultant, canEdit, onClose,
+}: { consultant: Consultant; canEdit: boolean; onClose: () => void }) {
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [rates, setRates] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setSaved(null);
+    Promise.all([staffApi.serviceItems(true), staffApi.consultantRates(consultant.id)])
+      .then(([list, agreed]) => {
+        if (!live) return;
+        setServices(list);
+        setRates(Object.fromEntries(agreed.map((rate) => [rate.service_item_id, String(rate.rate_paise / 100)])));
+      })
+      .catch((err) => live && setError(err instanceof Error ? err.message : "The rate card could not be loaded."));
+    return () => { live = false; };
+  }, [consultant.id]);
+
+  const agreed = Object.values(rates).filter((value) => value.trim() !== "").length;
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const card = Object.entries(rates)
+        .filter(([, value]) => value.trim() !== "")
+        .map(([service_item_id, value]) => ({ service_item_id, rate_paise: rupeesToPaise(value) }));
+      await staffApi.saveConsultantRates(consultant.id, card);
+      setSaved(`${card.length} ${card.length === 1 ? "rate" : "rates"} saved.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The rate card could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const shown = services.filter(
+    (service) => !search.trim() || `${service.code} ${service.name}`.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
+        <CardTitle>{consultant.full_name} — own rates</CardTitle>
+        <div className="flex items-center gap-2">
+          <Input className="h-9 w-52" placeholder="Search service" value={search}
+                 onChange={(event) => setSearch(event.target.value)} />
+          <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-xs text-ink-muted">
+          Leave a service blank to charge the hospital&apos;s own rate. Beats an organisation&apos;s blanket
+          discount, but a negotiated rate for the patient&apos;s payer still wins over this. Saving replaces
+          the whole card.
+        </p>
+        {error && <p className="text-sm text-clay">{error}</p>}
+        {saved && <p className="text-sm text-pine">{saved}</p>}
+        <div className="max-h-96 overflow-y-auto rounded-lg border border-border">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead className="sticky top-0 bg-mint-card text-left text-xs text-ink-muted">
+              <tr>
+                <th className="px-3 py-2">Service</th>
+                <th className="px-3 py-2 text-right">Our rate</th>
+                <th className="px-3 py-2 text-right">Their rate (Rs)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {shown.map((service) => (
+                <tr key={service.id}>
+                  <td className="px-3 py-1.5">
+                    <span className="font-mono text-xs text-ink-muted">{service.code}</span> {service.name}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-ink-muted">
+                    {formatINR(service.rate_paise)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <Input className="ml-auto h-8 w-28 text-right" inputMode="decimal" disabled={!canEdit}
+                           value={rates[service.id] ?? ""}
+                           onChange={(event) => setRates({ ...rates, [service.id]: event.target.value })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {canEdit && (
+          <Button size="sm" disabled={busy} onClick={() => void save()}>
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save {agreed} rates
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }

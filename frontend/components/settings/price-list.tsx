@@ -36,14 +36,20 @@ interface Form {
   category: ServiceCategory;
   department: string;
   rate: string;
+  ipd_rate: string;
+  unit: string;
   tax_percent: string;
   hsn_sac_code: string;
   is_active: boolean;
+  rate_editable: boolean;
+  discount_allowed: boolean;
+  requires_consultant: boolean;
 }
 
 const EMPTY: Form = {
   code: "", existing: false, name: "", category: "procedure", department: "",
-  rate: "", tax_percent: "0", hsn_sac_code: "", is_active: true,
+  rate: "", ipd_rate: "", unit: "", tax_percent: "0", hsn_sac_code: "", is_active: true,
+  rate_editable: true, discount_allowed: true, requires_consultant: false,
 };
 
 export function PriceList({ canEdit }: { canEdit: boolean }) {
@@ -92,9 +98,14 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
         category: form.category,
         department: form.department || null,
         rate_paise: rupeesToPaise(form.rate),
+        ipd_rate_paise: form.ipd_rate.trim() === "" ? null : rupeesToPaise(form.ipd_rate),
+        unit: form.unit.trim() || null,
         tax_percent: Number(form.tax_percent) || 0,
         hsn_sac_code: form.hsn_sac_code.trim() || null,
         is_active: form.is_active,
+        rate_editable: form.rate_editable,
+        discount_allowed: form.discount_allowed,
+        requires_consultant: form.requires_consultant,
       });
       setForm(null);
       await load();
@@ -150,6 +161,16 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
                        onChange={(event) => set({ rate: event.target.value })} />
               </label>
               <label className="space-y-1">
+                <span className="text-xs text-ink-muted">IPD rate (Rs), if different</span>
+                <Input inputMode="decimal" placeholder="Same as rate" value={form.ipd_rate}
+                       onChange={(event) => set({ ipd_rate: event.target.value })} />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-ink-muted">Unit</span>
+                <Input placeholder="per day, per test, each" value={form.unit}
+                       onChange={(event) => set({ unit: event.target.value })} />
+              </label>
+              <label className="space-y-1">
                 <span className="text-xs text-ink-muted">GST %</span>
                 <Input type="number" min={0} max={28} value={form.tax_percent}
                        onChange={(event) => set({ tax_percent: event.target.value })} />
@@ -163,6 +184,21 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
                 <input type="checkbox" checked={form.is_active}
                        onChange={(event) => set({ is_active: event.target.checked })} />
                 <span>Offered at the counter</span>
+              </label>
+              <label className="flex items-end gap-2 pb-1.5">
+                <input type="checkbox" checked={form.rate_editable}
+                       onChange={(event) => set({ rate_editable: event.target.checked })} />
+                <span>Rate editable at the counter</span>
+              </label>
+              <label className="flex items-end gap-2 pb-1.5">
+                <input type="checkbox" checked={form.discount_allowed}
+                       onChange={(event) => set({ discount_allowed: event.target.checked })} />
+                <span>Discount allowed</span>
+              </label>
+              <label className="flex items-end gap-2 pb-1.5">
+                <input type="checkbox" checked={form.requires_consultant}
+                       onChange={(event) => set({ requires_consultant: event.target.checked })} />
+                <span>Requires a consultant</span>
               </label>
             </div>
             <p className="text-xs text-ink-muted">
@@ -226,7 +262,13 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
                       <td className="py-2 pr-3">
                         {item.department ? DEPARTMENT_LABEL[item.department] ?? item.department : "Any"}
                       </td>
-                      <td className="py-2 pr-3 text-right tabular-nums">{formatINR(item.rate_paise)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {formatINR(item.rate_paise)}
+                        {item.unit && <span className="text-ink-muted"> /{item.unit}</span>}
+                        {item.ipd_rate_paise != null && (
+                          <div className="text-xs text-ink-muted">IPD {formatINR(item.ipd_rate_paise)}</div>
+                        )}
+                      </td>
                       <td className="py-2 pr-3 text-right">{item.tax_percent}%</td>
                       <td className="py-2 text-right">
                         {canEdit && (
@@ -234,8 +276,13 @@ export function PriceList({ canEdit }: { canEdit: boolean }) {
                                   onClick={() => setForm({
                                     code: item.code, existing: true, name: item.name, category: item.category,
                                     department: item.department ?? "", rate: String(item.rate_paise / 100),
+                                    ipd_rate: item.ipd_rate_paise != null ? String(item.ipd_rate_paise / 100) : "",
+                                    unit: item.unit ?? "",
                                     tax_percent: String(item.tax_percent), hsn_sac_code: "",
                                     is_active: item.is_active,
+                                    rate_editable: item.rate_editable,
+                                    discount_allowed: item.discount_allowed,
+                                    requires_consultant: item.requires_consultant,
                                   })}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
