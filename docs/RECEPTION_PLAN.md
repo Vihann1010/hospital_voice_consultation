@@ -72,6 +72,37 @@ outside the repo, since they show real patient data).
    upgrades) so it's clear which applies when. Verified against a genuinely empty database:
    ends at revision `0035` with all 67 tables and the latest columns present.
 
+## Bugs found during the full functional pass (2026-09-22, after item 9)
+
+With the parity items done, ran a real end-to-end pass — register a patient
+with every new field at once, admit and discharge an IPD stay, check the
+reports — rather than re-verifying each item in isolation. Found one real
+integration gap this way:
+
+1. **Fixed — IPD final bill dropped its payer and doctor.** The "Paid by"
+   organisation chosen at admission (item 2) and the discharge-mode work
+   (item 3) both worked in isolation, but `IPDService.finalise_billing()`'s
+   call to `create_invoice()` never passed `organisation_id` or
+   `doctor_name` through — so every IPD final bill showed "Self-pay" and no
+   consultant on the Invoice List report (item 7), regardless of what was
+   picked at admission. `organisation_id`/`doctor_name` now come from
+   `admission.organisation_id`/`admission.admitting_doctor_name`. This
+   doesn't retroactively reprice charges (IPD charges are already fixed
+   amounts by the time they're billed, and `pricing.py`'s explicit-price-
+   wins rule means an organisation's rate wouldn't apply to them anyway) —
+   it only fixes what the invoice *records* as the payer and doctor, which
+   is what every report, refund and reconciliation reads. Verified
+   end-to-end: admitted a patient under CGHS, raised the final bill, and
+   confirmed both the invoice row and the Invoice List report show CGHS and
+   the admitting doctor correctly.
+
+Also noticed, not fixed (pre-existing, not a regression from this work,
+backend already enforces the rule correctly either way): the ward panel's
+own Discharge tab (`ward-panel.tsx`) doesn't disable "Complete discharge" or
+show an inline warning when the chosen mode needs a signed summary — unlike
+the case sheet's Discharge tab, which does both. Staff see a toast error
+instead of a persistent hint. Cheap to align if it's worth a follow-up.
+
 ## Proposed work, in order
 
 1. ~~**Guardian and referred-by** on OPD registration.~~ **Done** (`664ca11`). Verified

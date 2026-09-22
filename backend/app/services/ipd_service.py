@@ -1047,6 +1047,12 @@ class IPDService:
                 discount_approved_by=created_by_name if discount_paise else None,
                 payer_type=payer_type or PayerType.SELF_PAY,
                 payer_covered_paise=payer_covered_paise,
+                # The payer and doctor chosen at admission, so the final bill
+                # (and every report that reads it) shows who this stay was
+                # actually billed to and under whom — not "self-pay" and "—"
+                # regardless of what was picked when the patient was admitted.
+                organisation_id=admission.organisation_id,
+                doctor_name=admission.admitting_doctor_name or None,
                 created_by_name=created_by_name,
                 issue=True,
             )
