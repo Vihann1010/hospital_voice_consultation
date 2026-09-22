@@ -206,7 +206,29 @@ docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.see
 It creates the price list, the endoscopy suite and recovery bay, and the
 procedure list — all at placeholder rates. It creates no staff logins and no
 consultants; those are the clinic's to enter, and the script says so when it
-finishes.
+finishes. A dental practice in the same clinic has its own:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.seed_smile_dental
+```
+
+(consultation fees, the dental procedures and X-rays, a dental chair — again
+at placeholder rates; per-tooth items are billed once per tooth booked).
+
+**Two practices in one clinic.** Set `ENABLED_DEPARTMENTS` to both, name the
+site for both (`HOSPITAL_NAME=CN Gastrocare & Smile Dental`), and name each
+department's practice:
+
+```ini
+DEPARTMENT_BRANDS=gastroenterology=CN Gastrocare;dentistry=Smile Dental
+DEPARTMENT_BRANDS_SPOKEN=gastroenterology=सी एन गैस्ट्रोकेयर;dentistry=स्माइल डेंटल
+```
+
+A bill, receipt or prescription then carries the practice of its visit's
+department; the voice greets a patient in the name of the practice they came
+to; the kiosk shows each practice on its card. A bill with no visit behind it
+is the site's. Both practices share one UHID series and one invoice series —
+if they are separate businesses for tax, they need separate deployments.
 
 Before the first patient, a new site also sets its identity in `.env`:
 `HOSPITAL_NAME` and `HOSPITAL_CITY` (printed on every prescription and bill,

@@ -1,4 +1,4 @@
-# Gastroenterology clinic — Staff Guide
+# CN Gastrocare & Smile Dental — Staff Guide
 
 How to run a day on this system, for the three people who run it: the front
 desk, the doctor, and whoever assists in the endoscopy suite. Keep a copy at
@@ -143,7 +143,33 @@ The assistant's job on this system is the checklist and the times.
 
 ---
 
-## 5. Reports that come back later
+## 5. Smile Dental
+
+The dental practice shares the front desk, the patient records and the
+voice intake. What differs:
+
+- **At the counter,** choose *Dentistry* as the department. The bill and the
+  receipt then say Smile Dental; a gastro visit's say CN Gastrocare.
+- **Booking a dental procedure,** choose the patient's visit from today's
+  list. The booking asks for the **teeth** in FDI numbers — `36`, `11, 21`,
+  `55` for a milk tooth — or *Full mouth*, *Upper arch*, *Lower arch*. It
+  refuses a number that is not a tooth. Read it back to the patient.
+- **In the chair,** the dental checklist comes first: identity, consent,
+  and the **tooth confirmed with the patient and on the X-ray**. All three
+  are required; there is no fasting question.
+- **The procedure bills itself** when the patient leaves the chair. A price
+  marked *per tooth* is charged for each tooth booked: two extractions,
+  two charges.
+- **The tooth chart** on the dental Visit Pad lists each finding's teeth
+  (decayed, missing, filled, root-canal treated, crowned…). It is carried to
+  the next visit, because it describes the mouth, not the day. So is the
+  **treatment plan**: book each sitting of a root canal or crown as its own
+  procedure, and tick it off.
+- **Prescribing:** the dental medicine list is withheld until the dentist has
+  reviewed it, exactly as the gastro one is. General antibiotics and pain
+  relief are available meanwhile.
+
+## 6. Reports that come back later
 
 Histopathology goes to an outside laboratory and comes back in about a week.
 When the report arrives:
@@ -157,7 +183,7 @@ brought** on the consultation screen.
 
 ---
 
-## 6. Rules everyone follows
+## 7. Rules everyone follows
 
 - **Never share your login.** Everything is recorded against whoever is signed in.
 - **Nothing is deleted.** Bills, receipts and documents are cancelled, reversed
@@ -169,7 +195,7 @@ brought** on the consultation screen.
 
 ---
 
-## 7. When something goes wrong
+## 8. When something goes wrong
 
 1. Read the message on screen. Most refusals explain themselves — a missing
    field, a step to do first, a permission you do not hold.

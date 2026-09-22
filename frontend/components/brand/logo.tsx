@@ -40,16 +40,24 @@ export function Logo({
     return <span className={cn("inline-block", className)} style={{ width, height }} aria-hidden />;
   }
   if (logo === "none") {
+    // A two-practice name ("CN Gastrocare & Smile Dental") is set on two
+    // lines, broken after the ampersand, a little smaller — rather than left
+    // to wrap wherever it runs out of room or spill out of a 32px header.
+    const name = hospitalName ?? "";
+    const [first, second] = name.includes(" & ") ? name.split(/ & (.*)/s) : [name, ""];
+    const size = Math.max(second ? 12 : 14, Math.round(width / (second ? 11 : 9)));
     return (
       <span
         className={cn(
-          "inline-flex items-center font-display font-semibold leading-tight",
+          "inline-flex flex-col justify-center font-display font-semibold leading-[1.1]",
           variant === "dark" ? "text-white" : "text-pine",
-          className
+          className,
+          "h-auto"
         )}
-        style={{ maxWidth: width, fontSize: Math.max(14, Math.round(width / 9)) }}
+        style={{ maxWidth: second ? undefined : width, fontSize: size }}
       >
-        {hospitalName ?? ""}
+        <span className="whitespace-nowrap">{second ? `${first} &` : first}</span>
+        {second && <span className="whitespace-nowrap">{second}</span>}
       </span>
     );
   }

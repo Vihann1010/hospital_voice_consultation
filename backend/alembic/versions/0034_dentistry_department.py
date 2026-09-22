@@ -17,7 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute("ALTER TYPE department ADD VALUE IF NOT EXISTS 'dentistry'")
-    op.execute("ALTER TYPE investigationcategory ADD VALUE IF NOT EXISTS 'dental'")
+    op.execute("ALTER TYPE investigation_category ADD VALUE IF NOT EXISTS 'dental'")
 
 
 def downgrade() -> None:
