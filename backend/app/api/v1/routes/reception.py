@@ -19,7 +19,8 @@ from app.billing.pdf import render_invoice_pdf
 from app.billing.receipt_pdf import render_receipt_pdf
 from app.core.audit import client_ip, record as audit_record
 from app.core.permissions import Permission
-from app.models.emr import CashSession, Payment, Visit, WalletEntry
+from app.core.config import settings
+from app.models.emr import CashSession, Invoice, Payment, Visit, WalletEntry
 from app.models.enums import (
     AuditAction,
     InvoiceStatus,
@@ -388,6 +389,19 @@ async def get_invoice(invoice_id: uuid.UUID, service: Service) -> InvoiceOut:
     return InvoiceOut.model_validate(invoice)
 
 
+async def _brand_for_invoice(service: ReceptionService, invoice: Invoice) -> str:
+    """The practice a bill is from: its visit's department's, or the site's.
+
+    A bill raised against a visit belongs to that visit's department. One with
+    no visit (an advance, a counter sale) is the site's, and says so.
+    """
+    if invoice.visit_id:
+        visit = await service.session.get(Visit, invoice.visit_id)
+        if visit is not None and visit.department is not None:
+            return settings.brand_for(visit.department)
+    return settings.HOSPITAL_NAME
+
+
 @router.get("/invoices/{invoice_id}/pdf", dependencies=[Depends(READ_INVOICE)])
 async def invoice_pdf(
     invoice_id: uuid.UUID,
@@ -412,6 +426,7 @@ async def invoice_pdf(
         invoice, patient, visit_number,
         watermark="DUPLICATE" if duplicate else None,
         layout=await load_layout(service.session, "invoice"),
+        brand=await _brand_for_invoice(service, invoice),
     )
     return Response(
         content=pdf,
@@ -649,6 +664,7 @@ async def receipt_pdf(
         purpose="Refund issued" if payment.is_refund else "Payment received",
         layout=await load_layout(service.session, "receipt"),
         watermark="DUPLICATE" if duplicate else None,
+        brand=await _brand_for_invoice(service, invoice),
     )
     return Response(
         content=pdf,

@@ -68,6 +68,8 @@ export interface TheatreWords {
   /** Times this kind of case never has. A scope has no incision and no
    *  closure; offering the buttons invites times that mean nothing. */
   skipMilestones: readonly string[];
+  /** Whether the booking asks which teeth (FDI numbers). */
+  askTeeth: boolean;
 }
 
 export const THEATRE_WORDS: Record<TheatreVocabulary, TheatreWords> = {
@@ -93,6 +95,7 @@ export const THEATRE_WORDS: Record<TheatreVocabulary, TheatreWords> = {
     anaesthesiaChoices: null,
     inRoom: "In theatre",
     skipMilestones: [],
+    askTeeth: false,
   },
   procedures: {
     board: "Procedures",
@@ -116,6 +119,36 @@ export const THEATRE_WORDS: Record<TheatreVocabulary, TheatreWords> = {
     anaesthesiaChoices: ["Sedation", "Local", "General"],
     inRoom: "In the room",
     skipMilestones: ["incision_at", "closure_at"],
+    askTeeth: false,
+  },
+};
+
+/** A department whose cases read differently from the site's own words.
+ *
+ * One clinic can hold a scope suite and a dental chair. The site's
+ * vocabulary sets the screens' headings; a case in one of these departments
+ * is described in its own words wherever the case itself is on screen. */
+const DEPARTMENT_WORDS: Partial<Record<Department, Partial<TheatreWords>>> = {
+  dentistry: {
+    caseWord: "dental procedure",
+    bookTitle: "Book a dental procedure",
+    operation: "Dental procedure",
+    operationPlaceholder: "Extraction, root canal, scaling…",
+    operationHint: "Search the procedure list, or type one not on it",
+    roomOne: "Dental chair",
+    operator: "Treating dentist",
+    anaesthetist: "Anaesthesia given by",
+    anaesthesia: "Anaesthesia",
+    times: "Chair times",
+    slip: "Procedure slip",
+    notes: "Notes for the chair",
+    checklist: "dental checklist",
+    durations: ["In the chair", "Procedure", "Anaesthesia"],
+    askSide: false,
+    anaesthesiaChoices: ["Local", "Sedation", "General"],
+    inRoom: "In the chair",
+    skipMilestones: ["incision_at", "closure_at"],
+    askTeeth: true,
   },
 };
 
@@ -127,6 +160,8 @@ interface ModuleState {
   has: (module: ModuleName) => boolean;
   /** The site's words for the theatre module; "theatre" until told otherwise. */
   words: TheatreWords;
+  /** The words for one case: the site's, with its department's on top. */
+  wordsFor: (department?: Department | null) => TheatreWords;
   /** The departments this site runs, in the order to offer them.
    *
    * Every department until the API answers: a registration screen showing one
@@ -153,6 +188,7 @@ const ModuleContext = createContext<ModuleState>({
   hospitalName: null,
   has: () => false,
   words: THEATRE_WORDS.theatre,
+  wordsFor: () => THEATRE_WORDS.theatre,
   departments: ALL_DEPARTMENTS,
   defaultDepartment: ALL_DEPARTMENTS[0],
   formularyPendingSignoff: [],
@@ -278,6 +314,10 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         hospitalName,
         has: (module) => enabled !== null && enabled.includes(module),
         words: THEATRE_WORDS[vocabulary],
+        wordsFor: (department) => ({
+          ...THEATRE_WORDS[vocabulary],
+          ...(department ? DEPARTMENT_WORDS[department] ?? {} : {}),
+        }),
         departments,
         defaultDepartment,
         formularyPendingSignoff,

@@ -30,7 +30,7 @@ class PatientEducationService(BaseAIService[PatientEducation]):
         ledger: Optional[CostLedger] = None,
     ) -> PatientEducation:
         system = (
-            f"You write patient education for {settings.HOSPITAL_NAME}. Audience: the patient and their "
+            f"You write patient education for {settings.brand_for(memory.department)}. Audience: the patient and their "
             f"family; write in language '{memory.language}' (hi = simple Hindi in Devanagari, "
             "mixed = natural Hinglish, en = simple Indian English at an 8th-grade level). "
             "STRICT rules: do NOT name a diagnosis or imply one; do NOT recommend medicines, "

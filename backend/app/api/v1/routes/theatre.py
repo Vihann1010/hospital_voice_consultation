@@ -31,7 +31,12 @@ from app.schemas.theatre_schemas import (
     SurgeryTimeIn,
     TheatreRoomIn,
 )
-from app.services.theatre_service import TheatreError, TheatreService
+from app.services.theatre_service import (
+    PRE_PROCEDURE_CHECKLISTS,
+    TheatreError,
+    TheatreService,
+    notes_for,
+)
 from app.theatre import rules
 from app.theatre.slip_pdf import render_surgery_slip
 
@@ -42,7 +47,6 @@ SCHEDULE = require_permission(Permission.THEATRE_SCHEDULE)
 RECORD = require_permission(Permission.THEATRE_RECORD)
 MASTERS = require_permission(Permission.MASTER_MANAGE)
 
-THEATRE_NOTES = [key for key, spec in REGISTRY.items() if spec.scope == "surgery"]
 
 
 def _fail(exc: TheatreError) -> HTTPException:
@@ -95,6 +99,7 @@ async def _surgery(session, surgery: Surgery) -> Dict[str, Any]:
         "operation_id": surgery.operation_id,
         "operation_name": surgery.operation_name,
         "laterality": surgery.laterality,
+        "teeth": surgery.teeth,
         "diagnosis": surgery.diagnosis,
         "surgeon_consultant_id": surgery.surgeon_consultant_id,
         "surgeon_name": surgery.surgeon_name,
@@ -116,8 +121,14 @@ async def _surgery(session, surgery: Surgery) -> Dict[str, Any]:
         "documents": [
             {"document_type": key, "label": REGISTRY[key].label,
              "authority": REGISTRY[key].authority, "status": states.get(key, "missing")}
-            for key in THEATRE_NOTES
+            for key in notes_for(surgery.department)
         ],
+        # Said by the server, which is what gates wheel-in: any of the
+        # pre-procedure checklists, signed. The screen used to check for the
+        # surgical one only, and kept a signed scope checklist waiting.
+        "checklist_signed": any(
+            states.get(key) == PadStatus.SIGNED.value for key in PRE_PROCEDURE_CHECKLISTS
+        ),
         "created_at": surgery.created_at,
     }
 

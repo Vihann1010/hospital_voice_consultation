@@ -433,6 +433,7 @@ class PrescriptionService:
             prescription_number=prescription.prescription_number,
             issued_at=prescription.issued_at or prescription.created_at,
             department_label=DEPARTMENT_LABELS[prescription.department],
+            brand=settings.brand_for(prescription.department),
             doctor_name=prescription.doctor_name,
             doctor_qualification=prescription.doctor_qualification,
             doctor_registration=prescription.doctor_registration,
@@ -528,7 +529,7 @@ class PrescriptionService:
         if patient:
             patient_name = patient.name
         caption = (
-            f"{settings.HOSPITAL_NAME} — prescription for {patient_name}\n"
+            f"{settings.brand_for(prescription.department)} — prescription for {patient_name}\n"
             f"Dr. {prescription.doctor_name.replace('Dr. ', '')} · "
             f"{DEPARTMENT_LABELS[prescription.department]}\n"
             f"Reference: {prescription.prescription_number}"

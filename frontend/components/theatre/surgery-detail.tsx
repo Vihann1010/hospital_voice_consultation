@@ -85,7 +85,8 @@ function RescheduleDialog({
   onClose: () => void;
   onDone: (surgery: Surgery) => void;
 }) {
-  const { words } = useModules();
+  const { wordsFor } = useModules();
+  const words = wordsFor(surgery.department);
   const [rooms, setRooms] = useState<TheatreRoom[]>([]);
   const [when, setWhen] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -193,7 +194,8 @@ function TheatreTimes({
   mayRecord: boolean;
   onRecorded: (surgery: Surgery) => void;
 }) {
-  const { words } = useModules();
+  const { wordsFor } = useModules();
+  const words = wordsFor(surgery.department);
   const [busy, setBusy] = useState<Milestone | null>(null);
   const [editing, setEditing] = useState<Milestone | null>(null);
   const [value, setValue] = useState("");
@@ -307,8 +309,9 @@ export function SurgeryDetail({
   boardPath: string;
 }) {
   const { user } = useAuth();
-  const { words } = useModules();
+  const { wordsFor } = useModules();
   const [surgery, setSurgery] = useState<Surgery | null>(null);
+  const words = wordsFor(surgery?.department);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cancelRequest, setCancelRequest] = useState<ReasonRequest | null>(null);
@@ -378,6 +381,11 @@ export function SurgeryDetail({
             </p>
             <div className="mt-2 rounded-lg bg-mint px-3 py-2">
               <p className="text-base font-semibold text-ink">{surgery.operation_name}</p>
+              {surgery.teeth && (
+                <p className="font-display text-lg font-bold tracking-wide text-clay">
+                  TEETH: {surgery.teeth}
+                </p>
+              )}
               {(sided || words.askSide) && (
                 <p className={cn("font-display text-lg font-bold tracking-wide", sided ? "text-clay" : "text-ink")}>
                   SIDE: {side}

@@ -57,7 +57,7 @@ function Readiness({ surgery }: { surgery: Surgery }) {
 
 export function TheatreBoard({ basePath }: { basePath: string }) {
   const { user } = useAuth();
-  const { words } = useModules();
+  const { words, wordsFor } = useModules();
   const unassigned = `No ${words.roomOne.toLowerCase()} assigned`;
   const router = useRouter();
   const [day, setDay] = useState(hospitalToday());
@@ -164,7 +164,9 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">
                       {item.operation_name}{" "}
-                      {(words.askSide || item.laterality !== "Not applicable") && (
+                      {item.teeth ? (
+                        <span className="font-semibold text-clay">· teeth {item.teeth}</span>
+                      ) : (words.askSide || item.laterality !== "Not applicable") && (
                         <span className="font-semibold uppercase text-clay">· {item.laterality}</span>
                       )}
                     </p>
@@ -178,7 +180,7 @@ export function TheatreBoard({ basePath }: { basePath: string }) {
                     <div className="flex gap-1">
                       {item.priority === "emergency" && <Badge variant="danger" size="sm">Emergency</Badge>}
                       <Badge variant={SURGERY_STATUS_VARIANT[item.status]} size="sm">
-                        {item.status === "in_theatre" ? words.inRoom : SURGERY_STATUS_LABEL[item.status]}
+                        {item.status === "in_theatre" ? wordsFor(item.department).inRoom : SURGERY_STATUS_LABEL[item.status]}
                       </Badge>
                     </div>
                     <Readiness surgery={item} />

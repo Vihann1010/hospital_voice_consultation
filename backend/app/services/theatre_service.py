@@ -29,10 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import day_bounds, local_today, to_local
 from app.core.logging import get_logger
 from app.models.consultant import Consultant
-from app.models.emr import DocumentCounter, Visit
+from app.models.emr import DocumentCounter, ServiceItem, Visit
 from app.models.enums import (
     AdmissionStatus,
     ChargeCategory,
+    Department,
     PadStatus,
     SurgeryStatus,
 )
@@ -50,7 +51,23 @@ logger = get_logger(__name__)
 # Both confirm identity, consent and fasting, which is what the door is for.
 PRE_OP_CHECKLIST = "ot_pre_op_checklist"
 DAY_PROCEDURE_CHECKLIST = "ot_day_procedure_checklist"
-PRE_PROCEDURE_CHECKLISTS = (PRE_OP_CHECKLIST, DAY_PROCEDURE_CHECKLIST)
+DENTAL_CHECKLIST = "ot_dental_checklist"
+PRE_PROCEDURE_CHECKLISTS = (PRE_OP_CHECKLIST, DAY_PROCEDURE_CHECKLIST, DENTAL_CHECKLIST)
+
+# The notes a case is written up in, by department. Every case used to be
+# offered every note — a scope was given an operation note and a pre-
+# anaesthetic assessment, and would have given a filling the same. A
+# department not listed here operates, and gets the surgical set.
+SURGICAL_NOTES = ("ot_pre_op_checklist", "ot_pre_anaesthetic", "ot_operation_note",
+                  "ot_post_op_orders")
+DEPARTMENT_NOTES = {
+    Department.GASTROENTEROLOGY: ("ot_day_procedure_checklist", "ot_endoscopy_report"),
+    Department.DENTISTRY: ("ot_dental_checklist", "ot_dental_note"),
+}
+
+
+def notes_for(department: Department) -> tuple:
+    return DEPARTMENT_NOTES.get(department, SURGICAL_NOTES)
 
 
 class TheatreError(Exception):
@@ -300,6 +317,13 @@ class TheatreService:
         if department is None:
             raise TheatreError("Say which department this surgery is under.")
 
+        teeth: Optional[str] = None
+        if department is Department.DENTISTRY:
+            try:
+                teeth = rules.parse_teeth(data.get("teeth"))
+            except rules.TheatreRuleError as exc:
+                raise TheatreError(str(exc)) from exc
+
         await self._check_room(
             reference="new", room_id=room.id if room else None, starts_at=scheduled_at,
             minutes=minutes, allow_overlap=bool(data.get("allow_overlap")),
@@ -314,6 +338,7 @@ class TheatreService:
             operation_id=operation.id if operation else None,
             operation_name=name[:255],
             laterality=laterality,
+            teeth=teeth,
             diagnosis=(data.get("diagnosis") or (admission.provisional_diagnosis if admission else None)),
             surgeon_consultant_id=consultant.id if consultant else None,
             surgeon_name=surgeon_name,
@@ -506,12 +531,24 @@ class TheatreService:
         from app.services.reception_service import ReceptionError, ReceptionService
 
         description = f"{surgery.operation_name} — {surgery.ot_number}"
+        quantity = 1
+        teeth = rules.tooth_count(surgery.teeth)
+        if teeth:
+            description = f"{surgery.operation_name} — teeth {surgery.teeth} — {surgery.ot_number}"
+            service = (
+                await self.session.execute(
+                    select(ServiceItem).where(ServiceItem.code == operation.service_code)
+                )
+            ).scalar_one_or_none()
+            if service is not None and rules.PER_TOOTH_MARKER in service.name.lower():
+                quantity = teeth
         try:
             async with self.session.begin_nested():
                 invoice = await ReceptionService(self.session).create_invoice(
                     visit_id=surgery.visit_id,
                     patient_id=surgery.patient_id,
-                    items=[{"code": operation.service_code, "description": description}],
+                    items=[{"code": operation.service_code, "description": description,
+                            "quantity": quantity}],
                     consultant_id=surgery.surgeon_consultant_id,
                     doctor_name=surgery.surgeon_name,
                     created_by_name=user.full_name,

@@ -96,6 +96,9 @@ class Surgery(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     operation_name: Mapped[str] = mapped_column(String(255), nullable=False)
     laterality: Mapped[str] = mapped_column(String(24), nullable=False)
+    # A dental case's teeth, in FDI numbers ("36, 37") or a span ("Full
+    # mouth"). Required for a dental booking; empty for everything else.
+    teeth: Mapped[Optional[str]] = mapped_column(String(64))
     diagnosis: Mapped[Optional[str]] = mapped_column(Text)
 
     surgeon_consultant_id: Mapped[Optional[uuid.UUID]] = mapped_column(

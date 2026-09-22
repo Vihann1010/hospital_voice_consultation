@@ -49,6 +49,6 @@ async def verify_prescription(
         "issued_on": prescription.issued_at.isoformat() if prescription.issued_at else None,
         "doctor": prescription.doctor_name,
         "department": prescription.department.value,
-        "hospital": f"{settings.HOSPITAL_NAME}, {settings.HOSPITAL_CITY}",
+        "hospital": f"{settings.brand_for(prescription.department)}, {settings.HOSPITAL_CITY}",
         "medicine_count": len(prescription.medicines),
     }

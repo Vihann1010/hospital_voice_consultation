@@ -65,7 +65,7 @@ def test_the_day_checklist_asks_the_questions_sedation_raises():
 
 def test_either_checklist_admits_a_patient_to_theatre():
     """The door asks for consent and fasting, not for a particular form."""
-    assert set(PRE_PROCEDURE_CHECKLISTS) == {PRE_OP_CHECKLIST, DAY_PROCEDURE_CHECKLIST}
+    assert {PRE_OP_CHECKLIST, DAY_PROCEDURE_CHECKLIST} <= set(PRE_PROCEDURE_CHECKLISTS)
 
 
 def test_the_checklist_is_the_nurses_and_the_report_is_the_doctors():

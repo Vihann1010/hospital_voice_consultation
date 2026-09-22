@@ -13,6 +13,11 @@
  * asked for a side either: a scope has none, and a side question on every
  * booking trains the desk to click "Left" to get past it.
  *
+ * A dental case names its teeth instead (FDI numbers, checked by the server):
+ * the department comes from the visit chosen, so the same dialog books a
+ * scope for the gastroenterologist and an extraction for the dentist, each in
+ * its own words.
+ *
  * A room that is already taken is refused by the server; the message says
  * which case holds it, and the doctor can book anyway when two lists sharing
  * a theatre is deliberate.
@@ -25,6 +30,7 @@ import { useModules } from "@/components/dashboard/modules-provider";
 import type { Consultant } from "@/lib/types/appointments";
 import type { BedOccupant } from "@/lib/types/ipd";
 import type { Visit } from "@/lib/types/emr";
+import type { Department } from "@/lib/types/core";
 import type { Operation, Surgery, TheatreOptions, TheatreRoom } from "@/lib/types/theatre";
 import { fromHospitalInput } from "@/lib/types/theatre";
 import { hospitalToday } from "@/lib/format";
@@ -47,6 +53,8 @@ export interface BookingPatient {
   patient_name: string;
   /** The IP number, or the visit number for a day case. */
   ip_number: string;
+  /** The visit's department, which decides the case's words and checks. */
+  department?: Department | null;
   diagnosis?: string | null;
 }
 
@@ -78,7 +86,7 @@ export function BookSurgeryDialog({
   patient?: BookingPatient;
 }) {
   const { user } = useAuth();
-  const { has, words } = useModules();
+  const { has, wordsFor } = useModules();
   // No wards: the patients to choose from are today's visits, not inpatients.
   const dayCase = !has("ipd");
   const [options, setOptions] = useState<TheatreOptions | null>(null);
@@ -92,6 +100,10 @@ export function BookSurgeryDialog({
   const [operation, setOperation] = useState<Operation | null>(null);
   const [suggestions, setSuggestions] = useState<Operation[]>([]);
   const [side, setSide] = useState("");
+  const [teeth, setTeeth] = useState("");
+  // The case's department: the visit's, else the chosen procedure's.
+  const department = patient?.department ?? operation?.department ?? null;
+  const words = wordsFor(department);
   const [diagnosis, setDiagnosis] = useState("");
   const [surgeon, setSurgeon] = useState("");
   const [assistants, setAssistants] = useState("");
@@ -113,6 +125,7 @@ export function BookSurgeryDialog({
     setOperationQuery("");
     setOperation(null);
     setSide(words.askSide ? "" : NOT_APPLICABLE);
+    setTeeth("");
     setDiagnosis(preset?.diagnosis ?? "");
     setSurgeon(user?.role === "doctor" ? user.full_name : "");
     setAssistants("");
@@ -149,6 +162,10 @@ export function BookSurgeryDialog({
   }, [open, preset, user, dayCase, words.askSide]);
 
   useEffect(() => {
+    if (!words.askSide) setSide(NOT_APPLICABLE);
+  }, [words.askSide]);
+
+  useEffect(() => {
     const term = operationQuery.trim();
     if (!open || term.length < 2 || operation?.name === term) {
       setSuggestions([]);
@@ -175,6 +192,9 @@ export function BookSurgeryDialog({
       return setError(`Choose a ${words.caseWord} from the list, or type what is being done.`);
     }
     if (!side) return setError("Choose the side.");
+    if (words.askTeeth && !teeth.trim()) {
+      return setError("Say which teeth, as FDI numbers (e.g. 36, or 11, 21) or Full mouth.");
+    }
     if (!surgeon.trim()) return setError(`Name the ${words.operator.toLowerCase()}.`);
     if (!when) return setError("Choose the date and time.");
 
@@ -186,6 +206,7 @@ export function BookSurgeryDialog({
         operation_id: operation?.id ?? null,
         operation_name: operation ? null : operationQuery.trim(),
         laterality: side,
+        teeth: words.askTeeth ? teeth.trim() : null,
         diagnosis: diagnosis.trim() || null,
         surgeon_consultant_id: surgeonId,
         surgeon_name: surgeon.trim(),
@@ -242,7 +263,8 @@ export function BookSurgeryDialog({
                     const found = visits.find((item) => item.id === event.target.value);
                     setPatient(
                       found
-                        ? { visit_id: found.id, patient_name: found.patient_name, ip_number: found.visit_number }
+                        ? { visit_id: found.id, patient_name: found.patient_name,
+                            ip_number: found.visit_number, department: found.department }
                         : null
                     );
                   }}
@@ -319,6 +341,14 @@ export function BookSurgeryDialog({
               </ul>
             )}
           </div>
+
+          {words.askTeeth && (
+            <div className="sm:col-span-2">
+              <Field label="Teeth (FDI)" hint="36 · 11, 21 · 55 for a milk tooth · or Full mouth, Upper arch, Lower arch">
+                <Input value={teeth} placeholder="36" onChange={(event) => setTeeth(event.target.value)} />
+              </Field>
+            </div>
+          )}
 
           {words.askSide && (
           <div className="sm:col-span-2">

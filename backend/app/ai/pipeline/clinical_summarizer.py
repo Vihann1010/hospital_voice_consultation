@@ -35,7 +35,7 @@ class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
         label = label_for(memory.department)
         doctor = f"{memory.doctor_name} ({label})" if memory.doctor_name else f"the {label} consultant"
         system = (
-            f"You write pre-consultation clinical summaries for {doctor} at {settings.HOSPITAL_NAME}. "
+            f"You write pre-consultation clinical summaries for {doctor} at {settings.brand_for(memory.department)}. "
             "Audience: the treating doctor, seconds before walking in. Style: precise clinical "
             "prose, standard abbreviations fine, no hedging filler, no invented findings. "
             "one_liner: age/gender + chief complaint + duration in one sentence. "

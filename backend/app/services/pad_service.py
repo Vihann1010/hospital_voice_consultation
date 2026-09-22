@@ -585,6 +585,7 @@ class PadService:
             } if admission else None,
             surgery={
                 "procedure": surgery.operation_name, "side": surgery.laterality,
+                "teeth": surgery.teeth,
                 "diagnosis": surgery.diagnosis, "surgeon": surgery.surgeon_name,
                 "anaesthesia": surgery.anaesthesia_type,
             } if surgery else None,
@@ -808,7 +809,10 @@ class PadService:
         values, provenance = rules.draft_from_record(
             sections,
             {
-                "procedure": f"{surgery.operation_name} — {surgery.laterality}",
+                "procedure": (
+                    f"{surgery.operation_name} — teeth {surgery.teeth}" if surgery.teeth
+                    else f"{surgery.operation_name} — {surgery.laterality}"
+                ),
                 "diagnosis": surgery.diagnosis,
                 "team": team,
                 "allergies": (admission.allergies if admission else None) or [],

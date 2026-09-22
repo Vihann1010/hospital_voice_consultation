@@ -32,7 +32,7 @@ class InvestigationEngineService(BaseAIService[InvestigationPlan]):
     ) -> InvestigationPlan:
         system = (
             f"You recommend pre-consultation investigations for a specialist at "
-            f"{settings.HOSPITAL_NAME} "
+            f"{settings.brand_for(memory.department)} "
             f"({memory.department.value}). Suggest only investigations a district Indian "
             "hospital can realistically perform (X-ray, USG, standard labs, ECG; MRI/CT only "
             "when clearly indicated). Map each test to the differentials/risk it serves in "

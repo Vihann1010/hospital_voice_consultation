@@ -4,7 +4,7 @@ Every tunable of the platform is sourced from environment variables so the
 same image can be promoted across environments without a rebuild.
 """
 from functools import lru_cache
-from typing import FrozenSet, List
+from typing import Dict, FrozenSet, List, Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -224,6 +224,14 @@ class Settings(BaseSettings):
     # printed: a Hindi voice reads "CN Gastrocare" letter by letter unless it
     # is written the way it is spoken. Empty means HOSPITAL_NAME.
     HOSPITAL_NAME_SPOKEN: str = ""
+    # The name a department practises under, where it is not the site's. A
+    # clinic can house two practices: "CN Gastrocare & Smile Dental" is the
+    # site, but a dental bill says Smile Dental and a gastro bill CN
+    # Gastrocare. Semicolon-separated department=name pairs; a department not
+    # named here uses HOSPITAL_NAME. The _SPOKEN form is how the Hindi voice
+    # should say each one.
+    DEPARTMENT_BRANDS: str = ""
+    DEPARTMENT_BRANDS_SPOKEN: str = ""
     # The platform's own mark, shown beside the site's on the sign-in screen
     # and in the console. "medicos" for a site running MedicOS under its own
     # name; "none" shows the site's identity alone.
@@ -322,6 +330,58 @@ class Settings(BaseSettings):
     def greeting(self) -> str:
         """The opening line, with this site's name in it."""
         return (self.GREETING_TEXT or "").replace("{hospital}", self.hospital_name_spoken).strip()
+
+    @staticmethod
+    def _brand_map(raw: str) -> Dict[Department, str]:
+        brands: Dict[Department, str] = {}
+        for pair in (raw or "").split(";"):
+            if not pair.strip():
+                continue
+            key, _, name = pair.partition("=")
+            brands[Department(key.strip().lower())] = name.strip()
+        return brands
+
+    def brand_for(self, department: Optional[Department]) -> str:
+        """The name on this department's paperwork, or the site's own."""
+        if department is not None:
+            name = self._brand_map(self.DEPARTMENT_BRANDS).get(department)
+            if name:
+                return name
+        return self.HOSPITAL_NAME
+
+    def spoken_brand_for(self, department: Optional[Department]) -> str:
+        """How the voice says brand_for(department)."""
+        if department is not None:
+            spoken = self._brand_map(self.DEPARTMENT_BRANDS_SPOKEN).get(department)
+            if spoken:
+                return spoken
+            written = self._brand_map(self.DEPARTMENT_BRANDS).get(department)
+            if written:
+                return written
+        return self.hospital_name_spoken
+
+    def greeting_for(self, department: Optional[Department]) -> str:
+        """The opening line, in the name of the practice the patient came to."""
+        return (self.GREETING_TEXT or "").replace(
+            "{hospital}", self.spoken_brand_for(department)
+        ).strip()
+
+    @field_validator("DEPARTMENT_BRANDS", "DEPARTMENT_BRANDS_SPOKEN")
+    @classmethod
+    def _brands_name_real_departments(cls, v: str) -> str:
+        for pair in (v or "").split(";"):
+            if not pair.strip():
+                continue
+            key, sep, name = pair.partition("=")
+            if not sep or not name.strip():
+                raise ValueError(
+                    f"'{pair.strip()}' is not department=name (e.g. dentistry=Smile Dental)."
+                )
+            try:
+                Department(key.strip().lower())
+            except ValueError:
+                raise ValueError(f"'{key.strip()}' is not a department.") from None
+        return v
 
     @field_validator("PLATFORM_BRAND")
     @classmethod

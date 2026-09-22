@@ -149,6 +149,9 @@ async def client_config() -> Dict[str, Any]:
         "hospital_city": settings.HOSPITAL_CITY,
         "hospital_logo": settings.HOSPITAL_LOGO,
         "platform_brand": settings.PLATFORM_BRAND,
+        # The practice each department works under, for the screens that
+        # show one department at a time (the kiosk's cards, a visit header).
+        "department_brands": {d.value: settings.brand_for(d) for d in settings.enabled_departments},
         "modules": sorted(m.value for m in settings.enabled_modules),
         # Departments whose drafted prescribing content is still withheld. A
         # doctor searching a near-empty formulary deserves to be told why

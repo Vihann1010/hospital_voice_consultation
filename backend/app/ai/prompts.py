@@ -24,13 +24,17 @@ def build_intake_system_prompt(
 ) -> str:
     guide = profile_for(department).intake_guide
     doctor = doctor_name or GENERIC_DOCTOR
+    # The practice the patient came to: at a clinic housing two, a dental
+    # patient is greeted by Smile Dental, not by the site's combined name.
+    practice = settings.brand_for(department)
+    spoken = settings.spoken_brand_for(department)
     pronoun_note = ""
     if patient.gender == Gender.MALE and department == Department.GYNECOLOGY:
         pronoun_note = (
             "\nNote: the registered patient is male in a gynecology consultation — "
             "politely confirm early on whom the consultation is for."
         )
-    return f"""You are the voice intake assistant of {settings.HOSPITAL_NAME}, preparing {doctor}'s next consultation. You are speaking with the patient out loud on a voice call, so everything you say will be converted to speech.
+    return f"""You are the voice intake assistant of {practice}, preparing {doctor}'s next consultation. You are speaking with the patient out loud on a voice call, so everything you say will be converted to speech.
 
 Patient details from the registration form:
 - Name: {patient.name}
@@ -52,11 +56,11 @@ Conversation rules — follow all of them:
 5. Never repeat a question that has already been answered; build on earlier answers.
 6. If an answer is vague, gently probe once, then move on.
 7. Do not diagnose, prescribe, or promise outcomes. If asked, say the doctor will advise after seeing them.
-8. If the patient describes an emergency (chest pain, heavy bleeding, breathlessness, loss of consciousness), tell them to come to the hospital emergency immediately and keep the reply short.
+8. If the patient describes an emergency (chest pain, heavy bleeding, breathlessness, loss of consciousness), tell them to go to the nearest hospital emergency department immediately and keep the reply short.
 9. Never use lists, headings, emojis, or any formatting — plain spoken sentences only.
 10. When you have covered everything, briefly summarise the key points in two sentences, tell them {doctor} will see them shortly, and thank them.
 
-Begin by greeting {patient.name} by name, mention you are calling from {settings.HOSPITAL_NAME} (in Hindi, say the name as "{settings.hospital_name_spoken}") to prepare for their visit to {doctor}, and ask what brings them in today."""
+Begin by greeting {patient.name} by name, mention you are calling from {practice} (in Hindi, say the name as "{spoken}") to prepare for their visit to {doctor}, and ask what brings them in today."""
 
 
 # Not an f-string: the schema below is full of braces, and an f-string would

@@ -451,6 +451,93 @@ _DAY_PROCEDURE_CHECKLIST: List[Dict[str, Any]] = [
     {"key": "notes", "title": "Notes", "kind": "text"},
 ]
 
+_DENTAL_CHECKLIST: List[Dict[str, Any]] = [
+    # Before anything is done in the chair. No fasting (local anaesthesia),
+    # and no marked site — the tooth number is the site, and it is confirmed
+    # against the patient and the radiograph, not drawn on the skin.
+    {"key": "procedure", "title": "Procedure and teeth as booked", "kind": "text",
+     "prefill_from": "procedure"},
+    {
+        "key": "checks",
+        "title": "Checks",
+        "kind": "fields",
+        "fields": [
+            {"key": "identity_confirmed", "label": "Identity confirmed with the patient",
+             "type": "checkbox", "required": True},
+            {"key": "consent_signed", "label": "Consent taken for this procedure",
+             "type": "checkbox", "required": True},
+            {"key": "tooth_confirmed",
+             "label": "Tooth confirmed with the patient and on the radiograph",
+             "type": "checkbox", "required": True},
+        ],
+    },
+    {
+        "key": "medical",
+        "title": "Medical history",
+        "kind": "fields",
+        "fields": [
+            {"key": "anticoagulant", "label": "Blood thinner", "type": "select",
+             "options": ["None", "Stopped as advised", "Still taking — tell the dentist"]},
+            {"key": "diabetes", "label": "Diabetes", "type": "select",
+             "options": ["No", "Yes — sugar checked today", "Yes — not checked"]},
+            {"key": "heart", "label": "Heart condition, valve or pacemaker", "type": "checkbox"},
+            {"key": "pregnant", "label": "Pregnant or may be pregnant", "type": "checkbox"},
+            {"key": "la_reaction", "label": "Previous reaction to a dental injection",
+             "type": "checkbox"},
+        ],
+    },
+    {"key": "allergies", "title": "Allergies", "kind": "list", "catalogue_category": "allergy",
+     "prefill_from": "allergies", "placeholder": "Add an allergy"},
+    _vitals(title="Vitals before the procedure"),
+    {"key": "notes", "title": "Notes", "kind": "text"},
+]
+
+_DENTAL_NOTE: List[Dict[str, Any]] = [
+    {"key": "procedure", "title": "Procedure and teeth", "kind": "text",
+     "prefill_from": "procedure"},
+    {"key": "indication", "title": "Diagnosis", "kind": "list",
+     "catalogue_category": "diagnosis", "prefill_from": "diagnosis"},
+    {
+        "key": "anaesthesia",
+        "title": "Anaesthesia",
+        "kind": "fields",
+        "fields": [
+            {"key": "type", "label": "Type", "type": "select",
+             "options": ["None", "Topical", "Infiltration", "Nerve block", "Sedation",
+                         "General anaesthesia"]},
+            {"key": "agent", "label": "Agent", "type": "text",
+             "placeholder": "Lignocaine 2% with adrenaline 1:80,000"},
+            {"key": "cartridges", "label": "Cartridges", "type": "number"},
+        ],
+    },
+    {"key": "done", "title": "What was done", "kind": "text",
+     "placeholder": "By tooth: what was done, material used"},
+    {
+        "key": "course",
+        "title": "Course",
+        "kind": "fields",
+        "fields": [
+            {"key": "complications", "label": "Complications", "type": "text",
+             "placeholder": "None, or say what happened"},
+            {"key": "haemostasis", "label": "Bleeding controlled before leaving the chair",
+             "type": "checkbox"},
+            {"key": "sitting", "label": "Sitting", "type": "text",
+             "placeholder": "Root canal: sitting 2 of 3"},
+        ],
+    },
+    {"key": "advice", "title": "Advice given", "kind": "text",
+     "placeholder": "Bite on gauze 30 minutes; no hot food, spitting or straws today"},
+    {
+        "key": "review",
+        "title": "Next visit",
+        "kind": "fields",
+        "fields": [
+            {"key": "date", "label": "Next sitting or review on", "type": "date"},
+            {"key": "plan", "label": "Plan for it", "type": "text"},
+        ],
+    },
+]
+
 _ENDOSCOPY_REPORT: List[Dict[str, Any]] = [
     {"key": "procedure", "title": "Procedure", "kind": "text", "prefill_from": "procedure"},
     {"key": "indication", "title": "Indication", "kind": "list",
@@ -614,6 +701,12 @@ REGISTRY: Dict[str, DocumentType] = {
                      "nursing", sections=_DAY_PROCEDURE_CHECKLIST),
         DocumentType("ot_endoscopy_report", "Endoscopy report", "surgery", "doctor",
                      sections=_ENDOSCOPY_REPORT),
+        # Dental procedures: the chair's checklist, and the note of what was
+        # done to which tooth.
+        DocumentType("ot_dental_checklist", "Dental checklist", "surgery", "nursing",
+                     sections=_DENTAL_CHECKLIST),
+        DocumentType("ot_dental_note", "Dental procedure note", "surgery", "doctor",
+                     sections=_DENTAL_NOTE),
         # Certificates and consent forms. Doctors write and sign them; see
         # app/pads/forms.py for their wording and the checks before signing.
         DocumentType("cert_medical_leave", "Medical certificate", "patient", "doctor", many=True,
@@ -653,6 +746,9 @@ PROTECTED_SECTIONS: Dict[str, Dict[str, List[str]]] = {
     "ot_pre_op_checklist": {"checks": ["identity_confirmed", "consent_signed", "site_marked"]},
     "ot_day_procedure_checklist": {
         "checks": ["identity_confirmed", "consent_signed", "fasting_confirmed"],
+    },
+    "ot_dental_checklist": {
+        "checks": ["identity_confirmed", "consent_signed", "tooth_confirmed"],
     },
     # Signing with the biopsy box ticked raises the histopathology order, so
     # the key may move on a layout but not disappear.

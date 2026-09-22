@@ -33,7 +33,7 @@ class RiskDetectionService(BaseAIService[RiskAssessment]):
         profile = profile_for(memory.department)
         guide = profile.red_flag_guide
         system = (
-            f"You are a triage risk-assessment model for {settings.HOSPITAL_NAME}'s "
+            f"You are a triage risk-assessment model for {settings.brand_for(memory.department)}'s "
             f"{profile.label} department. Grade risk conservatively but honestly — "
             "do not inflate routine complaints, do not miss dangerous combinations. "
             f"{guide} Deterministic screening already flagged: "

@@ -31,6 +31,8 @@ export interface Surgery {
   operation_id: string | null;
   operation_name: string;
   laterality: string;
+  /** FDI tooth numbers or a span, for a dental case; null otherwise. */
+  teeth: string | null;
   diagnosis: string | null;
   surgeon_consultant_id: string | null;
   surgeon_name: string;
@@ -57,6 +59,8 @@ export interface Surgery {
   booked_by_name: string | null;
   charge_reference: string | null;
   documents: TheatreDocument[];
+  /** Any of the pre-procedure checklists signed — what the server gates wheel-in on. */
+  checklist_signed?: boolean;
   created_at: string;
   /** Only on a theatre-time response: why a completed case was not billed. */
   charge_note?: string | null;
@@ -156,6 +160,9 @@ export function minutesLabel(minutes: number | null | undefined): string {
 }
 
 export function checklistSigned(surgery: Surgery): boolean {
+  // The server's answer when it gives one. Checking for the surgical checklist
+  // alone kept a signed endoscopy or dental checklist waiting at the door.
+  if (typeof surgery.checklist_signed === "boolean") return surgery.checklist_signed;
   return surgery.documents.some(
     (item) => item.document_type === PRE_OP_CHECKLIST && item.status === "signed"
   );

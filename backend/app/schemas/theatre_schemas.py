@@ -42,6 +42,8 @@ class SurgeryBookIn(BaseModel):
     operation_id: Optional[uuid.UUID] = None
     operation_name: Optional[str] = Field(default=None, max_length=255)
     laterality: str
+    #: FDI tooth numbers or a span; required when the case is dental.
+    teeth: Optional[str] = Field(default=None, max_length=120)
     diagnosis: Optional[str] = Field(default=None, max_length=2000)
     surgeon_consultant_id: Optional[uuid.UUID] = None
     surgeon_name: Optional[str] = Field(default=None, max_length=255)

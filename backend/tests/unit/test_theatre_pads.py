@@ -18,6 +18,9 @@ def test_the_theatre_notes_exist():
         # about an escort rather than a marked site, and a report shaped like
         # an endoscopy rather than an operation.
         "ot_day_procedure_checklist", "ot_endoscopy_report",
+        # A dental chair: the tooth confirmed before anything is done, and a
+        # note of what was done to which tooth.
+        "ot_dental_checklist", "ot_dental_note",
     }
 
 

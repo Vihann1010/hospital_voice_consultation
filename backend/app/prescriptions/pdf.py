@@ -159,6 +159,8 @@ class PrescriptionDocument:
     qr_payload: str
     signature_path: Optional[str] = None
     allergies: List[str] = None  # printed as a safety banner when present
+    # The practice the prescription is from; the site's name when not given.
+    brand: Optional[str] = None
 
 
 _LOGO_CACHE = {"loaded": False, "image": None}
@@ -206,7 +208,7 @@ class _Renderer:
         self.buffer = io.BytesIO()
         self.canvas = pdf_canvas.Canvas(self.buffer, pagesize=A4)
         self.canvas.setTitle(f"Prescription {document.prescription_number}")
-        self.canvas.setAuthor(settings.HOSPITAL_NAME)
+        self.canvas.setAuthor(document.brand or settings.HOSPITAL_NAME)
         self.canvas.setSubject(f"Prescription for {document.patient_name}")
         self.y = PAGE_HEIGHT - MARGIN
         self.page = 1
@@ -275,7 +277,7 @@ class _Renderer:
             self.canvas.drawImage(logo, MARGIN, PAGE_HEIGHT - 78, width=132, height=64,
                                   preserveAspectRatio=True, anchor="sw", mask="auto")
         else:   # asset missing: fall back to a typographic wordmark
-            self._text(MARGIN, PAGE_HEIGHT - 54, settings.HOSPITAL_NAME,
+            self._text(MARGIN, PAGE_HEIGHT - 54, doc.brand or settings.HOSPITAL_NAME,
                        font=FONT_BOLD, size=14, color=PINE)
 
         self._text(MARGIN + 144, PAGE_HEIGHT - 56, f"Department of {doc.department_label}",

@@ -32,7 +32,7 @@ class DifferentialDiagnosisService(BaseAIService[DifferentialDiagnosis]):
     ) -> DifferentialDiagnosis:
         system = (
             f"You are a clinical decision-support model assisting a specialist at "
-            f"{settings.HOSPITAL_NAME}"
+            f"{settings.brand_for(memory.department)}"
             f"Hospital ({memory.department.value}). Produce 3-5 differentials appropriate to "
             "this department and patient demographics, ordered by likelihood. Ground every "
             "supporting/contradicting feature in the record — cite the actual finding, not a "

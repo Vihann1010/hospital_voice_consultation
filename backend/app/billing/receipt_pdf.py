@@ -110,8 +110,11 @@ def render_receipt_pdf(
     wallet_balance_paise: Optional[int] = None,
     layout: Optional[PageLayout] = None,
     watermark: Optional[str] = None,
+    brand: Optional[str] = None,
 ) -> bytes:
+    """`brand` names the practice, as on the bill; the site's name otherwise."""
     layout = layout or DEFAULT_LAYOUT
+    brand = brand or settings.HOSPITAL_NAME
     font, font_bold = resolve_fonts(layout.font_family)
     left = layout.content_left
     right_x = layout.content_right
@@ -119,7 +122,7 @@ def render_receipt_pdf(
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Receipt {receipt_number}")
-    pdf.setAuthor(settings.HOSPITAL_NAME)
+    pdf.setAuthor(brand)
 
     draw_letterhead(pdf, layout)
 
@@ -139,7 +142,7 @@ def render_receipt_pdf(
         pdf.line(left, y, right_x, y)
 
     y = layout.content_top
-    text(left, y, settings.HOSPITAL_NAME.upper(), 20, BLUE, True)
+    text(left, y, brand.upper(), 20, BLUE, True)
     text(left, y - 17, "Trauma & Maternity Center", 9, MUTED)
     # A refund receipt must not be mistakable for a payment receipt at a
     # glance, so the heading changes rather than a line somewhere below.

@@ -44,8 +44,12 @@ def render_invoice_pdf(
     *,
     watermark: Optional[str] = None,
     layout: Optional[PageLayout] = None,
+    brand: Optional[str] = None,
 ) -> bytes:
     """Render persisted invoice values without recalculating billing arithmetic.
+
+    `brand` is the practice the bill is from: at a clinic housing two, a
+    dental bill says Smile Dental. The site's own name when not given.
 
     A cancelled invoice is always stamped, whatever the caller asked for: a
     cancelled bill that prints identically to a live one is the kind of paper
@@ -53,6 +57,7 @@ def render_invoice_pdf(
     on a reprint, most often.
     """
     layout = layout or DEFAULT_LAYOUT
+    brand = brand or settings.HOSPITAL_NAME
     font, font_bold = resolve_fonts(layout.font_family)
     left = layout.content_left
     right_x = layout.content_right
@@ -60,7 +65,7 @@ def render_invoice_pdf(
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Invoice {invoice.invoice_number}")
-    pdf.setAuthor(settings.HOSPITAL_NAME)
+    pdf.setAuthor(brand)
 
     draw_letterhead(pdf, layout)
 
@@ -81,7 +86,7 @@ def render_invoice_pdf(
 
     # Letterhead
     y = layout.content_top
-    text(left, y, settings.HOSPITAL_NAME.upper(), 20, BLUE, True)
+    text(left, y, brand.upper(), 20, BLUE, True)
     text(left, y - 17, "Trauma & Maternity Center", 9, MUTED)
     right(right_x, y, "TAX INVOICE / RECEIPT", 11, BLUE, True)
     right(right_x, y - 17, invoice.invoice_number, 9, MUTED)
@@ -191,11 +196,11 @@ def render_invoice_pdf(
         text(left, y, f"Discount note: {invoice.discount_reason}", 8, MUTED)
         y -= 14
     text(left, y, "This is a computer-generated invoice. Please retain it for your records.", 8, MUTED)
-    text(left, y - 14, f"Thank you for choosing {settings.HOSPITAL_NAME}.", 8, MUTED)
+    text(left, y - 14, f"Thank you for choosing {brand}.", 8, MUTED)
     right(right_x, y - 14, "Authorized signature", 8, MUTED)
     line(layout.content_bottom + 3, BLUE, 0.8)
     text(left, layout.content_bottom - 11,
-         f"{settings.HOSPITAL_NAME} | Patient billing desk", 7.5, MUTED)
+         f"{brand} | Patient billing desk", 7.5, MUTED)
     right(right_x, layout.content_bottom - 11, invoice.status.value.upper(), 7.5, BLUE, True)
 
     stamp = "CANCELLED" if invoice.status is InvoiceStatus.CANCELLED else watermark

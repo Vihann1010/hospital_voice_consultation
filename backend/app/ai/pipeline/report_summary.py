@@ -35,8 +35,7 @@ class ReportSummaryService(BaseAIService[ReportSummary]):
     ) -> ReportSummary:
         system = (
             f"You summarise laboratory and imaging reports for a specialist at "
-            f"{settings.HOSPITAL_NAME}"
-            f"Hospital ({department}). Audience: the treating doctor.\n\n"
+            f"{settings.HOSPITAL_NAME} ({department}). Audience: the treating doctor.\n\n"
             "CRITICAL RULE: the abnormal/normal classification of every numeric value has "
             "ALREADY been decided arithmetically against reference ranges and is given to "
             "you in `deterministic_analysis`. Do NOT re-classify any value, do NOT contradict "

@@ -55,6 +55,69 @@ ANAESTHESIA_TYPES: List[str] = [
 # a blank.
 LATERALITY: List[str] = ["Left", "Right", "Bilateral", "Not applicable"]
 
+# Which teeth, for a dental case: the dental form of "which side". Wrong-tooth
+# extraction is what wrong-side surgery is in a dental chair, and it starts
+# the same way — with a blank, or with a number nobody checked. FDI two-digit
+# numbering: quadrant 1-4 for permanent teeth (1-8 each), 5-8 for primary
+# teeth (1-5 each). A whole-mouth or whole-arch procedure names the span.
+TEETH_SPANS: List[str] = ["Full mouth", "Upper arch", "Lower arch"]
+
+
+def _valid_fdi(number: str) -> bool:
+    if len(number) != 2 or not number.isdigit():
+        return False
+    quadrant, tooth = int(number[0]), int(number[1])
+    if 1 <= quadrant <= 4:
+        return 1 <= tooth <= 8
+    if 5 <= quadrant <= 8:
+        return 1 <= tooth <= 5
+    return False
+
+
+def parse_teeth(raw: Optional[str]) -> str:
+    """Read "36, 37" or "Full mouth" into its stored form, or raise.
+
+    Numbers are kept in the order given (the order the dentist will work),
+    without duplicates. Anything that is not an FDI number is refused rather
+    than stored, because a typo here is a tooth nobody meant to treat.
+    """
+    text = (raw or "").strip()
+    if not text:
+        raise TheatreRuleError(
+            "Say which tooth: FDI numbers such as 36 or 11, 21, or Full mouth."
+        )
+    for span in TEETH_SPANS:
+        if text.lower() == span.lower():
+            return span
+    seen: List[str] = []
+    for part in text.replace(";", ",").replace(" ", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not _valid_fdi(part):
+            raise TheatreRuleError(
+                f"'{part}' is not an FDI tooth number. Permanent teeth are 11-18, 21-28, "
+                "31-38 and 41-48; milk teeth 51-55, 61-65, 71-75 and 81-85."
+            )
+        if part not in seen:
+            seen.append(part)
+    if len(seen) > 16:
+        raise TheatreRuleError("More than sixteen teeth: book it as Upper arch, Lower arch or Full mouth.")
+    return ", ".join(seen)
+
+
+def tooth_count(teeth: Optional[str]) -> int:
+    """How many individual teeth a case names; 0 for a span or none."""
+    if not teeth or teeth in TEETH_SPANS:
+        return 0
+    return len([part for part in teeth.split(",") if part.strip()])
+
+
+# A price-list item priced per tooth says so in its name. A two-tooth
+# extraction booked against it is billed for two teeth, not one.
+PER_TOOTH_MARKER = "per tooth"
+
+
 PRIORITIES: List[str] = ["elective", "emergency"]
 
 GRADES: List[str] = ["minor", "intermediate", "major", "super major"]

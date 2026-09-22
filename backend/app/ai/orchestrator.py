@@ -126,7 +126,7 @@ class VoiceSession:
             }
         )
         if not self.memory.turns:  # brand-new session: assistant opens the call
-            greeting = settings.greeting
+            greeting = settings.greeting_for(self.department)
             if settings.GREETING_ENABLED and greeting:
                 # Fixed opening: instant, costs no tokens, and still works when
                 # the model is unavailable.
