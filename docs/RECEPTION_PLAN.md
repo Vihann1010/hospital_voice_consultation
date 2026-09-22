@@ -33,7 +33,7 @@ outside the repo, since they show real patient data).
 | Diagnostics registration | **Missing, confirmed** | Department switch is Orthopedics/Gynecology only. Lab has its own "Register tests" flow, separate screen, not a Dept switch on the billing form |
 | OPD receipt / advance | **Not re-tested this pass** | Existing code path (wallet, numbered receipts); no reason to doubt it |
 | Appointments | **Have, confirmed** | Book screen: patient, consultant, day, slot picker, type, reason. Live queue board |
-| Invoice List report | **Have, confirmed** | Columns: Date, Bill, Patient, UHID, Consultant, From, Visit, Gross, Discount, Net, Paid, Balance, Status. Close to Onito's, but no payer/empanelment column and no separate cancelled-amount column |
+| Invoice List report | **Have** (item 7) | Columns: Date, Bill, Patient, UHID, Consultant, **Payer**, From, Visit, Gross, Discount, Net, Paid, Balance, **Cancelled**, Status. |
 | Daily Summary report | **Have, confirmed** | "Daily closing" report exists in the picker |
 | Ledger report | **Have, confirmed** | "Day-wise receipts and refunds" in the same report picker, alongside Cash ledger, Collection summary, Consultant-wise and Department-wise billing |
 | Service master | **Have** (item 4) | Add-service form now has: Code, Name, Kind, Department, Rate, **IPD rate, unit**, GST %, HSN/SAC, Offered-at-counter, **rate-editable, discount-allowed, requires-consultant flags**. Per-organisation rate rows already existed (separate Organisations screen, not the form itself) and per-consultant rows now exist too (separate Consultants screen, "Rates" button), both wired into the pricing engine and verified live. (Lab result grouping still lives separately in the Lab test list, matching Onito's medical-type idea reasonably well) |
@@ -108,7 +108,11 @@ outside the repo, since they show real patient data).
    Verified end-to-end (sex, sort_order, is_primary all round-tripped through the UI to the
    database).
 6. ~~Diagnostics dept on the counter~~ — dropped, keeping the separate Lab module (question 7).
-7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.
+7. ~~**Reports parity.**~~ **Done.** No migration needed — `Invoice.organisation_id` already
+   existed (item 2's discovery from `0014`), just wasn't joined in this report's query. Added
+   a `Payer` column (organisation name, or "Self-pay") and a `Cancelled` column (a cancelled
+   bill's original total, kept out of every other total the same way `gross`/`net`/etc.
+   already were). Verified live against the isolated stack.
 8. **IPD reception gaps.** Other consultant, attendant address, customised bill, ledgers,
    admission slip, "credit to IPD", any Receipt/Refund/Room Change tabs the hospital needs.
 9. **Two bugs above**, whenever convenient — neither blocks this plan.

@@ -39,6 +39,7 @@ from app.models.enums import (
     PaymentMode,
     WalletEntryKind,
 )
+from app.models.organisation import Organisation
 from app.models.patient import Patient
 from app.reports.definitions import Column, ColumnType, ReportSpec, register
 from app.reports.sources import invoice_sources
@@ -260,6 +261,7 @@ INVOICE_LIST = ReportSpec(
         Column("patient_name", "Patient"),
         Column("uhid", "UHID"),
         Column("doctor_name", "Consultant"),
+        Column("payer", "Payer"),
         Column("source", "From"),
         Column("visit_number", "Visit", default_visible=False),
         Column("gross_paise", "Gross", M, total=True),
@@ -267,6 +269,7 @@ INVOICE_LIST = ReportSpec(
         Column("net_paise", "Net", M, total=True),
         Column("paid_paise", "Paid", M, total=True),
         Column("balance_paise", "Balance", M, total=True),
+        Column("cancelled_paise", "Cancelled", M, total=True),
         Column("status", "Status", ColumnType.STATUS),
     ],
 )
@@ -277,17 +280,18 @@ async def _invoice_list(
 ) -> List[Dict[str, Any]]:
     start, end = _window(date_from, date_to)
     result = await session.execute(
-        select(Invoice, Patient, Visit)
+        select(Invoice, Patient, Visit, Organisation)
         .join(Patient, Patient.id == Invoice.patient_id)
         .outerjoin(Visit, Visit.id == Invoice.visit_id)
+        .outerjoin(Organisation, Organisation.id == Invoice.organisation_id)
         .where(Invoice.created_at >= start, Invoice.created_at < end)
         .order_by(Invoice.created_at.desc())
     )
 
     found = result.all()
-    sources = await invoice_sources(session, [invoice for invoice, _, _ in found])
+    sources = await invoice_sources(session, [invoice for invoice, _, _, _ in found])
     rows = []
-    for invoice, patient, visit in found:
+    for invoice, patient, visit, organisation in found:
         cancelled = invoice.status is InvoiceStatus.CANCELLED
         rows.append({
             "issued_on": to_local(invoice.issued_at or invoice.created_at).date(),
@@ -295,6 +299,7 @@ async def _invoice_list(
             "patient_name": patient.name,
             "uhid": patient.uhid or "",
             "doctor_name": invoice.doctor_name or (visit.doctor_name if visit else ""),
+            "payer": organisation.name if organisation else "Self-pay",
             "source": sources.get(invoice.id, ""),
             "visit_number": visit.visit_number if visit else "",
             # A cancelled bill stays in the list and out of every total.
@@ -305,6 +310,10 @@ async def _invoice_list(
             "balance_paise": (
                 0 if cancelled else invoice.total_paise - invoice.paid_paise
             ),
+            # What the bill would have totalled, kept visible only for a
+            # cancelled one — an auditor asking "how much did we not collect"
+            # needs this even though it counts toward nothing above.
+            "cancelled_paise": invoice.total_paise if cancelled else 0,
             "status": invoice.status.value,
         })
     return rows
