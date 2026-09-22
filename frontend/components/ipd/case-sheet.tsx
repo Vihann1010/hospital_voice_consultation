@@ -446,7 +446,7 @@ function DischargePanel({
   summarySigned: boolean;
   onDischarged: () => void;
 }) {
-  const [type, setType] = useState<DischargeType>("routine");
+  const [type, setType] = useState<DischargeType>("discharged");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -464,9 +464,10 @@ function DischargePanel({
     );
   }
 
-  // Going home or to another hospital needs the signed summary; the server
-  // enforces this too. The other three cannot wait for paperwork.
-  const needsSummary = type === "routine" || type === "transferred_out";
+  // Going home, to another hospital, or leaving on their own request needs
+  // the signed summary; the server enforces this too. LAMA/DAMA/expired
+  // cannot wait for paperwork. Mirrors ipd_service.complete_discharge.
+  const needsSummary = type === "discharged" || type === "referred" || type === "dopr";
   const blocked = needsSummary && !summarySigned;
 
   async function discharge() {
@@ -506,8 +507,8 @@ function DischargePanel({
         {blocked && (
           <p className="flex items-center gap-1.5 text-xs text-marigold-deep">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Sign the discharge summary above first. A patient going home or to another
-            hospital leaves with one.
+            Sign the discharge summary above first. A patient going home, to another
+            hospital, or on their own request leaves with one.
           </p>
         )}
         {error && <p className="text-xs text-clay">{error}</p>}

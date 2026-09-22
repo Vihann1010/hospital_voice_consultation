@@ -43,7 +43,7 @@ outside the repo, since they show real patient data).
 | IPD admission | **Partial, updated** | Admit form: patient search/register, Department, Under doctor, **Paid by (payer, added item 2)**, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Still missing: "other consultant", policy number, attendant address.** |
 | IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Partial, confirmed** | A quick popover per bed (Charges tab: advance + add-a-charge; Discharge tab: 3-step wizard) plus a full case sheet (Overview, Doctor's notes, Nursing, Vitals, Medicines, Theatre, Consents, Lab, Files, Records file, Discharge). No standalone Receipt, Refund or Room Change tab was found in either — worth a closer look if the hospital uses those often |
 | Customised bill, summary ledger, detailed ledger, admission slip | **Missing, confirmed** | Not found anywhere in the popover or case sheet |
-| Discharge modes | **Missing, confirmed** | The discharge wizard (Raise final bill → Draft summary → Final diagnosis + Complete discharge) has **no mode selector at all** — not a mapping problem, the field doesn't exist. Onito's six modes (Discharged, Expired, LAMA, DAMA, DOPR, Referred) all need adding |
+| Discharge modes | **Have** (item 3) | All six Onito modes (Discharged, Expired, LAMA, DAMA, DOPR, Referred) now selectable in both discharge UIs (ward panel wizard and case sheet Discharge tab) |
 | Patient files (5 categories) | **Have, confirmed — close match** | 7 categories: Identity proof, Referral letter, Previous records, Outside investigation/film, Clinical photograph, Insurance/TPA, Other. Covers Onito's Medical Record, Photo and Govt ID directly; Consent is handled separately (signed consent forms attach their own scan); no dedicated Billing Refund category, but refunds are already tracked in the ledger rather than as a file |
 | Move OPD / diagnostic bills onto an IPD bill ("Credit to IPD") | **Missing, confirmed** | The IPD charge form's "Kind" is Procedure / Investigation / Medicine / Consumable / Doctor visit / Oxygen / Other — manual entry only, no way to pull in an existing OPD or Lab invoice |
 | Keyboard-first entry | **Have, confirmed** | `?` (outside a field) opens a shortcuts panel: F2 Reception counter, F5 Find a patient, Alt+A Appointments, F6 Patient diary, Esc Back. Matches the staff guide |
@@ -69,7 +69,17 @@ outside the repo, since they show real patient data).
    IPD admission form (`ward-panel.tsx`). Verified end-to-end (admission `IP26-00002`,
    payer CGHS). Note: this only *captures* the payer on the admission — applying its rate
    to IPD charges is item 4's job (the per-service rate table), not wired yet.
-3. **Discharge modes.** Add a mode selector (all six Onito modes) to the discharge wizard.
+3. ~~**Discharge modes.**~~ **Done.** `DischargeType` enum replaced outright (migration
+   `0032_onito_discharge_types`) with Onito's six: Discharged, Expired, LAMA, DAMA, DOPR,
+   Referred — safe since no admission had ever been discharged (the old code always sent
+   `"routine"`, no selector existed). Wired into **two** discharge UIs that both existed
+   already: the ward panel's 3-step wizard (`ward-panel.tsx`) and the case sheet's
+   Discharge tab (`case-sheet.tsx`, which already had a working `<select>` reading off
+   `DISCHARGE_TYPE_LABEL` — just needed the label map and its two hardcoded `"routine"`/
+   `"transferred_out"` checks updated). The signed-discharge-summary gate now requires
+   Discharged/Referred/DOPR; LAMA/DAMA/Expired skip it — a judgement call (Onito's DAMA is
+   consented so arguably could require it too), flag if the hospital wants it different.
+   Verified end-to-end (admission `IP26-00002`, discharge_type `lama`, bed released).
 4. **Service master parity.** IPD rate, unit, flags, per-consultant and per-organisation rate
    rows (needs a migration and to feed the existing pricing engine) — this is also #2's
    per-service payer rate table. **Scope note (found while building item 2):** a

@@ -9,7 +9,7 @@ export type BedStatus = "vacant" | "occupied" | "cleaning" | "blocked" | "mainte
 export type AdmissionStatus =
   | "admitted" | "discharge_initiated" | "discharged" | "cancelled";
 export type DischargeType =
-  | "routine" | "against_medical_advice" | "transferred_out" | "absconded" | "death";
+  | "discharged" | "expired" | "lama" | "dama" | "dopr" | "referred";
 export type ChargeCategory =
   | "bed" | "nursing" | "doctor_visit" | "procedure" | "investigation"
   | "medicine" | "consumable" | "oxygen" | "other";
@@ -229,11 +229,12 @@ export interface RoomChargeRuns {
 }
 
 export const DISCHARGE_TYPE_LABEL: Record<DischargeType, string> = {
-  routine: "Routine — going home",
-  transferred_out: "Transferred to another hospital",
-  against_medical_advice: "Left against medical advice",
-  absconded: "Absconded",
-  death: "Death",
+  discharged: "Discharged",
+  expired: "Expired",
+  lama: "LAMA — left against medical advice",
+  dama: "DAMA — discharge against medical advice",
+  dopr: "DOPR — discharge on patient/parent request",
+  referred: "Referred",
 };
 
 export type DoseState = "given" | "omitted" | "overdue" | "due" | "upcoming" | "on_leave";

@@ -22,8 +22,8 @@ import {
   Loader2, LogOut, Plus, Printer, Search, Stethoscope, UserPlus, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
-import type { BedCell, Census, DeterioratingPatient, WardBoard } from "@/lib/types/ipd";
-import { BED_STATUS_STYLE, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/types/ipd";
+import type { BedCell, Census, DeterioratingPatient, DischargeType, WardBoard } from "@/lib/types/ipd";
+import { BED_STATUS_STYLE, DISCHARGE_TYPE_LABEL, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/types/ipd";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
 import type { Organisation, PaymentMode } from "@/lib/types/emr";
 import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
@@ -384,6 +384,7 @@ function BedSheet({
   const [invoice, setInvoice] = useState<Record<string, any> | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [finalDiagnosis, setFinalDiagnosis] = useState("");
+  const [dischargeType, setDischargeType] = useState<DischargeType>("discharged");
 
   const loadBill = useCallback(async () => {
     try {
@@ -448,7 +449,7 @@ function BedSheet({
     setBusy(true);
     try {
       await staffApi.dischargePatient(occupant.admission_id, {
-        discharge_type: "routine",
+        discharge_type: dischargeType,
         final_diagnosis: finalDiagnosis.trim() || null,
       });
       toast.success("Discharged", `${bed.label} is now free to clean`);
@@ -655,6 +656,13 @@ function BedSheet({
             <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">
               3 · Release the bed
             </p>
+            <label className="field-label mt-2" htmlFor="ad-disch-type">Discharge mode</label>
+            <select id="ad-disch-type" value={dischargeType} className="field-input"
+                    onChange={(e) => setDischargeType(e.target.value as DischargeType)}>
+              {(Object.keys(DISCHARGE_TYPE_LABEL) as DischargeType[]).map((value) => (
+                <option key={value} value={value}>{DISCHARGE_TYPE_LABEL[value]}</option>
+              ))}
+            </select>
             <Input className="mt-2" value={finalDiagnosis}
                    placeholder="Final diagnosis"
                    onChange={(e) => setFinalDiagnosis(e.target.value)} />

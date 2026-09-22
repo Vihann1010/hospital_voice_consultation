@@ -1221,7 +1221,7 @@ class IPDService:
         self,
         admission_id: uuid.UUID,
         *,
-        discharge_type: DischargeType = DischargeType.ROUTINE,
+        discharge_type: DischargeType = DischargeType.DISCHARGED,
         final_diagnosis: Optional[str] = None,
         discharged_by_name: str = "",
         charging_hour: int = 8,
@@ -1234,10 +1234,13 @@ class IPDService:
         if admission.status is AdmissionStatus.DISCHARGED:
             raise IPDError("This patient has already been discharged.")
 
-        # A patient going home, or to another hospital, leaves with a signed
-        # discharge summary. Leaving against advice, absconding and death are
-        # not held up by paperwork that cannot be written first.
-        if discharge_type in (DischargeType.ROUTINE, DischargeType.TRANSFERRED_OUT):
+        # A patient going home, to another hospital, or leaving on their own
+        # request has time for a signed discharge summary. Leaving against
+        # advice (LAMA/DAMA) and death are not held up by paperwork that
+        # cannot be written first.
+        if discharge_type in (
+            DischargeType.DISCHARGED, DischargeType.REFERRED, DischargeType.DOPR,
+        ):
             from app.models.enums import PadStatus
             from app.models.pad import PadDocument
 

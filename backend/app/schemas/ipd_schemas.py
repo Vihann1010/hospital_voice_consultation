@@ -231,7 +231,7 @@ class ChargeOut(BaseModel):
 
 
 class DischargeRequest(BaseModel):
-    discharge_type: DischargeType = DischargeType.ROUTINE
+    discharge_type: DischargeType = DischargeType.DISCHARGED
     final_diagnosis: Optional[str] = None
 
 

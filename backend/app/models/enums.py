@@ -357,11 +357,18 @@ class AdmissionStatus(str, enum.Enum):
 
 
 class DischargeType(str, enum.Enum):
-    ROUTINE = "routine"
-    AGAINST_MEDICAL_ADVICE = "against_medical_advice"
-    TRANSFERRED_OUT = "transferred_out"
-    ABSCONDED = "absconded"
-    DEATH = "death"
+    """Onito's six discharge modes, kept exactly as the pilot hospital uses them."""
+
+    DISCHARGED = "discharged"
+    EXPIRED = "expired"
+    # Left against medical advice: walked out, no consent to leave signed.
+    LAMA = "lama"
+    # Discharge against medical advice: leaving is documented and consented,
+    # unlike LAMA — Onito tracks these as separate modes.
+    DAMA = "dama"
+    # Discharge on patient/parent request.
+    DOPR = "dopr"
+    REFERRED = "referred"
 
 
 class ChargeCategory(str, enum.Enum):

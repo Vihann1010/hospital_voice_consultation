@@ -69,6 +69,11 @@ def _local(moment: Optional[datetime], fmt: str = "%d %b %Y, %I:%M %p") -> str:
 
 
 ROUTE_LABEL = {"iv": "IV", "im": "IM", "sc": "SC", "nasogastric": "Ryles tube"}
+# Onito's own abbreviations, not the generic Capitalised-words _label() gives.
+DISCHARGE_TYPE_LABEL = {
+    "discharged": "Discharged", "expired": "Expired", "lama": "LAMA",
+    "dama": "DAMA", "dopr": "DOPR", "referred": "Referred",
+}
 
 
 def _label(value: Any) -> str:
@@ -168,7 +173,8 @@ def render_cover_pdf(*, admission: Any, patient: Any, occupancies: Sequence[Any]
             ("Admitting doctor", admission.admitting_doctor_name),
             ("Admitted", _local(admission.admitted_at)),
             ("Discharged", _local(admission.discharged_at) if admission.discharged_at else "Still admitted"),
-            ("Discharge type", _label(admission.discharge_type) if admission.discharge_type else "—"),
+            ("Discharge type", DISCHARGE_TYPE_LABEL.get(
+                getattr(admission.discharge_type, "value", None), "—")),
             ("Reason for admission", admission.reason_for_admission),
             ("Provisional diagnosis", admission.provisional_diagnosis),
             ("Final diagnosis", admission.final_diagnosis),
