@@ -5,7 +5,9 @@ Base: `ocr-implementation` (30 migrations; most of the Onito replacement already
 v1 of this plan was written against `main` by mistake and overstated what was missing.
 v3 replaces every *verify* row from v2 with what was actually seen running the app
 (2026-09-22, isolated local stack, admin login) against a fresh seed — patients, wards,
-tariff and lab tests only, no consultants, payers or bills entered.
+tariff and lab tests only, no consultants, payers or bills entered. **The verify pass is
+now complete** — every screenshot-group row above is Have, Partial or Missing, none left
+as "verify" or "not re-tested".
 
 Source: 35 reference screenshots of the pilot hospital's Onito HIS reception login (kept
 outside the repo, since they show real patient data).
@@ -38,12 +40,12 @@ outside the repo, since they show real patient data).
 | Payer / organisation master | **Partial, confirmed — real gap** | Add-payer form: Short code, Name, Kind (TPA etc.), Contact, Phone, Email, Address, **one flat Standard discount %**, Credit days, In-use. **No per-service rate table, no service codes per payer** — this is the opposite of v2's "Have, verify" and needs your answer to question 3 |
 | IPD admitted list, ward board | **Have, confirmed** | Two views: a read-only Ward board on the clinical dashboard, and a working **Ward terminal** (`/ward`) with its own Admit action per bed |
 | IPD admission | **Partial, confirmed** | Admit form: patient search/register, Department, Under doctor, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Missing: "other consultant", payer/policy number, attendant address.** |
-| IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Not re-tested this pass** | Not opened; case sheet exists per the staff guide with discharge, transfer, advance, refunds, in a different layout from Onito's tabs |
-| Customised bill, summary ledger, detailed ledger, admission slip | **Not re-tested this pass** | Carried over from v2 as still unconfirmed |
-| Discharge modes | **Not re-tested this pass** | Carried over from v2; still needs your answer to question 2 |
-| Patient files (5 categories) | **Not re-tested this pass** | Carried over from v2 |
-| Move OPD / diagnostic bills onto an IPD bill ("Credit to IPD") | **Not re-tested this pass** | Carried over from v2 |
-| Keyboard-first entry | **Not re-tested this pass** | Carried over from v2 (F2/F3/F5/F6, Alt+A, Ctrl+S, Ctrl+P, Esc, `?`) |
+| IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Partial, confirmed** | A quick popover per bed (Charges tab: advance + add-a-charge; Discharge tab: 3-step wizard) plus a full case sheet (Overview, Doctor's notes, Nursing, Vitals, Medicines, Theatre, Consents, Lab, Files, Records file, Discharge). No standalone Receipt, Refund or Room Change tab was found in either — worth a closer look if the hospital uses those often |
+| Customised bill, summary ledger, detailed ledger, admission slip | **Missing, confirmed** | Not found anywhere in the popover or case sheet |
+| Discharge modes | **Missing, confirmed** | The discharge wizard (Raise final bill → Draft summary → Final diagnosis + Complete discharge) has **no mode selector at all** — not a mapping problem, the field doesn't exist. Onito's six modes (Discharged, Expired, LAMA, DAMA, DOPR, Referred) all need adding |
+| Patient files (5 categories) | **Have, confirmed — close match** | 7 categories: Identity proof, Referral letter, Previous records, Outside investigation/film, Clinical photograph, Insurance/TPA, Other. Covers Onito's Medical Record, Photo and Govt ID directly; Consent is handled separately (signed consent forms attach their own scan); no dedicated Billing Refund category, but refunds are already tracked in the ledger rather than as a file |
+| Move OPD / diagnostic bills onto an IPD bill ("Credit to IPD") | **Missing, confirmed** | The IPD charge form's "Kind" is Procedure / Investigation / Medicine / Consumable / Doctor visit / Oxygen / Other — manual entry only, no way to pull in an existing OPD or Lab invoice |
+| Keyboard-first entry | **Have, confirmed** | `?` (outside a field) opens a shortcuts panel: F2 Reception counter, F5 Find a patient, Alt+A Appointments, F6 Patient diary, Esc Back. Matches the staff guide |
 
 ## Bugs found while verifying (not Onito parity — separate fixes)
 
@@ -59,19 +61,22 @@ outside the repo, since they show real patient data).
 
 ## Proposed work, in order
 
-1. **Finish the verify pass.** IPD billing tabs, discharge modes, patient files, "credit to
-   IPD", keyboard shortcuts — the rows not re-tested this session.
+1. **Guardian and referred-by** on OPD registration. Smallest confirmed gap, no open
+   question blocks it — starting here.
 2. **Payer on the bill.** Add empanelment/payer to OPD registration and the IPD admission
-   form; per-service payer rates on the payer master (question 3 decides the size of this).
-3. **Guardian and referred-by** on OPD registration.
+   form, using the existing organisation master as-is (its one flat discount %). Per-service
+   payer rates are a separate, larger piece gated on question 3.
+3. **Discharge modes.** Add a mode selector to the discharge wizard. Gated on question 2
+   (which modes, exactly).
 4. **Service master parity.** IPD rate, unit, flags, per-consultant and per-organisation rate
-   rows (needs a migration and to feed the existing pricing engine).
+   rows (needs a migration and to feed the existing pricing engine) — folds in with #2's
+   per-service payer rates if question 3 says build it.
 5. **Consultant master parity.** Missing display flags, sort order, sex.
 6. **Diagnostics dept on the counter**, if question 7 confirms the hospital wants Onito's
    single Dept switch rather than the existing separate Lab flow.
 7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.
 8. **IPD reception gaps.** Other consultant, attendant address, customised bill, ledgers,
-   admission slip, discharge-mode mapping.
+   admission slip, "credit to IPD", any Receipt/Refund/Room Change tabs the hospital needs.
 9. **Two bugs above**, whenever convenient — neither blocks this plan.
 10. **Cutover.** Onito data import, parity checklist against the 35 screens, staff quick guide.
 
