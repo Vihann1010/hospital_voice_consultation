@@ -28,7 +28,7 @@ from app.models.organisation import NegotiatedRate, Organisation
 from app.models.patient import PatientFieldSetting
 from app.models.printing import PrintSetting
 from app.printing.layout import PAGE_HEIGHT
-from app.models.enums import AuditAction, Department, PayerType
+from app.models.enums import AuditAction, Department, Gender, PayerType
 
 router = APIRouter(prefix="/masters", tags=["masters"])
 
@@ -42,6 +42,7 @@ class ConsultantOut(BaseModel):
     id: uuid.UUID
     full_name: str
     department: Department
+    sex: Optional[Gender] = None
     qualification: Optional[str] = None
     registration_number: Optional[str] = None
     phone_number: Optional[str] = None
@@ -56,6 +57,11 @@ class ConsultantOut(BaseModel):
     payout_share_percent: int
     payout_categories: List[str] = []
     notes: Optional[str] = None
+    display_in_opd: bool = True
+    display_in_ipd: bool = True
+    display_in_diagnostics: bool = True
+    sort_order: int = 0
+    is_primary: bool = False
     is_active: bool
 
 
@@ -66,6 +72,7 @@ class ConsultantUpsert(BaseModel):
 
     full_name: str = Field(min_length=2, max_length=255)
     department: Department
+    sex: Optional[Gender] = None
     qualification: Optional[str] = Field(default=None, max_length=255)
     registration_number: Optional[str] = Field(default=None, max_length=120)
     phone_number: Optional[str] = Field(default=None, max_length=20)
@@ -88,6 +95,11 @@ class ConsultantUpsert(BaseModel):
     # screen, where the change is audited; accepting it here would let every
     # save of this form quietly reset a doctor's share.
     notes: Optional[str] = Field(default=None, max_length=1000)
+    display_in_opd: bool = True
+    display_in_ipd: bool = True
+    display_in_diagnostics: bool = True
+    sort_order: int = Field(default=0, ge=0, le=999)
+    is_primary: bool = False
     is_active: bool = True
 
     @model_validator(mode="after")
@@ -309,7 +321,10 @@ async def list_consultants(
     department: Optional[Department] = Query(default=None),
     active_only: bool = Query(default=True),
 ) -> List[ConsultantOut]:
-    statement = select(Consultant).order_by(Consultant.department, Consultant.full_name)
+    statement = select(Consultant).order_by(
+        Consultant.department, Consultant.is_primary.desc(),
+        Consultant.sort_order, Consultant.full_name,
+    )
     if department is not None:
         statement = statement.where(Consultant.department == department)
     if active_only:

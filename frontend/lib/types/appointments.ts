@@ -86,6 +86,7 @@ export interface Consultant {
   id: string;
   full_name: string;
   department: Department;
+  sex?: "male" | "female" | "other" | null;
   qualification?: string | null;
   registration_number?: string | null;
   phone_number?: string | null;
@@ -101,5 +102,10 @@ export interface Consultant {
   payout_share_percent: number;
   payout_categories?: string[];
   notes?: string | null;
+  display_in_opd: boolean;
+  display_in_ipd: boolean;
+  display_in_diagnostics: boolean;
+  sort_order: number;
+  is_primary: boolean;
   is_active: boolean;
 }

@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import Department
+from app.models.enums import Department, Gender
 
 _VALUES = lambda e: [m.value for m in e]  # noqa: E731
 
@@ -38,6 +38,9 @@ class Consultant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         SAEnum(Department, name="department", values_callable=_VALUES),
         nullable=False,
         index=True,
+    )
+    sex: Mapped[Optional[Gender]] = mapped_column(
+        SAEnum(Gender, name="gender", values_callable=_VALUES)
     )
 
     # Printed under the signature on every prescription and report they sign.
@@ -94,6 +97,22 @@ class Consultant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Which kinds of billed service the share is taken on. Consultations only,
     # unless agreed otherwise; see app/accounts/payout.py.
     payout_categories: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: ["consultation"])
+
+    # Which pickers this consultant shows up in. A visiting radiologist who
+    # only reads films has no business on the OPD registration screen, but
+    # still needs to appear when a diagnostics report is signed.
+    display_in_opd: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_in_ipd: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_in_diagnostics: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    # Lower sorts first within a department; ties break on name. Zero for
+    # everyone by default, so a hospital that never touches this gets the
+    # alphabetical order it already had.
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The department's usual doctor — floats to the top of its picker and is
+    # the default selection, ahead of sort_order.
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, index=True

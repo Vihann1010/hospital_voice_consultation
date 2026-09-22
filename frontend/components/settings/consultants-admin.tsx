@@ -31,6 +31,7 @@ interface ConsultantForm {
   id?: string;
   full_name: string;
   department: Department;
+  sex: string;
   qualification: string;
   registration_number: string;
   phone_number: string;
@@ -43,24 +44,35 @@ interface ConsultantForm {
   free_follow_up_days: string;
   consultation_service_code: string;
   notes: string;
+  display_in_opd: boolean;
+  display_in_ipd: boolean;
+  display_in_diagnostics: boolean;
+  sort_order: string;
+  is_primary: boolean;
   is_active: boolean;
 }
 
 const EMPTY: ConsultantForm = {
-  full_name: "", department: "orthopedics", qualification: "", registration_number: "", phone_number: "",
+  full_name: "", department: "orthopedics", sex: "", qualification: "", registration_number: "", phone_number: "",
   user_id: "", appointment_minutes: "15", first_consultation_free: false, opd_start_time: "09:00",
   opd_end_time: "17:00", opd_days: ["1", "2", "3", "4", "5", "6"], free_follow_up_days: "0",
-  consultation_service_code: "", notes: "", is_active: true,
+  consultation_service_code: "", notes: "",
+  display_in_opd: true, display_in_ipd: true, display_in_diagnostics: true,
+  sort_order: "0", is_primary: false, is_active: true,
 };
 
 function toForm(c: Consultant): ConsultantForm {
   return {
-    id: c.id, full_name: c.full_name, department: c.department, qualification: c.qualification ?? "",
+    id: c.id, full_name: c.full_name, department: c.department, sex: c.sex ?? "",
+    qualification: c.qualification ?? "",
     registration_number: c.registration_number ?? "", phone_number: c.phone_number ?? "", user_id: c.user_id ?? "",
     appointment_minutes: String(c.appointment_minutes), first_consultation_free: Boolean(c.first_consultation_free),
     opd_start_time: c.opd_start_time.slice(0, 5), opd_end_time: c.opd_end_time.slice(0, 5),
     opd_days: c.opd_days.split(",").filter(Boolean), free_follow_up_days: String(c.free_follow_up_days),
-    consultation_service_code: c.consultation_service_code ?? "", notes: c.notes ?? "", is_active: c.is_active,
+    consultation_service_code: c.consultation_service_code ?? "", notes: c.notes ?? "",
+    display_in_opd: c.display_in_opd, display_in_ipd: c.display_in_ipd,
+    display_in_diagnostics: c.display_in_diagnostics,
+    sort_order: String(c.sort_order), is_primary: c.is_primary, is_active: c.is_active,
   };
 }
 
@@ -116,6 +128,7 @@ export function ConsultantsAdmin() {
     try {
       await staffApi.saveConsultant({
         full_name: form.full_name.trim(), department: form.department,
+        sex: form.sex || null,
         qualification: form.qualification.trim() || null, registration_number: form.registration_number.trim() || null,
         phone_number: form.phone_number.trim() || null, user_id: form.user_id || null,
         appointment_minutes: Number(form.appointment_minutes) || 15,
@@ -124,7 +137,11 @@ export function ConsultantsAdmin() {
         opd_days: [...form.opd_days].sort().join(","),
         free_follow_up_days: Number(form.free_follow_up_days) || 0,
         consultation_service_code: form.consultation_service_code.trim() || null,
-        notes: form.notes.trim() || null, is_active: form.is_active,
+        notes: form.notes.trim() || null,
+        display_in_opd: form.display_in_opd, display_in_ipd: form.display_in_ipd,
+        display_in_diagnostics: form.display_in_diagnostics,
+        sort_order: Number(form.sort_order) || 0, is_primary: form.is_primary,
+        is_active: form.is_active,
       }, form.id);
       setForm(null);
       await load();
@@ -155,6 +172,16 @@ export function ConsultantsAdmin() {
                 <select className={`${SELECT} w-full`} value={form.department}
                         onChange={(e) => set({ department: e.target.value as Department })}>
                   {DEPARTMENTS.map((d) => <option key={d} value={d}>{DEPARTMENT_LABEL[d] ?? d}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-ink-muted">Sex</span>
+                <select className={`${SELECT} w-full`} value={form.sex}
+                        onChange={(e) => set({ sex: e.target.value })}>
+                  <option value="">Not recorded</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
                 </select>
               </label>
               <label className="space-y-1">
@@ -221,6 +248,11 @@ export function ConsultantsAdmin() {
                 <Input type="number" min={0} max={365} value={form.free_follow_up_days}
                        onChange={(e) => set({ free_follow_up_days: e.target.value })} />
               </label>
+              <label className="space-y-1">
+                <span className="text-xs text-ink-muted">Sort order (lower shows first)</span>
+                <Input type="number" min={0} max={999} value={form.sort_order}
+                       onChange={(e) => set({ sort_order: e.target.value })} />
+              </label>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -252,9 +284,34 @@ export function ConsultantsAdmin() {
                 First consultation free
               </label>
               <label className="flex items-center gap-2">
+                <input type="checkbox" checked={form.is_primary}
+                       onChange={(e) => set({ is_primary: e.target.checked })} />
+                Department&apos;s primary consultant
+              </label>
+              <label className="flex items-center gap-2">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => set({ is_active: e.target.checked })} />
                 In use (shown in the pickers)
               </label>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-ink-muted">Shown as a consultant option on</span>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={form.display_in_opd}
+                         onChange={(e) => set({ display_in_opd: e.target.checked })} />
+                  OPD registration
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={form.display_in_ipd}
+                         onChange={(e) => set({ display_in_ipd: e.target.checked })} />
+                  IPD admission
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={form.display_in_diagnostics}
+                         onChange={(e) => set({ display_in_diagnostics: e.target.checked })} />
+                  Diagnostics
+                </label>
+              </div>
             </div>
             <p className="text-xs text-ink-muted">The payout share is set on the Accounts screen, not here.</p>
 
@@ -309,9 +366,11 @@ export function ConsultantsAdmin() {
                     <tr key={c.id} className={c.is_active ? "" : "text-ink-muted"}>
                       <td className="py-2 pr-3">
                         <span className="font-medium">{c.full_name}</span>
+                        {c.is_primary && <Badge className="ml-2">Primary</Badge>}
                         {!c.is_active && <Badge variant="outline" className="ml-2">Not in use</Badge>}
                         <span className="block text-xs text-ink-muted">
-                          {[c.qualification, c.registration_number && `Reg. ${c.registration_number}`,
+                          {[c.sex && c.sex[0].toUpperCase() + c.sex.slice(1),
+                            c.qualification, c.registration_number && `Reg. ${c.registration_number}`,
                             c.user_id && (loginName(c.user_id) ? `Login: ${loginName(c.user_id)}` : "Has a login")]
                             .filter(Boolean).join(" · ") || "—"}
                         </span>

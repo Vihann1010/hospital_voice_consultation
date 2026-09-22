@@ -37,7 +37,7 @@ outside the repo, since they show real patient data).
 | Daily Summary report | **Have, confirmed** | "Daily closing" report exists in the picker |
 | Ledger report | **Have, confirmed** | "Day-wise receipts and refunds" in the same report picker, alongside Cash ledger, Collection summary, Consultant-wise and Department-wise billing |
 | Service master | **Have** (item 4) | Add-service form now has: Code, Name, Kind, Department, Rate, **IPD rate, unit**, GST %, HSN/SAC, Offered-at-counter, **rate-editable, discount-allowed, requires-consultant flags**. Per-organisation rate rows already existed (separate Organisations screen, not the form itself) and per-consultant rows now exist too (separate Consultants screen, "Rates" button), both wired into the pricing engine and verified live. (Lab result grouping still lives separately in the Lab test list, matching Onito's medical-type idea reasonably well) |
-| Consultant master | **Partial, confirmed** | Add-consultant form: Name, Department, Phone, Qualification (printed under signature), Registration number, Consultation fee, OPD days, OPD from/until, Minutes per appointment, Free follow-up days, Login, Notes, First-consultation-free, In-use. **Missing: sex, display-in-OPD/IPD/Diagnostics flags, sort order, "is primary".** |
+| Consultant master | **Have** (item 5) | Add-consultant form now also has: Sex, Sort order, "Department's primary consultant", and display-in-OPD/IPD/Diagnostics flags, alongside the existing fields. `is_primary` and `sort_order` are wired into `GET /masters/consultants`' ordering (primary first, then sort order, then name) — the same order the reception counter's default-consultant picker reads. The three display flags are captured but **not yet filtered** per screen (see note below). |
 | Payer / organisation master | **Partial, confirmed — real gap** | Add-payer form: Short code, Name, Kind (TPA etc.), Contact, Phone, Email, Address, **one flat Standard discount %**, Credit days, In-use. **No per-service rate table, no service codes per payer** — this is the opposite of v2's "Have, verify" and needs your answer to question 3 |
 | IPD admitted list, ward board | **Have, confirmed** | Two views: a read-only Ward board on the clinical dashboard, and a working **Ward terminal** (`/ward`) with its own Admit action per bed |
 | IPD admission | **Partial, updated** | Admit form: patient search/register, Department, Under doctor, **Paid by (payer, added item 2)**, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Still missing: "other consultant", policy number, attendant address.** |
@@ -97,7 +97,16 @@ outside the repo, since they show real patient data).
    Kind/Description/Rate — it does not read the service catalog, so `ipd_rate_paise` and
    these new consultant/org rates do not yet apply there automatically. Rebuilding that flow
    to pick services from the catalog is a separate, larger piece; ask before starting it.
-5. **Consultant master parity.** Missing display flags, sort order, sex.
+5. ~~**Consultant master parity.**~~ **Done, same small-scope pattern as item 4.** Migration
+   `0034_consultant_master_parity` adds sex, display_in_opd/ipd/diagnostics, sort_order,
+   is_primary. `sort_order`/`is_primary` are wired into the consultant list's ordering
+   (real behaviour change: this is what the OPD counter's default-consultant fallback reads).
+   The three display flags are data-only for now — filtering the OPD/IPD/diagnostics pickers
+   by them would mean touching three separate call sites (reception-counter.tsx,
+   ward-panel.tsx, and wherever diagnostics picks a consultant), the same "small vs large
+   scope" tradeoff as item 4's IPD rate, so left for a decision rather than assumed.
+   Verified end-to-end (sex, sort_order, is_primary all round-tripped through the UI to the
+   database).
 6. ~~Diagnostics dept on the counter~~ — dropped, keeping the separate Lab module (question 7).
 7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.
 8. **IPD reception gaps.** Other consultant, attendant address, customised bill, ledgers,
