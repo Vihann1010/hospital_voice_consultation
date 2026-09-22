@@ -1,6 +1,7 @@
 # Reception module: Onito parity plan (v3)
 
-Status: **DRAFT, awaiting approval. Nothing below is built yet.**
+Status: **APPROVED (2026-09-22). All 7 questions answered below. Building the proposed
+work list in order.**
 Base: `ocr-implementation` (30 migrations; most of the Onito replacement already exists).
 v1 of this plan was written against `main` by mistake and overstated what was missing.
 v3 replaces every *verify* row from v2 with what was actually seen running the app
@@ -28,7 +29,7 @@ outside the repo, since they show real patient data).
 | Patient search, top bar | **Have** | Counter has its own "UHID, mobile number or name" box; global F5 not re-tested this pass |
 | OPD registration | **Partial, confirmed** | Register-new-patient fields: Full name, Mobile, Age, Gender, City. **No Guardian field.** Visit: Department (clinical: Orthopedics/Gynecology, not OPD/Cons./DIAG), Visit type, Consultant. **No Referred-by field anywhere on the counter.** |
 | OPD billing / charges | **Have, confirmed** | Per-line Rate, Qty, Discount (₹), Remark; whole-bill discount; Cash/UPI/Card/Net banking/Cheque; register & bill in one step |
-| Empanelment (payer) on a bill | **Missing, confirmed** | No payer/empanelment field anywhere on the counter or the admission form. The plan's v2 "Have" was wrong — the staff guide's "agreed rate applied automatically" must mean something else (worth asking, see question 6) |
+| Empanelment (payer) on a bill | **Corrected: Have on OPD, Missing on IPD** | v3's "Missing, confirmed" was wrong — `reception-counter.tsx` has had a "Paid by" org dropdown since `f2570d1` (2026-09-16); the verify pass just had no organisations seeded, so it stayed hidden by design ("only shown when the hospital actually has agreements"). Confirmed working once an org (CGHS) exists. IPD admission genuinely still has no payer field. |
 | Diagnostics registration | **Missing, confirmed** | Department switch is Orthopedics/Gynecology only. Lab has its own "Register tests" flow, separate screen, not a Dept switch on the billing form |
 | OPD receipt / advance | **Not re-tested this pass** | Existing code path (wallet, numbered receipts); no reason to doubt it |
 | Appointments | **Have, confirmed** | Book screen: patient, consultant, day, slot picker, type, reason. Live queue board |
@@ -61,41 +62,33 @@ outside the repo, since they show real patient data).
 
 ## Proposed work, in order
 
-1. **Guardian and referred-by** on OPD registration. Smallest confirmed gap, no open
-   question blocks it — starting here.
-2. **Payer on the bill.** Add empanelment/payer to OPD registration and the IPD admission
-   form, using the existing organisation master as-is (its one flat discount %). Per-service
-   payer rates are a separate, larger piece gated on question 3.
-3. **Discharge modes.** Add a mode selector to the discharge wizard. Gated on question 2
-   (which modes, exactly).
+1. **Guardian and referred-by** on OPD registration. Smallest confirmed gap — starting here.
+2. **Payer on the bill.** OPD already has it (needs orgs seeded to show). Add the same
+   payer dropdown to the IPD admission form.
+3. **Discharge modes.** Add a mode selector (all six Onito modes) to the discharge wizard.
 4. **Service master parity.** IPD rate, unit, flags, per-consultant and per-organisation rate
-   rows (needs a migration and to feed the existing pricing engine) — folds in with #2's
-   per-service payer rates if question 3 says build it.
+   rows (needs a migration and to feed the existing pricing engine) — this is also #2's
+   per-service payer rate table.
 5. **Consultant master parity.** Missing display flags, sort order, sex.
-6. **Diagnostics dept on the counter**, if question 7 confirms the hospital wants Onito's
-   single Dept switch rather than the existing separate Lab flow.
+6. ~~Diagnostics dept on the counter~~ — dropped, keeping the separate Lab module (question 7).
 7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.
 8. **IPD reception gaps.** Other consultant, attendant address, customised bill, ledgers,
    admission slip, "credit to IPD", any Receipt/Refund/Room Change tabs the hospital needs.
 9. **Two bugs above**, whenever convenient — neither blocks this plan.
-10. **Cutover.** Onito data import, parity checklist against the 35 screens, staff quick guide.
+10. **Cutover.** Onito data import (keeping its invoice-number format and counters), parity
+    checklist against the 35 screens, staff quick guide.
 
-## Questions for you
+## Questions for you — answered (2026-09-22)
 
-1. Are the pilot's hospital staff already using this branch's reception screens, or has nobody
-   outside development seen them? It changes how much we can safely rearrange.
-2. **Discharge modes:** Onito has LAMA, DAMA and DOPR as separate options. Do you want all six
-   Onito modes kept exactly (staff and reports depend on them), or map onto ours?
-3. **Service master:** is the per-consultant / per-organisation rate table on Onito's service
-   form something the hospital actually uses, or would the existing organisation rate card do?
+1. **Staff exposure:** not yet used by staff — free to rearrange fields/layouts to match Onito.
+2. **Discharge modes:** keep all six Onito modes exactly (Discharged, Expired, LAMA, DAMA,
+   DOPR, Referred).
+3. **Service master:** build the full per-consultant / per-organisation rate table — full
+   parity, not just the flat org discount.
 4. **Invoice numbering:** keep Onito's format (`2026OPD5915`, `2026RC7186`) and continue its
-   counters after cutover, or start fresh?
-5. **Roles:** Onito showed one reception login. Should reception be able to edit price list and
-   consultants (Onito allowed it), or stay with admin / manager as now?
-6. **Payer on the bill is a confirmed gap**, not something to verify further — there is
-   genuinely no way to attach a payer/empanelment to a bill today. Should this be built as
-   part of this plan, or is it already tracked elsewhere?
-7. **Diagnostics**: the hospital's Onito flow puts diagnostics on the same registration screen
-   as OPD (Dept: OPD/Cons./DIAG). This branch instead has a separate Lab module. Keep them
-   separate (less rework, different mental model for reception) or build Onito's single
-   switch (closer match, more rework)?
+   counters after cutover.
+5. **Roles:** stay with admin / manager only — reception does not get price list / consultant
+   edit access.
+6. **Payer on the bill:** confirmed gap, build as part of this plan (item 2 below).
+7. **Diagnostics:** keep the existing separate Lab module — do not merge into a single
+   OPD/Cons./DIAG dept switch on the counter. (Item 6 in "Proposed work" below is dropped.)

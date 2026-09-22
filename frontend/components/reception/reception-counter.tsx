@@ -100,10 +100,13 @@ export function ReceptionCounter() {
   const [gender, setGender] = useState<Gender>("female");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
+  const [guardianRelation, setGuardianRelation] = useState("");
+  const [guardianName, setGuardianName] = useState("");
 
   // Visit
   const [department, setDepartment] = useState<Department>("orthopedics");
   const [visitType, setVisitType] = useState<VisitType>("new");
+  const [referredBy, setReferredBy] = useState("");
   // The counter used to send no doctor at all, which left every visit with a
   // blank doctor name on the queue board and meant the consultant's own
   // pricing rules — free follow-up, first consultation — could never fire.
@@ -221,6 +224,7 @@ export function ReceptionCounter() {
   const reset = useCallback(() => {
     setDone(null); setSelected(null); setQuery(""); setResults(null);
     setRegistering(false); setName(""); setAge(""); setPhone(""); setCity("");
+    setGuardianRelation(""); setGuardianName(""); setReferredBy("");
     setLines([]); setDiscountRupees(""); setDiscountReason("");
     setModeDetails({}); setWalletPaise(0); setQuote(null);
     setOrganisationId(""); setError(null);
@@ -318,6 +322,8 @@ export function ReceptionCounter() {
         gender,
         phone_number: phone.trim(),
         city: city.trim() || null,
+        guardian_relation: guardianRelation.trim() || null,
+        guardian_name: guardianName.trim() || null,
       });
       // Selected rather than cleared: the commonest next step is to bill the
       // person standing there, and making the clerk search for the record
@@ -325,6 +331,7 @@ export function ReceptionCounter() {
       setSelected(patient);
       setRegistering(false);
       setName(""); setAge(""); setPhone(""); setCity("");
+      setGuardianRelation(""); setGuardianName("");
       toast.success(`${patient.uhid} registered`, "No visit opened and no bill raised.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not register the patient.";
@@ -344,6 +351,7 @@ export function ReceptionCounter() {
         visit_type: visitType,
         doctor_name: chosenConsultant?.full_name ?? "",
         organisation_id: organisationId || null,
+        referred_by: referredBy.trim() || null,
         items: billItems(),
         invoice_discount_paise: billDiscountPaise,
         discount_reason:
@@ -358,6 +366,8 @@ export function ReceptionCounter() {
           gender,
           phone_number: phone.trim(),
           city: city.trim() || null,
+          guardian_relation: guardianRelation.trim() || null,
+          guardian_name: guardianName.trim() || null,
         };
       }
       // Collect what the server quoted, not what was computed locally: if a
@@ -611,10 +621,28 @@ export function ReceptionCounter() {
                     </select>
                   </div>
                 </div>
-                <div>
-                  <label className="field-label" htmlFor="rc-city">City (optional)</label>
-                  <Input id="rc-city" value={city}
-                         onChange={(e) => setCity(e.target.value)} />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="field-label" htmlFor="rc-city">City (optional)</label>
+                    <Input id="rc-city" value={city}
+                           onChange={(e) => setCity(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="rc-guardian-rel">Guardian (optional)</label>
+                    <select id="rc-guardian-rel" value={guardianRelation} className="field-input"
+                            onChange={(e) => setGuardianRelation(e.target.value)}>
+                      <option value="">—</option>
+                      <option value="S/O">S/O</option>
+                      <option value="D/O">D/O</option>
+                      <option value="W/O">W/O</option>
+                      <option value="C/O">C/O</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="rc-guardian-name">Guardian name</label>
+                    <Input id="rc-guardian-name" value={guardianName}
+                           onChange={(e) => setGuardianName(e.target.value)} />
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setRegistering(false)}>
@@ -717,6 +745,11 @@ export function ReceptionCounter() {
                   <option key={item.id} value={item.id}>{item.full_name}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="rc-referred-by">Referred by (optional)</label>
+              <Input id="rc-referred-by" value={referredBy}
+                     onChange={(e) => setReferredBy(e.target.value)} />
             </div>
             <div>
               {/* Only shown when the hospital actually has agreements. Most
