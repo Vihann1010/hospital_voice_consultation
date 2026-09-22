@@ -436,6 +436,7 @@ function BedSheet({
   const [summary, setSummary] = useState<string | null>(null);
   const [finalDiagnosis, setFinalDiagnosis] = useState("");
   const [dischargeType, setDischargeType] = useState<DischargeType>("discharged");
+  const [summarySigned, setSummarySigned] = useState(false);
 
   const loadBill = useCallback(async () => {
     try {
@@ -446,6 +447,22 @@ function BedSheet({
   }, [occupant.admission_id]);
 
   useEffect(() => { void loadBill(); }, [loadBill]);
+
+  // Mirrors the case sheet's own check (stateOf(documents, "ipd_discharge_summary")
+  // === "signed") so this popover and that screen never disagree about whether
+  // discharge is actually blocked.
+  useEffect(() => {
+    staffApi.padDocuments({ admission_id: occupant.admission_id })
+      .then((documents) => setSummarySigned(
+        documents.some((doc) => doc.document_type === "ipd_discharge_summary" && doc.status === "signed")
+      ))
+      .catch(() => setSummarySigned(false));
+  }, [occupant.admission_id]);
+
+  // Mirrors the server's own rule in IPDService.complete_discharge.
+  const needsSummary = dischargeType === "discharged" || dischargeType === "referred"
+    || dischargeType === "dopr";
+  const dischargeBlocked = needsSummary && !summarySigned;
 
   async function addCharge() {
     if (!description.trim() || !amount) return;
@@ -743,7 +760,7 @@ function BedSheet({
                    placeholder="Final diagnosis"
                    onChange={(e) => setFinalDiagnosis(e.target.value)} />
             <Button className="mt-2 w-full" size="sm" onClick={completeDischarge}
-                    disabled={busy || !invoice}>
+                    disabled={busy || !invoice || dischargeBlocked}>
               {busy ? <Loader2 className="animate-spin" /> : <LogOut />}
               Complete discharge
             </Button>
@@ -751,6 +768,14 @@ function BedSheet({
               <p className="mt-1.5 text-[11px] text-ink-muted">
                 Raise the final bill first — charges cannot be added once the
                 admission is closed.
+              </p>
+            )}
+            {invoice && dischargeBlocked && (
+              <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-marigold-deep">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                Sign the discharge summary first — on the case sheet&apos;s
+                Discharge tab. Going home, to another hospital, or on their
+                own request needs one; LAMA/DAMA/expired do not.
               </p>
             )}
           </div>

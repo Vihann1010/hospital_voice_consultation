@@ -76,8 +76,8 @@ outside the repo, since they show real patient data).
 
 With the parity items done, ran a real end-to-end pass — register a patient
 with every new field at once, admit and discharge an IPD stay, check the
-reports — rather than re-verifying each item in isolation. Found one real
-integration gap this way:
+reports — rather than re-verifying each item in isolation. Found two real
+gaps this way, both fixed.
 
 1. **Fixed — IPD final bill dropped its payer and doctor.** The "Paid by"
    organisation chosen at admission (item 2) and the discharge-mode work
@@ -96,12 +96,27 @@ integration gap this way:
    confirmed both the invoice row and the Invoice List report show CGHS and
    the admitting doctor correctly.
 
-Also noticed, not fixed (pre-existing, not a regression from this work,
-backend already enforces the rule correctly either way): the ward panel's
-own Discharge tab (`ward-panel.tsx`) doesn't disable "Complete discharge" or
-show an inline warning when the chosen mode needs a signed summary — unlike
-the case sheet's Discharge tab, which does both. Staff see a toast error
-instead of a persistent hint. Cheap to align if it's worth a follow-up.
+2. **Fixed — ward panel's Discharge tab didn't warn before the reject.**
+   Pre-existing gap (not a regression): unlike the case sheet's Discharge
+   tab, `ward-panel.tsx` didn't disable "Complete discharge" or show an
+   inline warning when the chosen mode needs a signed summary — staff only
+   found out via a toast error after clicking. Now fetches the admission's
+   pad documents (`staffApi.padDocuments`) and mirrors the exact same check
+   the case sheet and the server both use (`ipd_discharge_summary` signed),
+   disabling the button and showing the same warning copy when blocked.
+   Verified end-to-end: "Discharged" mode correctly showed the warning and
+   a disabled button on a real unbilled admission; switching to LAMA
+   cleared both and the discharge completed successfully.
+
+Also found, not fixed — a second, separate pre-existing gap noticed while
+testing #2: the ward panel's bedside popover doesn't remember that an
+admission was already billed once it's closed and reopened (`invoice` is
+local component state, not fetched from `admission.final_invoice_id` on
+mount). Reopening shows "Raise final bill" again for an admission that's
+already billed; clicking it correctly gets rejected by the server ("This
+admission has already been billed"), so no double-billing risk — it's a
+display gap, not a data-integrity one. Worth a follow-up if it trips up
+staff in practice.
 
 ## Proposed work, in order
 
