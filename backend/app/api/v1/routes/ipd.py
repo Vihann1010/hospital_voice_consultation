@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -400,6 +400,77 @@ async def running_bill(admission_id: uuid.UUID, service: Service) -> Dict[str, A
         return await service.running_bill(admission_id)
     except IPDError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.get("/admissions/{admission_id}/admission-slip.pdf",
+            dependencies=[Depends(WARD_READ)])
+async def admission_slip_pdf(admission_id: uuid.UUID, service: Service) -> Response:
+    from app.ipd.documents import render_admission_slip_pdf
+    from app.models.organisation import Organisation
+    from app.printing.layout import load_layout
+
+    admission = await service.session.get(Admission, admission_id)
+    if admission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+    patient = await service.session.get(Patient, admission.patient_id)
+    if patient is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Patient not found")
+
+    occupancy = (await service.session.execute(
+        select(BedOccupancy)
+        .where(BedOccupancy.admission_id == admission_id)
+        .order_by(BedOccupancy.started_at.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    organisation_name = None
+    if admission.organisation_id:
+        organisation = await service.session.get(Organisation, admission.organisation_id)
+        organisation_name = organisation.name if organisation else None
+
+    pdf = render_admission_slip_pdf(
+        admission, patient,
+        ward_name=occupancy.ward_name if occupancy else "-",
+        bed_label=occupancy.bed_label if occupancy else "-",
+        organisation_name=organisation_name,
+        layout=await load_layout(service.session, "admission_slip"),
+    )
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{admission.ip_number}-slip.pdf"'},
+    )
+
+
+@router.get("/admissions/{admission_id}/ledger.pdf", dependencies=[Depends(WARD_READ)])
+async def ledger_pdf(
+    admission_id: uuid.UUID, service: Service,
+    detailed: bool = Query(default=False),
+) -> Response:
+    from app.ipd.documents import render_ledger_pdf
+    from app.printing.layout import load_layout
+
+    try:
+        data = await service.ledger_rows(admission_id)
+    except IPDError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    admission = data["admission"]
+    patient = await service.session.get(Patient, admission.patient_id)
+    if patient is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Patient not found")
+
+    pdf = render_ledger_pdf(
+        admission, patient,
+        charges=data["charges"], deposits=data["deposits"], summary=data["summary"],
+        detailed=detailed,
+        layout=await load_layout(service.session, "ipd_ledger"),
+    )
+    kind = "detailed" if detailed else "summary"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{admission.ip_number}-{kind}-ledger.pdf"',
+        },
+    )
 
 
 @router.post("/admissions/{admission_id}/accrue", dependencies=[Depends(WARD)])

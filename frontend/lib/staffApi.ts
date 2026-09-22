@@ -787,6 +787,11 @@ export const staffApi = {
       body: JSON.stringify(payload),
     }),
 
+  admissionSlipPdfUrl: (admissionId: string) =>
+    `${API_URL}/api/v1/ipd/admissions/${admissionId}/admission-slip.pdf`,
+  ledgerPdfUrl: (admissionId: string, detailed = false) =>
+    `${API_URL}/api/v1/ipd/admissions/${admissionId}/ledger.pdf${query({ detailed })}`,
+
   saveWard: (payload: Record<string, unknown>) =>
     request<{ id: string; code: string; name: string }>("/ipd/wards", {
       method: "POST",

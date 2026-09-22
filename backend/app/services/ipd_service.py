@@ -681,6 +681,58 @@ class IPDService:
             "days_so_far": by_category.get("bed", {}).get("count", 0),
         }
 
+    async def ledger_rows(self, admission_id: uuid.UUID) -> Dict[str, Any]:
+        """Every charge and every deposit against a stay, in date order.
+
+        The detailed ledger prints this as-is; the summary ledger uses
+        running_bill's own category grouping, so the two documents can never
+        disagree about the total.
+
+        `advance_held_paise` in running_bill's summary is unspent wallet
+        credit — correct for "what could still be set against the bill"
+        mid-stay, wrong for "total paid" once a final bill exists and has
+        already consumed that credit as a payment. Once final_invoice_id is
+        set, the invoice's own paid/balance figures are substituted in, so
+        the ledger and the bill never disagree about what was actually paid.
+        """
+        from app.models.emr import Invoice, WalletEntry
+        from app.models.enums import WalletEntryKind
+
+        admission = await self.session.get(Admission, admission_id)
+        if admission is None:
+            raise IPDError("Admission not found.")
+
+        charges = (await self.session.execute(
+            select(AdmissionCharge)
+            .where(AdmissionCharge.admission_id == admission_id)
+            .order_by(AdmissionCharge.charged_on, AdmissionCharge.created_at)
+        )).scalars().all()
+
+        deposits = (await self.session.execute(
+            select(WalletEntry).where(
+                WalletEntry.admission_id == admission_id,
+                WalletEntry.kind == WalletEntryKind.DEPOSIT,
+            ).order_by(WalletEntry.created_at)
+        )).scalars().all()
+
+        summary = await self.running_bill(admission_id)
+        if admission.final_invoice_id:
+            invoice = await self.session.get(Invoice, admission.final_invoice_id)
+            if invoice is not None:
+                summary = {
+                    **summary,
+                    "total_paise": invoice.total_paise,
+                    "advance_held_paise": invoice.paid_paise,
+                    "balance_paise": invoice.total_paise - invoice.paid_paise,
+                }
+
+        return {
+            "admission": admission,
+            "charges": list(charges),
+            "deposits": list(deposits),
+            "summary": summary,
+        }
+
     # ------------------------------------------------------------- advances
     async def advance_position(self, admission: Admission) -> Dict[str, int]:
         """What is held against a stay.

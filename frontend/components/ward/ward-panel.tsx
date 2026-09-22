@@ -22,6 +22,7 @@ import {
   Loader2, LogOut, Plus, Printer, Search, Stethoscope, Undo2, UserPlus, X,
 } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
+import { getToken } from "@/lib/auth";
 import type { BedCell, Census, DeterioratingPatient, DischargeType, WardBoard } from "@/lib/types/ipd";
 import { BED_STATUS_STYLE, DISCHARGE_TYPE_LABEL, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/types/ipd";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
@@ -37,6 +38,16 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 30000;
+
+async function printPdf(url: string) {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+  });
+  if (!response.ok) throw new Error("That document is not available.");
+  const blobUrl = URL.createObjectURL(await response.blob());
+  window.open(blobUrl, "_blank");
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
 
 interface FoundPatient {
   id: string;
@@ -557,6 +568,21 @@ function BedSheet({
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm"
+                onClick={() => void printPdf(staffApi.admissionSlipPdfUrl(occupant.admission_id))}>
+          <FileText /> Admission slip
+        </Button>
+        <Button variant="ghost" size="sm"
+                onClick={() => void printPdf(staffApi.ledgerPdfUrl(occupant.admission_id, false))}>
+          <FileText /> Summary ledger
+        </Button>
+        <Button variant="ghost" size="sm"
+                onClick={() => void printPdf(staffApi.ledgerPdfUrl(occupant.admission_id, true))}>
+          <FileText /> Detailed ledger
+        </Button>
+      </div>
+
       {tab === "charges" && (
         <div className="space-y-3">
           {bill && (
@@ -655,7 +681,8 @@ function BedSheet({
                   </p>
                 )}
                 <div className="mt-2 flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.print()}>
+                  <Button variant="outline" size="sm"
+                          onClick={() => void printPdf(staffApi.invoicePdfUrl(invoice.id as string))}>
                     <Printer /> Print bill
                   </Button>
                   {invoice.paid_paise > 0 && (

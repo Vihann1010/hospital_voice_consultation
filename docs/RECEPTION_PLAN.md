@@ -41,8 +41,8 @@ outside the repo, since they show real patient data).
 | Payer / organisation master | **Partial, confirmed — real gap** | Add-payer form: Short code, Name, Kind (TPA etc.), Contact, Phone, Email, Address, **one flat Standard discount %**, Credit days, In-use. **No per-service rate table, no service codes per payer** — this is the opposite of v2's "Have, verify" and needs your answer to question 3 |
 | IPD admitted list, ward board | **Have, confirmed** | Two views: a read-only Ward board on the clinical dashboard, and a working **Ward terminal** (`/ward`) with its own Admit action per bed |
 | IPD admission | **Partial, updated** | Admit form: patient search/register, Department, Under doctor, **Paid by (payer, added item 2)**, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Still missing: "other consultant", policy number, attendant address.** |
-| IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Partial, confirmed** | A quick popover per bed (Charges tab: advance + add-a-charge; Discharge tab: 3-step wizard) plus a full case sheet (Overview, Doctor's notes, Nursing, Vitals, Medicines, Theatre, Consents, Lab, Files, Records file, Discharge). No standalone Receipt, Refund or Room Change tab was found in either — worth a closer look if the hospital uses those often |
-| Customised bill, summary ledger, detailed ledger, admission slip | **Missing, confirmed** | Not found anywhere in the popover or case sheet |
+| IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Have** (item 8) | Charges tab: advance + add-a-charge, receipted (Receipt: confirmed no gap, already covered). Discharge tab: 3-step wizard, now with a "Refund" link to the reception bill-corrections flow once something's paid. **Room tab (new):** lists every vacant bed across all wards, wired to the transfer backend that already existed unused. Plus the full case sheet (Overview, Doctor's notes, Nursing, Vitals, Medicines, Theatre, Consents, Lab, Files, Records file, Discharge) |
+| Customised bill, summary ledger, detailed ledger, admission slip | **Have** (item 8) | Customised bill = the existing tax-invoice PDF, reused (IPD's final bill is a normal `Invoice`); the ward's own "Print bill" button was fixed to use it too, replacing a bare `window.print()`. Admission slip, summary ledger and detailed ledger are new documents (`app/ipd/documents.py`), same letterhead/PrintSetting infrastructure as every other printed document here — functional equivalents, not pixel copies of Onito's layout |
 | Discharge modes | **Have** (item 3) | All six Onito modes (Discharged, Expired, LAMA, DAMA, DOPR, Referred) now selectable in both discharge UIs (ward panel wizard and case sheet Discharge tab) |
 | Patient files (5 categories) | **Have, confirmed — close match** | 7 categories: Identity proof, Referral letter, Previous records, Outside investigation/film, Clinical photograph, Insurance/TPA, Other. Covers Onito's Medical Record, Photo and Govt ID directly; Consent is handled separately (signed consent forms attach their own scan); no dedicated Billing Refund category, but refunds are already tracked in the ledger rather than as a file |
 | Move OPD / diagnostic bills onto an IPD bill ("Credit to IPD") | **Missing, confirmed** | The IPD charge form's "Kind" is Procedure / Investigation / Medicine / Consumable / Doctor visit / Oxygen / Other — manual entry only, no way to pull in an existing OPD or Lab invoice |
@@ -113,8 +113,14 @@ outside the repo, since they show real patient data).
    a `Payer` column (organisation name, or "Self-pay") and a `Cancelled` column (a cancelled
    bill's original total, kept out of every other total the same way `gross`/`net`/etc.
    already were). Verified live against the isolated stack.
-8. **IPD reception gaps.** Other consultant, attendant address, customised bill, ledgers,
-   admission slip, "credit to IPD", any Receipt/Refund/Room Change tabs the hospital needs.
+8. ~~**IPD reception gaps.**~~ **Done**, except "credit to IPD" (deferred by your choice —
+   real cross-module billing logic, not a quick field; worth confirming the hospital
+   actually needs it before building). Everything else — other consultant, attendant
+   address, customised bill, summary/detailed ledger, admission slip, Room Change,
+   Refund — done and verified against the isolated stack. One real bug found and fixed
+   along the way: the ledger's "Total paid" initially read the wallet's *unspent* balance
+   (correctly 0 once a final bill had already consumed it as payment) instead of what was
+   actually paid — fixed by reading the final invoice's own paid/balance once one exists.
 9. **Two bugs above**, whenever convenient — neither blocks this plan.
 10. **Cutover.** Onito data import (keeping its invoice-number format and counters), parity
     checklist against the 35 screens, staff quick guide.
