@@ -41,13 +41,46 @@ function waitedFor(registeredAt: string): string {
   return `${hours} hr ${minutes % 60} min`;
 }
 
+/** Which queue this tablet shows, kept on the tablet itself.
+ *
+ * Two intake tablets run side by side — one for CN Gastrocare, one for Smile
+ * Dental — and each should stay on its own queue through a reload or a
+ * sign-out, not fall back to everyone's. */
+const TABLET_QUEUE_KEY = "intake_tablet_department";
+
+function readTabletQueue(): Department | "all" {
+  try {
+    return (window.localStorage.getItem(TABLET_QUEUE_KEY) as Department | "all" | null) ?? "all";
+  } catch {
+    return "all";
+  }
+}
+
 export function IntakeQueue() {
-  const { departments } = useModules();
+  const { departments, departmentBrands, hospitalName } = useModules();
   const toast = useToast();
 
   const [queue, setQueue] = useState<QueuedPatient[] | null>(null);
   const [completed, setCompleted] = useState<ConsultationListItem[] | null>(null);
-  const [department, setDepartment] = useState<Department | "all">("all");
+  const [department, setDepartmentState] = useState<Department | "all">(
+    () => (typeof window === "undefined" ? "all" : readTabletQueue())
+  );
+  const setDepartment = (value: Department | "all") => {
+    setDepartmentState(value);
+    try {
+      window.localStorage.setItem(TABLET_QUEUE_KEY, value);
+    } catch {
+      // A private window: the choice lasts until the page is closed.
+    }
+  };
+  // A stored department the site no longer runs is dropped, not shown.
+  useEffect(() => {
+    if (department !== "all" && !departments.includes(department)) setDepartmentState("all");
+  }, [department, departments]);
+  const queueLabel = (d: Department) => {
+    const brand = departmentBrands[d];
+    return brand && brand !== hospitalName ? brand : DEPARTMENT_LABEL[d] ?? d;
+  };
   const [confirming, setConfirming] = useState<QueuedPatient | null>(null);
   const [starting, setStarting] = useState(false);
   const [activeSession, setActiveSession] = useState<{
@@ -178,7 +211,7 @@ export function IntakeQueue() {
       <div className="flex flex-wrap items-center gap-2">
         {[
           { value: "all" as const, label: "Everyone" },
-          ...departments.map((d) => ({ value: d, label: DEPARTMENT_LABEL[d] ?? d })),
+          ...departments.map((d) => ({ value: d, label: queueLabel(d) })),
         ].map((option) => (
           <button
             key={option.value}

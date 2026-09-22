@@ -175,6 +175,15 @@ voice intake. What differs:
   reviewed it, exactly as the gastro one is. General antibiotics and pain
   relief are available meanwhile.
 
+### Two intake tablets
+
+The voice intake runs on two tablets at once, one per practice. Sign each in
+with its own nurse login and choose its queue once — **CN Gastrocare** on one,
+**Smile Dental** on the other. The tablet remembers the choice through a
+reload or a sign-out. Two patients can be interviewed at the same time, and
+both doctors' screens can be open at the same time; each doctor sees only
+their own practice's patients.
+
 ## 6. Reports that come back later
 
 Histopathology goes to an outside laboratory and comes back in about a week.
