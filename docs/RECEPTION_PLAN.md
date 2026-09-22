@@ -50,15 +50,27 @@ outside the repo, since they show real patient data).
 
 ## Bugs found while verifying (not Onito parity — separate fixes)
 
-1. **Hydration error on the clinical dashboard** (`/dashboard`): a `<div>` renders inside a
-   `<p>` inside a `<Skeleton>`, invalid HTML nesting that React's dev overlay flags as a
-   hydration mismatch (3 errors shown on load). Worth a quick separate fix.
-2. **Fresh-install migration failure**: migration `0001` builds every current table from the
-   ORM's metadata (`Base.metadata.create_all`), so on a brand-new database migration `0007`
-   onward fails with "relation already exists" — its `create_table` calls collide with tables
-   `0001` already made. Existing deployments are unaffected (they only ever ran `0001` once,
-   long before `0007` existed), but a fresh deployment — like the pilot cutover — hits this
-   immediately. Worked around here with `alembic stamp head`; needs a real fix before cutover.
+1. ~~**Hydration error on the clinical dashboard**~~ **Fixed** (`app/(dashboard)/dashboard/page.tsx`):
+   the `<p>` wrapping `StatCard`'s value/`<Skeleton>` is now a `<div>` — a `<div>` cannot
+   legally nest inside a `<p>`, which is what React's dev overlay was flagging. Verified: no
+   hydration errors in the console on `/dashboard` after the fix.
+2. ~~**Fresh-install migration failure**~~ **Fixed, by scope, not by patching 34 files.**
+   Actually much bigger than first described: it isn't just `0007`'s `create_table` — *any*
+   `add_column`/`create_table`/`create_index`/`create_type` from `0002` onward for something
+   `0001`'s current-day `create_all` already includes collides the same way on a truly empty
+   database, confirmed by actually running `alembic upgrade head` against one (it failed
+   immediately). Guarding every such call across ~30 files was the other option (asked, you
+   picked this one): instead, `0001` stays as it was — it has to build everything in one shot,
+   since some early tables (e.g. `insurance_policies`) carry a foreign key added by a *later*
+   migration pointing at a table created by an even *later* one, and only creating all of it
+   together lets SQLAlchemy's dependency sort get that ordering right. What changed: a fresh
+   install now runs `alembic upgrade 0001_initial` (builds the real, current schema) then
+   `alembic stamp head` (marks `0002`-`0035` applied without replaying their now-redundant
+   DDL) — via `python -m scripts.migrate_fresh_install`, which refuses to run against a
+   database that already has any tables. Documented in `docs/DEPLOYMENT.md` §4 alongside the
+   two other migration paths (adopting a pre-`0001` deployment; day-to-day incremental
+   upgrades) so it's clear which applies when. Verified against a genuinely empty database:
+   ends at revision `0035` with all 67 tables and the latest columns present.
 
 ## Proposed work, in order
 
@@ -121,7 +133,8 @@ outside the repo, since they show real patient data).
    along the way: the ledger's "Total paid" initially read the wallet's *unspent* balance
    (correctly 0 once a final bill had already consumed it as payment) instead of what was
    actually paid — fixed by reading the final invoice's own paid/balance once one exists.
-9. **Two bugs above**, whenever convenient — neither blocks this plan.
+9. ~~**Two bugs above**~~ **Done** — see "Bugs found while verifying" for what each fix
+   actually was.
 10. **Cutover.** Onito data import (keeping its invoice-number format and counters), parity
     checklist against the 35 screens, staff quick guide.
 

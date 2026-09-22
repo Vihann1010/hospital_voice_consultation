@@ -51,9 +51,9 @@ function StatCard({
             </div>
             <ArrowRight className="h-4 w-4 text-ink-faint opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
           </div>
-          <p className="tabular mt-4 font-display text-3xl font-semibold leading-none text-pine">
+          <div className="tabular mt-4 font-display text-3xl font-semibold leading-none text-pine">
             {value === undefined ? <Skeleton className="h-8 w-12" /> : value}
-          </p>
+          </div>
           <p className="mt-1.5 text-sm text-ink-muted">{label}</p>
         </Card>
       </Link>

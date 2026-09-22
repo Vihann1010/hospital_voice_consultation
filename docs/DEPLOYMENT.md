@@ -96,18 +96,53 @@ sudo crontab -e
 Migrations run first — the API deliberately refuses to boot against an
 unmigrated database rather than silently creating tables.
 
+**Which of these three applies to you:**
+
+**A brand-new deployment, on a database that has never held any of this
+platform's tables** (this is the pilot cutover's case). `0001_initial`
+already builds today's *entire* schema in one step — migrations `0002`
+onward exist only to carry an *already-running* deployment forward
+incrementally, and replaying that history on an empty database makes some of
+them try to create a table `0001` just built, which fails with "relation
+already exists". Run `0001` for real, then mark the rest as already applied
+rather than re-running their DDL:
+
 ```bash
 docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml run --rm migrate
+docker compose -f docker-compose.prod.yml run --rm backend python -m scripts.migrate_fresh_install
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Upgrading an existing deployment** that was created by the old `create_all`
-path — adopt the baseline instead of re-creating tables:
+`scripts/migrate_fresh_install` does exactly the two `alembic` commands below
+and nothing else — it refuses to run if the database already has any tables
+in it, so it cannot be pointed at the wrong deployment by mistake. Run it
+by hand instead if you'd rather see each step:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade 0001_initial
+docker compose -f docker-compose.prod.yml run --rm backend alembic stamp head
+```
+
+**Upgrading an existing deployment that pre-dates `0001`** — one that was
+built by the old, unversioned `create_all` path before this migration
+history existed. Same idea: the tables are already there, so adopt the
+baseline instead of re-creating them, then apply everything after it for
+real (`0002` onward are always safe on a deployment that has been running
+and being migrated incrementally, which is the case they're written for):
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm backend alembic stamp 0001_initial
 docker compose -f docker-compose.prod.yml run --rm migrate    # applies 0002 onward
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**A deployment already at some migration, picking up new ones** — the normal
+case day to day. `alembic upgrade head` is exactly right here:
+
+```bash
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml run --rm migrate
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Verify:
