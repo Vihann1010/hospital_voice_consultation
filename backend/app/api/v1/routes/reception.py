@@ -20,6 +20,8 @@ from app.billing.receipt_pdf import render_receipt_pdf
 from app.core.audit import client_ip, record as audit_record
 from app.core.permissions import Permission
 from app.core.config import settings
+from app.practices import by_prefix
+from app.practices import for_department as practice_for_department
 from app.models.emr import CashSession, Invoice, Payment, Visit, WalletEntry
 from app.models.enums import (
     AuditAction,
@@ -106,7 +108,10 @@ async def register_patient(
 ) -> PatientCardOut:
     """Register a new patient and issue their permanent UHID."""
     try:
-        patient = await service.register_patient(**payload.model_dump())
+        fields = payload.model_dump(exclude={"practice"})
+        patient = await service.register_patient(
+            **fields, practice=by_prefix(payload.practice) if payload.practice else None
+        )
         await service.session.commit()
     except ReceptionError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
@@ -133,7 +138,10 @@ async def register_and_bill(
             if patient is None:
                 raise ReceptionError("Patient not found.")
         elif payload.new_patient is not None:
-            patient = await service.register_patient(**payload.new_patient.model_dump())
+            patient = await service.register_patient(
+                **payload.new_patient.model_dump(exclude={"practice"}),
+                practice=practice_for_department(payload.department),
+            )
         else:
             raise ReceptionError(
                 "Provide an existing patient, or the details to register a new one."

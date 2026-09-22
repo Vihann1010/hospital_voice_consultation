@@ -64,8 +64,14 @@ class PrescriptionService:
 
     async def _next_number(self, department: Department) -> str:
         """SH-ORT-2026-000123 — readable, sortable, unique per year."""
+        from app.practices import for_department, is_default
+
         year = datetime.now(timezone.utc).year
-        prefix = f"{settings.PRESCRIPTION_NUMBER_PREFIX}-{DEPARTMENT_CODES[department]}-{year}-"
+        practice = for_department(department)
+        # The default practice keeps the series it always had; another
+        # practice's prescriptions carry its own letters.
+        head = settings.PRESCRIPTION_NUMBER_PREFIX if is_default(practice) else practice.prefix
+        prefix = f"{head}-{DEPARTMENT_CODES[department]}-{year}-"
         result = await self.session.execute(
             select(func.count())
             .select_from(Prescription)

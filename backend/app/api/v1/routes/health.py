@@ -22,6 +22,7 @@ from app.ai.session.manager import session_manager
 from app.api.deps import DbSession, require_permission
 from app.core.permissions import Permission
 from app.core.cache import get_cache
+from app.practices import all_practices
 from app.core.config import settings
 from app.core.metrics import metrics
 from app.investigations.extraction import extraction_capabilities
@@ -152,6 +153,12 @@ async def client_config() -> Dict[str, Any]:
         # The practice each department works under, for the screens that
         # show one department at a time (the kiosk's cards, a visit header).
         "department_brands": {d.value: settings.brand_for(d) for d in settings.enabled_departments},
+        # Separate businesses under one roof, each with its own patients.
+        "practices": [
+            {"prefix": p.prefix, "name": p.name,
+             "departments": [d.value for d in p.departments if d in settings.enabled_departments]}
+            for p in all_practices()
+        ],
         "modules": sorted(m.value for m in settings.enabled_modules),
         # Departments whose drafted prescribing content is still withheld. A
         # doctor searching a near-empty formulary deserves to be told why

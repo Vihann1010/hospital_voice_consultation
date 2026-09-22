@@ -138,12 +138,17 @@ class ConsultationService:
         )
 
     async def start(self, payload: ConsultationStartRequest) -> ConsultationStartResponse:
+        from app.practices import default_practice, for_department
+
+        practice = for_department(payload.department)
         patient = await self.patients.find_returning_patient(
-            payload.patient.phone_number, payload.patient.name
+            payload.patient.phone_number, payload.patient.name,
+            practice=practice.prefix, default_practice=default_practice().prefix,
         )
         if patient is None:
             patient = await self.patients.add(
                 Patient(
+                    practice=practice.prefix,
                     name=payload.patient.name.strip(),
                     age=payload.patient.age,
                     gender=payload.patient.gender,

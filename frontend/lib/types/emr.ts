@@ -24,6 +24,8 @@ export type ServiceCategory =
 export interface PatientCard {
   id: string;
   uhid?: string | null;
+  /** The practice the patient is registered with (its three letters). */
+  practice?: string | null;
   name: string;
   age: number;
   gender: Gender;

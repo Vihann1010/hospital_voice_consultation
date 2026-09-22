@@ -231,6 +231,11 @@ class Settings(BaseSettings):
     # named here uses HOSPITAL_NAME. The _SPOKEN form is how the Hindi voice
     # should say each one.
     DEPARTMENT_BRANDS: str = ""
+    # Separate businesses under one roof: PREFIX=Name:departments pairs, e.g.
+    # "CNG=CN Gastrocare:gastroenterology;SMD=Smile Dental:dentistry". Each
+    # practice has its own patients, UHIDs, bill and receipt numbers. Empty
+    # means one practice (DOCUMENT_PREFIX, HOSPITAL_NAME). See app/practices.py.
+    PRACTICES: str = ""
     DEPARTMENT_BRANDS_SPOKEN: str = ""
     # The platform's own mark, shown beside the site's on the sign-in screen
     # and in the console. "medicos" for a site running MedicOS under its own
@@ -343,6 +348,9 @@ class Settings(BaseSettings):
 
     def brand_for(self, department: Optional[Department]) -> str:
         """The name on this department's paperwork, or the site's own."""
+        if department is not None and self.PRACTICES.strip():
+            from app.practices import for_department
+            return for_department(department).name
         if department is not None:
             name = self._brand_map(self.DEPARTMENT_BRANDS).get(department)
             if name:
@@ -365,6 +373,16 @@ class Settings(BaseSettings):
         return (self.GREETING_TEXT or "").replace(
             "{hospital}", self.spoken_brand_for(department)
         ).strip()
+
+    @field_validator("PRACTICES")
+    @classmethod
+    def _practices_are_coherent(cls, v: str) -> str:
+        from app.practices import PracticeConfigError, parse
+        try:
+            parse(v)
+        except PracticeConfigError as exc:
+            raise ValueError(f"PRACTICES: {exc}") from None
+        return v
 
     @field_validator("DEPARTMENT_BRANDS", "DEPARTMENT_BRANDS_SPOKEN")
     @classmethod

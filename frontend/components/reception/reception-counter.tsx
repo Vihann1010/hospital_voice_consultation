@@ -82,7 +82,7 @@ const lineDiscount = (line: BillLine) =>
   Math.min(rupeesToPaise(line.discountRupees || "0"), lineGross(line));
 
 export function ReceptionCounter() {
-  const { departments, defaultDepartment } = useModules();
+  const { departments, defaultDepartment, practices, practiceFor } = useModules();
   const toast = useToast();
   const { user } = useAuth();
   // Returning a balance is money leaving the hospital, so the button only
@@ -215,7 +215,17 @@ export function ReceptionCounter() {
     [lines]
   );
 
+  // Separate businesses: a patient registered with one practice cannot be
+  // billed by the other. Somebody seen by both is registered with both.
+  const practice = practiceFor(department);
+  const practiceName = (prefix?: string | null) =>
+    practices.find((item) => item.prefix === (prefix ?? practices[0]?.prefix))?.name ?? null;
+  const wrongPractice =
+    selected !== null && practices.length > 1 && practice !== null &&
+    (selected.practice ?? practices[0]?.prefix) !== practice.prefix;
+
   const canSubmit =
+    !wrongPractice &&
     lines.length > 0 &&
     totalPaise >= 0 &&
     grossPaise > 0 &&
@@ -317,6 +327,8 @@ export function ReceptionCounter() {
     setError(null);
     try {
       const patient = await staffApi.registerPatient({
+        // With the practice of the department chosen: its own series.
+        ...(practice ? { practice: practice.prefix } : {}),
         name: name.trim(),
         age: Number(age),
         gender,
@@ -566,6 +578,7 @@ export function ReceptionCounter() {
                   <p className="text-xs text-ink-muted">
                     {selected.uhid} · {selected.age} yrs · {selected.gender} ·{" "}
                     {selected.phone_number}
+                    {practices.length > 1 && ` · ${practiceName(selected.practice)}`}
                   </p>
                 </div>
                 <button
@@ -576,6 +589,29 @@ export function ReceptionCounter() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
+              {wrongPractice && practice && (
+                <div className="rounded-lg border border-marigold/40 bg-marigold/10 px-4 py-3 text-sm text-marigold-deep">
+                  <p>
+                    {selected.name} is a {practiceName(selected.practice)} patient. {practice.name} keeps
+                    its own patients and bills, so register them with {practice.name} first.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => {
+                      setName(selected.name);
+                      setPhone(selected.phone_number);
+                      setAge(String(selected.age));
+                      setGender(selected.gender);
+                      setSelected(null);
+                      setRegistering(true);
+                    }}
+                  >
+                    Register with {practice.name}
+                  </Button>
+                </div>
+              )}
               {/* Shown the moment a patient is chosen. Taking cash from
                   somebody who already has credit on account is the
                   expensive mistake here, and it is only avoidable if the
@@ -671,6 +707,7 @@ export function ReceptionCounter() {
                                 <p className="text-sm font-medium text-ink">{patient.name}</p>
                                 <p className="text-xs text-ink-faint">
                                   {patient.uhid} · {patient.age} yrs · {patient.phone_number}
+                                  {practices.length > 1 && ` · ${practiceName(patient.practice)}`}
                                 </p>
                               </button>
                             </li>

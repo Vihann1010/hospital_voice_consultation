@@ -16,6 +16,10 @@ class Patient(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # from the previous system can be imported before numbers are assigned;
     # everything created here always has one.
     uhid: Mapped[Optional[str]] = mapped_column(String(16), unique=True, index=True)
+    # The practice this patient is registered with (its three letters). A
+    # person seen by two practices under one roof is two patients, one in each.
+    # Empty on a record from before practices existed: the site's default.
+    practice: Mapped[Optional[str]] = mapped_column(String(3), index=True)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     age: Mapped[int] = mapped_column(Integer, nullable=False)

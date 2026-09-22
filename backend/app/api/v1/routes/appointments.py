@@ -30,6 +30,7 @@ from app.schemas.appointment_schemas import (
 from app.schemas.emr_schemas import VisitOut
 from app.services.appointment_service import AppointmentError, AppointmentService
 from app.services.reception_service import ReceptionError, ReceptionService
+from app.practices import for_department as practice_for_department
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -236,7 +237,8 @@ async def check_in(
                 patient_id = linked.id
             elif payload.new_patient is not None:
                 created = await reception.register_patient(
-                    **payload.new_patient.model_dump()
+                    **payload.new_patient.model_dump(exclude={"practice"}),
+                    practice=practice_for_department(appointment.department),
                 )
                 patient_id = created.id
             else:

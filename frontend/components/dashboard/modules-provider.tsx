@@ -152,6 +152,12 @@ const DEPARTMENT_WORDS: Partial<Record<Department, Partial<TheatreWords>>> = {
   },
 };
 
+export interface Practice {
+  prefix: string;
+  name: string;
+  departments: string[];
+}
+
 interface ModuleState {
   /** Null until the first answer arrives — not "none". */
   enabled: ModuleName[] | null;
@@ -181,6 +187,11 @@ interface ModuleState {
   /** The practice each department works under ("dentistry" → "Smile
    *  Dental"), where it is not the site's own name. */
   departmentBrands: Readonly<Record<string, string>>;
+  /** Separate businesses under one roof, each with its own patients. One
+   *  entry at a site that has not split itself into practices. */
+  practices: readonly Practice[];
+  /** The practice a department belongs to; the first when none claims it. */
+  practiceFor: (department: Department) => Practice | null;
   /** The platform this site runs, shown beside its own identity: "medicos",
    *  or null for a site that shows only its own. */
   platform: "medicos" | null;
@@ -198,6 +209,8 @@ const ModuleContext = createContext<ModuleState>({
   logo: null,
   hospitalCity: null,
   departmentBrands: {},
+  practices: [],
+  practiceFor: () => null,
   platform: null,
 });
 
@@ -240,6 +253,7 @@ function readCache(): {
   hospital_city?: string;
   platform_brand?: string;
   department_brands?: Record<string, string>;
+  practices?: Practice[];
 } | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -273,6 +287,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   const [departmentBrands, setDepartmentBrands] = useState<Record<string, string>>(
     cached?.department_brands ?? {}
   );
+  const [practices, setPractices] = useState<readonly Practice[]>(cached?.practices ?? []);
   const [platform, setPlatform] = useState<"medicos" | null>(
     cached?.platform_brand === "medicos" ? "medicos" : null
   );
@@ -300,6 +315,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         setLogo(data.hospital_logo === "none" ? "none" : "bundled");
         setHospitalCity(data.hospital_city ?? null);
         setDepartmentBrands(data.department_brands ?? {});
+        setPractices(Array.isArray(data.practices) ? data.practices : []);
         setPlatform(data.platform_brand === "medicos" ? "medicos" : null);
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
@@ -333,6 +349,9 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         logo,
         hospitalCity,
         departmentBrands,
+        practices,
+        practiceFor: (department) =>
+          practices.find((item) => item.departments.includes(department)) ?? practices[0] ?? null,
         platform,
       }}
     >

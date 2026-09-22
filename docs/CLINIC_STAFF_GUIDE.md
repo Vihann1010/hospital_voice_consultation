@@ -148,6 +148,12 @@ The assistant's job on this system is the checklist and the times.
 The dental practice shares the front desk, the patient records and the
 voice intake. What differs:
 
+- **Smile Dental and CN Gastrocare are separate businesses.** Each has its own
+  patients: a Smile Dental ID starts `SMD`, a CN Gastrocare one `CNG`, and so
+  do their bills. Someone who sees both doctors is registered twice, once
+  with each. If you pick a CN Gastrocare patient for a dental visit, the
+  counter says so and offers **Register with Smile Dental**, which copies
+  their details into a new registration.
 - **At the counter,** choose *Dentistry* as the department. The bill and the
   receipt then say Smile Dental; a gastro visit's say CN Gastrocare.
 - **Booking a dental procedure,** choose the patient's visit from today's

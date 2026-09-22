@@ -13,13 +13,28 @@ from app.repositories.base import BaseRepository
 class PatientRepository(BaseRepository[Patient]):
     model = Patient
 
-    async def find_returning_patient(self, phone_number: str, name: str) -> Optional[Patient]:
-        """Match an existing record so repeat visits don't duplicate patients."""
+    async def find_returning_patient(
+        self, phone_number: str, name: str, *, practice: Optional[str] = None,
+        default_practice: Optional[str] = None,
+    ) -> Optional[Patient]:
+        """Match an existing record so repeat visits don't duplicate patients.
+
+        Within one practice only: a dental walk-in with the same phone as a
+        gastro patient is a new Smile Dental patient, not the gastro record.
+        A record with no practice is the site default's.
+        """
+        statement = select(Patient).where(
+            Patient.phone_number == phone_number, Patient.name.ilike(name)
+        )
+        if practice is not None:
+            if practice == default_practice:
+                statement = statement.where(
+                    (Patient.practice == practice) | (Patient.practice.is_(None))
+                )
+            else:
+                statement = statement.where(Patient.practice == practice)
         result = await self.session.execute(
-            select(Patient)
-            .where(Patient.phone_number == phone_number, Patient.name.ilike(name))
-            .order_by(Patient.created_at.desc())
-            .limit(1)
+            statement.order_by(Patient.created_at.desc()).limit(1)
         )
         return result.scalar_one_or_none()
 

@@ -227,8 +227,23 @@ DEPARTMENT_BRANDS_SPOKEN=gastroenterology=सी एन गैस्ट्रो
 A bill, receipt or prescription then carries the practice of its visit's
 department; the voice greets a patient in the name of the practice they came
 to; the kiosk shows each practice on its card. A bill with no visit behind it
-is the site's. Both practices share one UHID series and one invoice series —
-if they are separate businesses for tax, they need separate deployments.
+is the site's.
+
+**Separate businesses.** Two practices that must not share patients or
+numbers are declared as practices:
+
+```ini
+PRACTICES=CNG=CN Gastrocare:gastroenterology;SMD=Smile Dental:dentistry
+```
+
+Each practice then registers its own patients (UHIDs `CNG26…`, `SMD26…`),
+numbers its own bills (`CNG/26-27/…`, `SMD/26-27/…`), receipts (`RCP/…` and
+`SMD-RCP/…`) and prescriptions (`SMD-DEN-2026-…`), and a visit can only be
+opened in the practice the patient is registered with — a person seen by
+both is registered with both. The first practice listed continues the
+counters the site had before, so turning this on restarts nobody's series.
+The three letters are permanent once a patient is registered. The books
+(Accounts), the cash counter and the reports are still one set for the site.
 
 Before the first patient, a new site also sets its identity in `.env`:
 `HOSPITAL_NAME` and `HOSPITAL_CITY` (printed on every prescription and bill,

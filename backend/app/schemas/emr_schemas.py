@@ -45,6 +45,9 @@ class PatientRegisterRequest(BaseModel):
     age: int = Field(ge=0, le=120)
     gender: Gender
     phone_number: str = Field(min_length=6, max_length=20)
+    #: Which practice registers them (its three letters). Set by the server
+    #: from the visit's department where there is one.
+    practice: Optional[str] = Field(default=None, min_length=3, max_length=3)
 
     date_of_birth: Optional[date] = None
     address: Optional[str] = Field(default=None, max_length=512)
@@ -76,6 +79,7 @@ class PatientCardOut(BaseModel):
 
     id: uuid.UUID
     uhid: Optional[str] = None
+    practice: Optional[str] = None
     name: str
     age: int
     gender: Gender

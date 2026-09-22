@@ -40,6 +40,8 @@ from app.billing.payment_modes import (
     summarise as summarise_mode,
     validate_mode_details,
 )
+from app.practices import Practice, by_prefix, counter_scope, default_practice
+from app.practices import for_department as practice_for_department
 from app.billing.identifiers import (
     build_invoice_number,
     build_receipt_number,
@@ -104,6 +106,34 @@ class ReceptionService:
         self.session = session
 
     # ---------------------------------------------------------- numbering
+    async def _practice_for(
+        self, *, visit_id: Optional[uuid.UUID] = None, patient_id: Optional[uuid.UUID] = None,
+        invoice: Optional[Invoice] = None,
+    ):
+        """The practice a bill or receipt belongs to.
+
+        Its visit's department's, else its patient's. Decides whose series the
+        number comes from, so it must be the same answer every time.
+        """
+        if invoice is not None:
+            visit_id, patient_id = invoice.visit_id, invoice.patient_id
+        if visit_id is not None:
+            visit = await self.session.get(Visit, visit_id)
+            if visit is not None and visit.department is not None:
+                return practice_for_department(visit.department)
+        if patient_id is not None:
+            patient = await self.session.get(Patient, patient_id)
+            if patient is not None:
+                return by_prefix(patient.practice)
+        return default_practice()
+
+    async def _receipt_number(self, today: date, **owner: Any) -> str:
+        practice = await self._practice_for(**owner)
+        sequence = await self._next_sequence(
+            counter_scope("receipt", practice), financial_year(today)
+        )
+        return build_receipt_number(sequence, today, prefix=practice.prefix)
+
     async def _next_sequence(self, scope: str, period: str) -> int:
         """Allocate the next number in a sequence, safely under concurrency.
 
@@ -192,9 +222,13 @@ class ReceptionService:
         age: int,
         gender: Gender,
         phone_number: str,
+        practice: Optional[Practice] = None,
         **demographics: Any,
     ) -> Patient:
         """Create a patient and issue their permanent UHID.
+
+        In the practice given, from its own series; the site's default when
+        none is. A practice's patients are its own.
 
         Everything beyond name, age, sex and mobile is optional here. Which of
         those the counter must actually fill in is configured per hospital and
@@ -214,9 +248,11 @@ class ReceptionService:
                 "Unknown patient fields: " + ", ".join(sorted(unknown))
             )
 
-        sequence = await self._next_sequence("uhid", "all")
+        practice = practice or default_practice()
+        sequence = await self._next_sequence(counter_scope("uhid", practice), "all")
         patient = Patient(
-            uhid=build_uhid(sequence),
+            uhid=build_uhid(sequence, prefix=practice.prefix),
+            practice=practice.prefix,
             name=name.strip(),
             age=age,
             gender=gender,
@@ -254,6 +290,16 @@ class ReceptionService:
         patient = await self.session.get(Patient, patient_id)
         if patient is None:
             raise ReceptionError("Patient not found.")
+        # Separate businesses: a visit belongs to the practice the patient is
+        # registered with. Somebody seen by both is registered with both.
+        owner = by_prefix(patient.practice)
+        wanted = practice_for_department(department)
+        if owner.prefix != wanted.prefix:
+            raise ReceptionError(
+                f"{patient.name} is registered with {owner.name} ({patient.uhid}). "
+                f"{wanted.name} keeps its own patients: register them with "
+                f"{wanted.name} to open a {department.value} visit."
+            )
 
         today = local_today()
         sequence = await self._next_sequence("visit", today.isoformat())
@@ -431,9 +477,12 @@ class ReceptionService:
             raise ReceptionError(str(exc)) from exc
 
         today = local_today()
-        sequence = await self._next_sequence("invoice", financial_year(today))
+        practice = await self._practice_for(visit_id=visit_id, patient_id=patient_id)
+        sequence = await self._next_sequence(
+            counter_scope("invoice", practice), financial_year(today)
+        )
         invoice = Invoice(
-            invoice_number=build_invoice_number(sequence, today),
+            invoice_number=build_invoice_number(sequence, today, prefix=practice.prefix),
             visit_id=visit_id,
             patient_id=patient_id,
             status=InvoiceStatus.ISSUED if issue else InvoiceStatus.DRAFT,
@@ -509,9 +558,9 @@ class ReceptionService:
             raise ReceptionError(str(exc)) from exc
 
         today = local_today()
-        sequence = await self._next_sequence("receipt", financial_year(today))
+        receipt_number = await self._receipt_number(today, invoice=invoice)
         payment = Payment(
-            receipt_number=build_receipt_number(sequence, today),
+            receipt_number=receipt_number,
             invoice_id=invoice_id,
             cash_session_id=cash_session_id,
             amount_paise=amount_paise,
@@ -656,8 +705,7 @@ class ReceptionService:
 
         wallet = await self._wallet(patient_id)
         today = local_today()
-        sequence = await self._next_sequence("receipt", financial_year(today))
-        receipt_number = build_receipt_number(sequence, today)
+        receipt_number = await self._receipt_number(today, patient_id=patient_id)
 
         entry = await self._wallet_move(
             wallet=wallet,
@@ -692,8 +740,7 @@ class ReceptionService:
 
         wallet = await self._wallet(patient_id)
         today = local_today()
-        sequence = await self._next_sequence("receipt", financial_year(today))
-        receipt_number = build_receipt_number(sequence, today)
+        receipt_number = await self._receipt_number(today, patient_id=patient_id)
 
         entry = await self._wallet_move(
             wallet=wallet,
@@ -744,9 +791,9 @@ class ReceptionService:
         wallet = await self._wallet(invoice.patient_id)
 
         today = local_today()
-        sequence = await self._next_sequence("receipt", financial_year(today))
+        receipt_number = await self._receipt_number(today, invoice=invoice)
         payment = Payment(
-            receipt_number=build_receipt_number(sequence, today),
+            receipt_number=receipt_number,
             invoice_id=invoice_id,
             amount_paise=amount_paise,
             mode=PaymentMode.WALLET,
@@ -814,9 +861,9 @@ class ReceptionService:
             mode = PaymentMode.WALLET
 
         today = local_today()
-        sequence = await self._next_sequence("receipt", financial_year(today))
+        receipt_number = await self._receipt_number(today, invoice=invoice)
         refund = Payment(
-            receipt_number=build_receipt_number(sequence, today),
+            receipt_number=receipt_number,
             invoice_id=invoice_id,
             amount_paise=-amount_paise,
             mode=mode,
@@ -960,6 +1007,7 @@ class ReceptionService:
                 "patient_id": patient.id,
                 "patient_name": patient.name,
                 "uhid": patient.uhid,
+                "practice": patient.practice or default_practice().prefix,
                 "visit_number": visit.visit_number if visit else None,
                 "visit_id": invoice.visit_id,
                 "total_paise": invoice.total_paise,
@@ -1048,6 +1096,7 @@ class ReceptionService:
                 "patient": {
                     "id": str(patient.id),
                     "uhid": patient.uhid,
+                    "practice": patient.practice or default_practice().prefix,
                     "name": patient.name,
                     "age": patient.age,
                     "gender": patient.gender.value,
