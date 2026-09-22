@@ -167,6 +167,9 @@ class Admission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     attendant_name: Mapped[Optional[str]] = mapped_column(String(255))
     attendant_phone: Mapped[Optional[str]] = mapped_column(String(20))
     attendant_relation: Mapped[Optional[str]] = mapped_column(String(64))
+    organisation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="SET NULL")
+    )
 
     discharge_type: Mapped[Optional[DischargeType]] = mapped_column(
         SAEnum(DischargeType, name="discharge_type", values_callable=_VALUES)

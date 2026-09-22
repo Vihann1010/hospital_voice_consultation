@@ -25,7 +25,7 @@ import { staffApi } from "@/lib/staffApi";
 import type { BedCell, Census, DeterioratingPatient, WardBoard } from "@/lib/types/ipd";
 import { BED_STATUS_STYLE, NEWS_BANDS, WARD_TYPE_LABEL, dayOfStay } from "@/lib/types/ipd";
 import { formatINR, rupeesToPaise } from "@/lib/types/emr";
-import type { PaymentMode } from "@/lib/types/emr";
+import type { Organisation, PaymentMode } from "@/lib/types/emr";
 import { PaymentModeFields } from "@/components/finance/payment-mode-fields";
 import { ADVANCE_MODES, TakeAdvance, openWalletReceipt } from "@/components/ipd/take-advance";
 import type { Department, Gender } from "@/lib/types/core";
@@ -84,6 +84,8 @@ function AdmitSheet({
   const [attendantName, setAttendantName] = useState("");
   const [attendantPhone, setAttendantPhone] = useState("");
   const [allergies, setAllergies] = useState("");
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
+  const [organisationId, setOrganisationId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,6 +102,10 @@ function AdmitSheet({
     }, 250);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    staffApi.organisations(true).then(setOrganisations).catch(() => setOrganisations([]));
+  }, []);
 
   const [advanceMode, setAdvanceMode] = useState<PaymentMode>("cash");
   const [advanceDetails, setAdvanceDetails] = useState<Record<string, string>>({});
@@ -137,6 +143,7 @@ function AdmitSheet({
         advance_mode_details: Object.keys(advanceDetails).length ? advanceDetails : null,
         attendant_name: attendantName.trim() || null,
         attendant_phone: attendantPhone.trim() || null,
+        organisation_id: organisationId || null,
         allergies: allergies
           .split(",")
           .map((a) => a.trim())
@@ -273,6 +280,18 @@ function AdmitSheet({
           <Input id="ad-doc" value={doctor} placeholder="Dr A K Agarwal"
                  onChange={(e) => setDoctor(e.target.value)} />
         </div>
+        {organisations.length > 0 && (
+          <div>
+            <label className="field-label" htmlFor="ad-org">Paid by</label>
+            <select id="ad-org" value={organisationId} className="field-input"
+                    onChange={(e) => setOrganisationId(e.target.value)}>
+              <option value="">Patient (self-pay)</option>
+              {organisations.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div>
         <label className="field-label" htmlFor="ad-diag">Provisional diagnosis</label>

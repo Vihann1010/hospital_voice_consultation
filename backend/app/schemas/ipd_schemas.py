@@ -48,6 +48,7 @@ class AdmitRequest(BaseModel):
     attendant_name: Optional[str] = Field(default=None, max_length=255)
     attendant_phone: Optional[str] = Field(default=None, max_length=20)
     attendant_relation: Optional[str] = Field(default=None, max_length=64)
+    organisation_id: Optional[uuid.UUID] = None
     # Taken as a receipted deposit into the patient's wallet, tagged to the stay.
     advance_paid_paise: int = Field(default=0, ge=0)
     advance_mode: str = "cash"
@@ -79,6 +80,7 @@ class AdmissionOut(BaseModel):
     allergies: Optional[List[str]] = []
     attendant_name: Optional[str] = None
     attendant_phone: Optional[str] = None
+    organisation_id: Optional[uuid.UUID] = None
     # Only advances recorded before receipts existed; see advance_position.
     advance_paid_paise: int = 0
     advance_receipt_number: Optional[str] = None

@@ -40,7 +40,7 @@ outside the repo, since they show real patient data).
 | Consultant master | **Partial, confirmed** | Add-consultant form: Name, Department, Phone, Qualification (printed under signature), Registration number, Consultation fee, OPD days, OPD from/until, Minutes per appointment, Free follow-up days, Login, Notes, First-consultation-free, In-use. **Missing: sex, display-in-OPD/IPD/Diagnostics flags, sort order, "is primary".** |
 | Payer / organisation master | **Partial, confirmed — real gap** | Add-payer form: Short code, Name, Kind (TPA etc.), Contact, Phone, Email, Address, **one flat Standard discount %**, Credit days, In-use. **No per-service rate table, no service codes per payer** — this is the opposite of v2's "Have, verify" and needs your answer to question 3 |
 | IPD admitted list, ward board | **Have, confirmed** | Two views: a read-only Ward board on the clinical dashboard, and a working **Ward terminal** (`/ward`) with its own Admit action per bed |
-| IPD admission | **Partial, confirmed** | Admit form: patient search/register, Department, Under doctor, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Missing: "other consultant", payer/policy number, attendant address.** |
+| IPD admission | **Partial, updated** | Admit form: patient search/register, Department, Under doctor, **Paid by (payer, added item 2)**, Provisional diagnosis, Reason for admission, Allergies, Advance (₹) with receipt mode, Attendant name, Attendant mobile. **Still missing: "other consultant", policy number, attendant address.** |
 | IPD billing tabs (Summary, Add Services, Receipt, Discharge, Refund, Room Change) | **Partial, confirmed** | A quick popover per bed (Charges tab: advance + add-a-charge; Discharge tab: 3-step wizard) plus a full case sheet (Overview, Doctor's notes, Nursing, Vitals, Medicines, Theatre, Consents, Lab, Files, Records file, Discharge). No standalone Receipt, Refund or Room Change tab was found in either — worth a closer look if the hospital uses those often |
 | Customised bill, summary ledger, detailed ledger, admission slip | **Missing, confirmed** | Not found anywhere in the popover or case sheet |
 | Discharge modes | **Missing, confirmed** | The discharge wizard (Raise final bill → Draft summary → Final diagnosis + Complete discharge) has **no mode selector at all** — not a mapping problem, the field doesn't exist. Onito's six modes (Discharged, Expired, LAMA, DAMA, DOPR, Referred) all need adding |
@@ -62,13 +62,22 @@ outside the repo, since they show real patient data).
 
 ## Proposed work, in order
 
-1. **Guardian and referred-by** on OPD registration. Smallest confirmed gap — starting here.
-2. **Payer on the bill.** OPD already has it (needs orgs seeded to show). Add the same
-   payer dropdown to the IPD admission form.
+1. ~~**Guardian and referred-by** on OPD registration.~~ **Done** (`664ca11`). Verified
+   end-to-end: `guardian_relation`/`guardian_name` on Patient, `referred_by` on Visit.
+2. ~~**Payer on the bill.**~~ **Done.** Migration `0031_admission_organisation` adds
+   `organisation_id` to `admissions`; same "Paid by" dropdown pattern as OPD added to the
+   IPD admission form (`ward-panel.tsx`). Verified end-to-end (admission `IP26-00002`,
+   payer CGHS). Note: this only *captures* the payer on the admission — applying its rate
+   to IPD charges is item 4's job (the per-service rate table), not wired yet.
 3. **Discharge modes.** Add a mode selector (all six Onito modes) to the discharge wizard.
 4. **Service master parity.** IPD rate, unit, flags, per-consultant and per-organisation rate
    rows (needs a migration and to feed the existing pricing engine) — this is also #2's
-   per-service payer rate table.
+   per-service payer rate table. **Scope note (found while building item 2):** a
+   per-organisation rate table (`negotiated_rates`: organisation_id, service_item_id,
+   rate_paise) already exists from migration `0014` — check whether the pricing engine
+   (`app/billing/pricing.py`) already reads it before assuming this needs building from
+   scratch. Per-consultant rates and the service-master admin UI to edit either table still
+   need checking/building regardless.
 5. **Consultant master parity.** Missing display flags, sort order, sex.
 6. ~~Diagnostics dept on the counter~~ — dropped, keeping the separate Lab module (question 7).
 7. **Reports parity.** Payer/empanelment column on Invoice List, cancelled-amount column.

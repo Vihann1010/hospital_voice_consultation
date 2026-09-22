@@ -253,6 +253,7 @@ class IPDService:
         attendant_name: Optional[str] = None,
         attendant_phone: Optional[str] = None,
         attendant_relation: Optional[str] = None,
+        organisation_id: Optional[uuid.UUID] = None,
         advance_paid_paise: int = 0,
         advance_mode: str = "cash",
         advance_mode_details: Optional[Dict[str, Any]] = None,
@@ -323,6 +324,7 @@ class IPDService:
             attendant_name=attendant_name,
             attendant_phone=attendant_phone,
             attendant_relation=attendant_relation,
+            organisation_id=organisation_id,
             # Holds only advances recorded before they were receipted. A new
             # advance is taken below as a deposit with a receipt.
             advance_paid_paise=0,
