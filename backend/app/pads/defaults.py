@@ -841,8 +841,121 @@ _OPD_VISIT_GASTRO: List[Dict[str, Any]] = [
 ]
 
 #: (document type, department) -> the sections that department starts from.
+_OPD_VISIT_DENTAL: List[Dict[str, Any]] = [
+    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+     "ai_source": "intake_summary", "visible_in_print": True},
+    {"key": "complaints", "title": "Chief complaints", "kind": "list",
+     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
+    {"key": "history", "title": "History", "kind": "text",
+     "placeholder": "Which tooth, what brings the pain on, how long, swelling"},
+    {
+        "key": "medical",
+        "title": "Medical alerts",
+        "kind": "fields",
+        "carry_forward": True,
+        "fields": [
+            {"key": "anticoagulant", "label": "Blood thinner", "type": "text",
+             "placeholder": "Name, or None"},
+            {"key": "diabetes", "label": "Diabetes", "type": "select",
+             "options": ["No", "Yes — controlled", "Yes — poorly controlled"]},
+            {"key": "heart", "label": "Heart condition, valve or pacemaker", "type": "checkbox"},
+            {"key": "pregnant", "label": "Pregnant", "type": "checkbox"},
+        ],
+    },
+    {
+        "key": "vitals",
+        "title": "Vitals",
+        "kind": "fields",
+        "fields": [
+            {"key": "bp", "label": "BP", "type": "text", "unit": "mmHg"},
+            {"key": "pulse", "label": "Pulse", "type": "number", "unit": "/min"},
+            {"key": "temperature", "label": "Temp", "type": "number", "unit": "°F"},
+        ],
+    },
+    {"key": "extraoral", "title": "Extraoral examination", "kind": "text",
+     "placeholder": "Facial swelling, lymph nodes, TMJ, mouth opening"},
+    # The tooth chart, simple version: each finding lists its teeth in FDI
+    # numbers. Carried forward, because the chart is the patient's mouth, not
+    # the visit's — a filling done today is still there next year. A drawn
+    # odontogram can replace this later without changing what it records.
+    {
+        "key": "tooth_chart",
+        "title": "Tooth chart (FDI)",
+        "kind": "fields",
+        "carry_forward": True,
+        "fields": [
+            {"key": "dentition", "label": "Dentition", "type": "select",
+             "options": ["Permanent", "Mixed", "Primary"]},
+            {"key": "decayed", "label": "Decayed (caries)", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "missing", "label": "Missing", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "filled", "label": "Filled", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "rct", "label": "Root canal treated", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "crowned", "label": "Crown or bridge", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "mobile", "label": "Mobile", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "tender", "label": "Tender on percussion", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "impacted", "label": "Impacted or partly erupted", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "fractured", "label": "Fractured", "type": "text",
+             "placeholder": "FDI numbers, e.g. 16, 36"},
+            {"key": "notes", "label": "Other findings", "type": "text"},
+        ],
+    },
+    {
+        "key": "periodontal",
+        "title": "Gums and hygiene",
+        "kind": "fields",
+        "fields": [
+            {"key": "gingiva", "label": "Gingiva", "type": "select",
+             "options": ["Healthy", "Gingivitis", "Periodontitis"]},
+            {"key": "calculus", "label": "Calculus", "type": "select",
+             "options": ["None", "Mild", "Moderate", "Heavy"]},
+            {"key": "oral_hygiene", "label": "Oral hygiene", "type": "select",
+             "options": ["Good", "Fair", "Poor"]},
+            {"key": "soft_tissue", "label": "Soft tissue", "type": "text",
+             "placeholder": "Ulcers, white or red patches, tobacco changes"},
+        ],
+    },
+    {"key": "red_flags", "title": "Red flags", "kind": "ai",
+     "ai_source": "red_flags", "visible_in_print": False},
+    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
+     "ai_source": "differentials", "visible_in_print": False},
+    {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
+     "catalogue_category": "diagnosis", "carry_forward": True,
+     "placeholder": "With the tooth: e.g. Irreversible pulpitis 36"},
+    # The treatment plan runs over several visits (a root canal is three
+    # sittings, a crown two), so it is carried forward and ticked off: each
+    # sitting is booked as a procedure and billed to the visit it happens in.
+    {"key": "treatment_plan", "title": "Treatment plan", "kind": "list",
+     "catalogue_category": "procedure", "carry_forward": True,
+     "placeholder": "Tooth and procedure, in order: e.g. 36 RCT, 36 crown"},
+    {"key": "done_today", "title": "Done today", "kind": "text",
+     "placeholder": "By tooth"},
+    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+     "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
+    {"key": "advice", "title": "Advice", "kind": "list",
+     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    {
+        "key": "follow_up",
+        "title": "Next sitting",
+        "kind": "fields",
+        "fields": [
+            {"key": "date", "label": "Next sitting on", "type": "date"},
+            {"key": "notes", "label": "For", "type": "text"},
+        ],
+    },
+]
+
+
 DEPARTMENT_LAYOUTS: Dict[Tuple[str, Department], List[Dict[str, Any]]] = {
     ("opd_visit", Department.GASTROENTEROLOGY): _OPD_VISIT_GASTRO,
+    ("opd_visit", Department.DENTISTRY): _OPD_VISIT_DENTAL,
 }
 
 

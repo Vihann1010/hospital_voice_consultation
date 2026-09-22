@@ -42,3 +42,16 @@ def test_the_dental_checklist_gates_the_chair_and_asks_for_the_tooth():
 @pytest.mark.parametrize("teeth,count", [("36", 1), ("36, 37", 2), ("Full mouth", 0), (None, 0)])
 def test_a_per_tooth_price_is_charged_for_each_tooth(teeth, count):
     assert rules.tooth_count(teeth) == count
+
+
+def test_the_dental_pad_has_a_tooth_chart_that_follows_the_patient():
+    from app.pads.defaults import default_layout
+    from app.pads.sections import validate_layout
+
+    sections = default_layout("opd_visit", Department.DENTISTRY)
+    keys = [s["key"] for s in sections]
+    assert "tooth_chart" in keys and "treatment_plan" in keys
+    assert "gi_symptoms" not in keys
+    chart = next(s for s in sections if s["key"] == "tooth_chart")
+    assert chart["carry_forward"]
+    validate_layout(sections)

@@ -178,6 +178,9 @@ interface ModuleState {
    *  the API answers, so neither is flashed on the wrong site. */
   logo: "bundled" | "none" | null;
   hospitalCity: string | null;
+  /** The practice each department works under ("dentistry" → "Smile
+   *  Dental"), where it is not the site's own name. */
+  departmentBrands: Readonly<Record<string, string>>;
   /** The platform this site runs, shown beside its own identity: "medicos",
    *  or null for a site that shows only its own. */
   platform: "medicos" | null;
@@ -194,6 +197,7 @@ const ModuleContext = createContext<ModuleState>({
   formularyPendingSignoff: [],
   logo: null,
   hospitalCity: null,
+  departmentBrands: {},
   platform: null,
 });
 
@@ -235,6 +239,7 @@ function readCache(): {
   hospital_logo?: "bundled" | "none";
   hospital_city?: string;
   platform_brand?: string;
+  department_brands?: Record<string, string>;
 } | null {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
@@ -265,6 +270,9 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   );
   const [logo, setLogo] = useState<"bundled" | "none" | null>(cached?.hospital_logo ?? null);
   const [hospitalCity, setHospitalCity] = useState<string | null>(cached?.hospital_city ?? null);
+  const [departmentBrands, setDepartmentBrands] = useState<Record<string, string>>(
+    cached?.department_brands ?? {}
+  );
   const [platform, setPlatform] = useState<"medicos" | null>(
     cached?.platform_brand === "medicos" ? "medicos" : null
   );
@@ -291,6 +299,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         setPending(data.formulary_pending_signoff ?? []);
         setLogo(data.hospital_logo === "none" ? "none" : "bundled");
         setHospitalCity(data.hospital_city ?? null);
+        setDepartmentBrands(data.department_brands ?? {});
         setPlatform(data.platform_brand === "medicos" ? "medicos" : null);
         try {
           window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
@@ -323,6 +332,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         formularyPendingSignoff,
         logo,
         hospitalCity,
+        departmentBrands,
         platform,
       }}
     >

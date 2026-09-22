@@ -21,12 +21,23 @@ const DEPARTMENT_BLURB: Record<string, string> = {
  * clinic that never employed them — and this screen is unauthenticated, so it
  * cannot read the consultant register. The department and what it covers is
  * what the patient actually needs to choose correctly. */
-function departmentChoices(departments: readonly Department[]) {
-  return departments.map((value) => ({
-    value,
-    label: DEPARTMENT_LABEL[value] ?? value,
-    blurb: DEPARTMENT_BLURB[value] ?? "",
-  }));
+function departmentChoices(
+  departments: readonly Department[],
+  brands: Readonly<Record<string, string>>,
+  siteName: string | null,
+) {
+  return departments.map((value) => {
+    // At a clinic housing two practices the patient looks for the name on
+    // the door — Smile Dental — before the speciality.
+    const brand = brands[value] && brands[value] !== siteName ? brands[value] : null;
+    return {
+      value,
+      label: brand ?? DEPARTMENT_LABEL[value] ?? value,
+      blurb: brand
+        ? `${DEPARTMENT_LABEL[value] ?? value} · ${DEPARTMENT_BLURB[value] ?? ""}`
+        : DEPARTMENT_BLURB[value] ?? "",
+    };
+  });
 }
 
 const GENDERS: { value: Gender; label: string }[] = [
@@ -37,8 +48,8 @@ const GENDERS: { value: Gender; label: string }[] = [
 
 export default function IntakePage() {
   const router = useRouter();
-  const { departments } = useModules();
-  const choices = departmentChoices(departments);
+  const { departments, departmentBrands, hospitalName } = useModules();
+  const choices = departmentChoices(departments, departmentBrands, hospitalName);
   // A clinic with one speciality should not ask a question with one answer:
   // the department is settled, so the patient fills in four fields, not five.
   const onlyDepartment = choices.length === 1 ? choices[0].value : null;
