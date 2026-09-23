@@ -1113,8 +1113,16 @@ export const staffApi = {
       if (err instanceof SyntaxError) return;
       throw err;
     }),
-  signPad: (id: string) =>
-    request<PadDocument>(`/pads/documents/${id}/sign`, { method: "POST" }),
+  /**
+   * Sign a pad. Serious medication warnings refuse the signature until they
+   * are sent back acknowledged, so the doctor answers them rather than
+   * discovering them afterwards.
+   */
+  signPad: (id: string, acknowledgedAlerts: SafetyAlert[] = []) =>
+    request<PadDocument>(`/pads/documents/${id}/sign`, {
+      method: "POST",
+      body: JSON.stringify({ acknowledged_alerts: acknowledgedAlerts }),
+    }),
   amendPad: (id: string, reason: string) =>
     request<PadDocument>(`/pads/documents/${id}/amend`, {
       method: "POST",

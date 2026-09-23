@@ -72,10 +72,26 @@ def _vitals(*extra: Dict[str, Any], title: str = "Vitals") -> Dict[str, Any]:
 
 _ABSENT_PRESENT = ["Absent", "Present"]
 
+#: How soon the patient is seen again. Plain day counts: a follow-up is
+#: counted in days at the desk, and "1 week" would have to be turned back into
+#: one somewhere less visible.
+FOLLOW_UP_CHOICES = [
+    "3 days", "5 days", "7 days", "10 days", "14 days", "21 days",
+    "30 days", "45 days", "60 days", "90 days", "Only if needed",
+]
+
+
 # ------------------------------------------------------------------ OPD
 _OPD_VISIT: List[Dict[str, Any]] = [
     {"key": "intake_summary", "title": "History from intake", "kind": "ai",
      "ai_source": "intake_summary", "visible_in_print": True},
+    # The same history in Hindi. Kept as its own section rather than mixed
+    # into the English one so either can be turned off, and so the patient's
+    # copy reads as one list rather than alternating languages.
+    {"key": "intake_summary_hi", "title": "मरीज़ का विवरण (Hindi)", "kind": "ai",
+     "ai_source": "intake_summary_hi", "visible_in_print": True},
+    {"key": "background", "title": "Background", "kind": "ai",
+     "ai_source": "background", "visible_in_print": True},
     {"key": "complaints", "title": "Chief complaints", "kind": "list",
      "catalogue_category": "complaint", "placeholder": "Add a complaint"},
     {"key": "history", "title": "History", "kind": "text",
@@ -102,16 +118,30 @@ _OPD_VISIT: List[Dict[str, Any]] = [
     {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
      "catalogue_category": "diagnosis", "carry_forward": True,
      "placeholder": "Add a diagnosis"},
-    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+    # Advised tests and prescribed medicines are rows, not prose: signing the
+    # pad places the orders and issues the prescription from exactly what is
+    # written here, so there is no second screen to keep in step.
+    {"key": "investigations", "title": "Investigations advised", "kind": "investigations",
      "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
+    {"key": "medicines", "title": "Medicines", "kind": "medicines"},
     {"key": "advice", "title": "Advice", "kind": "list",
      "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    # The doctor's own working note. Kept off the patient's copy by default:
+    # it is where a doubt or a thought for next time is written, and neither
+    # belongs on a slip the patient carries home.
+    {"key": "doctor_notes", "title": "Doctor's notes", "kind": "text",
+     "visible_in_print": False, "carry_forward": True,
+     "placeholder": "Notes for yourself and the next visit"},
     {
         "key": "follow_up",
         "title": "Follow-up",
         "kind": "fields",
         "fields": [
-            {"key": "date", "label": "Review on", "type": "date"},
+            # Chosen as a number of days, which is how it is said in the room —
+            # "come back in a week" — and turned into a date when the pad is
+            # signed, so the patient's copy still carries a real date.
+            {"key": "after_days", "label": "Review in", "type": "select",
+             "options": FOLLOW_UP_CHOICES},
             {"key": "notes", "label": "Notes", "type": "text"},
         ],
     },

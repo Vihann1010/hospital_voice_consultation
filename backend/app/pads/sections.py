@@ -21,13 +21,22 @@ from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-SectionKind = Literal["text", "fields", "list", "ai"]
+SectionKind = Literal["text", "fields", "list", "ai", "medicines", "investigations"]
 FieldType = Literal["text", "textarea", "number", "date", "select", "multiselect", "checkbox"]
 
 # Where an AI section's first draft comes from. Each maps onto a part of the
 # intake dossier the voice pipeline already produces; nothing new is generated
 # for the pad.
-AISource = Literal["intake_summary", "red_flags", "differentials", "suggested_investigations"]
+AISource = Literal[
+    "intake_summary",
+    #: The same history in Hindi, for the copy the patient takes home.
+    "intake_summary_hi",
+    #: Allergies, medicines already being taken, past illness and surgery.
+    "background",
+    "red_flags",
+    "differentials",
+    "suggested_investigations",
+]
 
 # Facts already recorded on the admission, copied into a new inpatient
 # document so nobody retypes the diagnosis the admitting doctor wrote an hour
@@ -47,6 +56,39 @@ _KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 MAX_TEXT = 8000
 MAX_ITEM = 400
 MAX_ITEMS = 60
+
+# A prescribed line, in the shape the prescription table stores it, so a pad
+# that is signed can issue the prescription without reshaping anything. The
+# lengths are the column lengths: a value that would be truncated on the way
+# to the database is better trimmed here, where the doctor can still see it.
+MEDICINE_FIELDS: Dict[str, int] = {
+    "formulary_code": 64,
+    "name": 255,
+    "generic": 255,
+    "form": 64,
+    "strength": 64,
+    "dosage": 120,
+    "frequency_code": 32,
+    "frequency_text": 120,
+    "duration": 120,
+    "timing": 120,
+    "route": 64,
+    "instructions": MAX_TEXT,
+}
+
+# How a line arrived: read off the doctor's dictation, chosen from the
+# formulary, or typed. Kept because it is the only way to measure whether
+# dictation is working, and because a dictated line the doctor never touched
+# reads differently in an audit from one they typed themselves.
+MEDICINE_SOURCES = ("dictated", "catalog", "manual")
+
+#: An investigation the doctor has advised, which becomes a real order when
+#: the pad is signed.
+INVESTIGATION_FIELDS: Dict[str, int] = {
+    "code": 32,
+    "name": 255,
+    "note": MAX_ITEM,
+}
 
 
 class FieldSpec(BaseModel):
@@ -113,8 +155,25 @@ class SectionSpec(BaseModel):
                 raise ValueError(f"Section {self.key!r} defines the same field twice.")
         if self.kind == "ai" and not self.ai_source:
             raise ValueError(f"AI section {self.key!r} does not say what it is drafted from.")
-        if self.kind != "ai" and self.ai_source:
+        # An investigations section may also carry suggestions from the
+        # intake, which is how the doctor gets to add them with one tap.
+        if self.kind not in ("ai", "investigations") and self.ai_source:
             raise ValueError(f"Only an AI section can be drafted from the intake ({self.key!r}).")
+        if self.kind == "investigations" and self.ai_source != "suggested_investigations":
+            if self.ai_source is not None:
+                raise ValueError(
+                    f"Section {self.key!r} lists investigations, so it can only be "
+                    "drafted from the suggested investigations."
+                )
+        if self.kind in ("medicines", "investigations") and self.fields:
+            raise ValueError(
+                f"Section {self.key!r} holds its own kind of row and defines no fields."
+            )
+        if self.kind == "medicines" and self.catalogue_category:
+            raise ValueError(
+                f"Section {self.key!r} prescribes from the formulary, not from a "
+                "phrase catalogue."
+            )
         if self.prefill_from and self.kind not in ("text", "list"):
             raise ValueError(
                 f"Section {self.key!r} can only be filled from the admission if it holds "
@@ -205,6 +264,47 @@ def _clean_field(spec: Dict[str, Any], value: Any) -> Any:
     return _clean_text(value, MAX_TEXT if kind == "textarea" else MAX_ITEM)
 
 
+def _clean_rows(
+    value: Any, spec: Dict[str, int], *, required: str, extra: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """Clean a list of row-shaped entries, dropping any without their one
+    indispensable field.
+
+    A medicine with no name is not a medicine, and carrying it forward as a
+    blank row onto a printed prescription is worse than losing it.
+    """
+    rows: List[Dict[str, Any]] = []
+    if not isinstance(value, list):
+        return rows
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        row: Dict[str, Any] = {}
+        for key, limit in spec.items():
+            text = _clean_text(entry.get(key), limit)
+            if text:
+                row[key] = text
+        if not row.get(required):
+            continue
+        for key, allowed in (extra or {}).items():
+            given = entry.get(key)
+            row[key] = given if given in allowed else allowed[-1]
+        rows.append(row)
+        if len(rows) >= MAX_ITEMS:
+            break
+    return rows
+
+
+def clean_medicines(value: Any) -> List[Dict[str, Any]]:
+    return _clean_rows(
+        value, MEDICINE_FIELDS, required="name", extra={"source": MEDICINE_SOURCES}
+    )
+
+
+def clean_investigations(value: Any) -> List[Dict[str, Any]]:
+    return _clean_rows(value, INVESTIGATION_FIELDS, required="name")
+
+
 def clean_values(sections: List[Dict[str, Any]], values: Dict[str, Any]) -> Dict[str, Any]:
     """Keep only what the layout allows, in the shape it expects.
 
@@ -238,17 +338,43 @@ def clean_values(sections: List[Dict[str, Any]], values: Dict[str, Any]) -> Dict
                 entry["text"] = _clean_text(raw.get("text"))
             if "items" in raw:
                 entry["items"] = _clean_items(raw.get("items"))
+            # What the model offered and the doctor has not taken. Held apart
+            # so an unread suggestion is never mistaken for the doctor's own
+            # words, and never printed.
+            if "suggestions" in raw:
+                entry["suggestions"] = _clean_items(raw.get("suggestions"))
             cleaned[key] = entry
+        elif kind == "medicines":
+            # Suggestions are held apart from the prescription itself. Nothing
+            # is prescribed until the doctor taps it across, so a line the
+            # dictation heard but the doctor never accepted can never reach
+            # the printed slip.
+            cleaned[key] = {
+                "medicines": clean_medicines(raw.get("medicines")),
+                "suggestions": clean_medicines(raw.get("suggestions")),
+            }
+        elif kind == "investigations":
+            cleaned[key] = {
+                "investigations": clean_investigations(raw.get("investigations")),
+                "suggestions": clean_investigations(raw.get("suggestions")),
+            }
     return cleaned
 
 
 def is_empty(section: Dict[str, Any], value: Optional[Dict[str, Any]]) -> bool:
-    """Would this section print nothing?"""
+    """Would this section print nothing?
+
+    Suggestions do not count. A pad showing three medicines the doctor has not
+    accepted has an empty prescription, and printing it as though it were the
+    doctor's would put words in their mouth.
+    """
     if not value:
         return True
     if value.get("text"):
         return False
     if value.get("items"):
+        return False
+    if value.get("medicines") or value.get("investigations"):
         return False
     fields = value.get("fields") or {}
     return all(item in (None, "", [], False) for item in fields.values())
@@ -485,6 +611,37 @@ def refresh_intake_vitals(
     return values, provenance, changed
 
 
+
+
+def _sentences(text: Optional[str]) -> List[str]:
+    """Break a paragraph into the points it is made of."""
+    if not text:
+        return []
+    parts = re.split(r"(?<=[.!?])\s+", str(text).strip())
+    return [part.strip() for part in parts if len(part.strip()) > 3]
+
+
+def _background_points(record: Dict[str, Any]) -> List[str]:
+    """What the patient brings with them, as the intake recorded it.
+
+    Silence is reported as silence. "No allergies" would be a clinical claim
+    nobody made; "Allergies: not asked" is the truth and tells the doctor
+    there is a question still to ask.
+    """
+    def listed(values: Any) -> str:
+        items = [str(item).strip() for item in (values or []) if str(item).strip()]
+        return ", ".join(dict.fromkeys(items))
+
+    points = []
+    for label, value in (
+        ("Allergies", listed(record.get("allergies"))),
+        ("Already taking", listed(record.get("current_medicines"))),
+        ("Past history", listed(record.get("medical_history"))),
+        ("Previous surgery", listed(record.get("previous_surgeries"))),
+    ):
+        points.append(f"{label}: {value}" if value else f"{label}: not recorded at intake")
+    return points
+
 def draft_from_intake(
     sections: List[Dict[str, Any]], dossier: Optional[Dict[str, Any]]
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -507,20 +664,60 @@ def draft_from_intake(
     drafted_at = datetime.now(timezone.utc).isoformat()
 
     for section in sections:
+        # An investigations section takes the same suggestions, but they land
+        # as suggestions rather than as advised tests: the doctor taps the
+        # ones they want, and an order is placed for those alone.
+        if section["kind"] == "investigations":
+            if section.get("ai_source") != "suggested_investigations":
+                continue
+            rows = []
+            seen = set()
+            for item in plan.get("investigations") or []:
+                if not isinstance(item, dict):
+                    continue
+                name = _clean_text(item.get("test"), INVESTIGATION_FIELDS["name"])
+                if not name or name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+                row = {"name": name}
+                note = _clean_text(item.get("reason"), INVESTIGATION_FIELDS["note"])
+                if note:
+                    row["note"] = note
+                rows.append(row)
+            if rows:
+                values[section["key"]] = {"investigations": [], "suggestions": rows}
+                provenance[section["key"]] = {
+                    "source": "ai:suggested_investigations", "drafted_at": drafted_at
+                }
+            continue
         if section["kind"] != "ai":
             continue
         source = section.get("ai_source")
         entry: Dict[str, Any] = {}
 
         if source == "intake_summary":
-            text = (
-                summary.get("history_of_present_illness")
-                or summary.get("summary_for_doctor")
-                or record.get("summary_for_doctor")
-                or summary.get("one_liner")
-            )
-            if text:
-                entry = {"text": _clean_text(text)}
+            # Bullets where the summariser produced them; the older prose is
+            # split on sentence ends so an existing consultation still reads
+            # as points rather than a paragraph.
+            items = _dedupe(summary.get("history_points") or [])
+            if not items:
+                text = (
+                    summary.get("history_of_present_illness")
+                    or summary.get("summary_for_doctor")
+                    or record.get("summary_for_doctor")
+                    or summary.get("one_liner")
+                )
+                items = _dedupe(_sentences(text))
+            if items:
+                entry = {"items": [], "suggestions": items}
+        elif source == "intake_summary_hi":
+            items = _dedupe(summary.get("history_points_hi") or [])
+            if items:
+                entry = {"items": [], "suggestions": items}
+        elif source == "background":
+            items = _dedupe(_background_points(record))
+            if items:
+                entry = {"items": [], "suggestions": items}
         elif source == "red_flags":
             items = _dedupe(
                 [_humanise(flag.get("flag", "")) for flag in risk.get("red_flags") or []
@@ -528,7 +725,7 @@ def draft_from_intake(
                 + [_humanise(flag) for flag in record.get("red_flags") or []]
             )
             if items:
-                entry = {"items": items}
+                entry = {"items": [], "suggestions": items}
         elif source == "differentials":
             items = _dedupe(
                 f"{item.get('condition')} ({item.get('likelihood', 'moderate')} likelihood)"
@@ -536,7 +733,7 @@ def draft_from_intake(
                 if isinstance(item, dict) and item.get("condition")
             )
             if items:
-                entry = {"items": items}
+                entry = {"items": [], "suggestions": items}
         elif source == "suggested_investigations":
             items = _dedupe(
                 item.get("test", "")

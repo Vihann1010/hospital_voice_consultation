@@ -26,12 +26,15 @@ def test_every_builtin_layout_is_valid():
 
 
 def test_default_layout_is_a_fresh_copy_each_time():
+    def vitals(layout):
+        return next(section for section in layout if section["key"] == "vitals")
+
     first = default_layout("opd_visit")
     first[0]["title"] = "changed"
-    first[3]["fields"][0]["label"] = "changed"
+    vitals(first)["fields"][0]["label"] = "changed"
     second = default_layout("opd_visit")
     assert second[0]["title"] != "changed"
-    assert second[3]["fields"][0]["label"] != "changed"
+    assert vitals(second)["fields"][0]["label"] != "changed"
 
 
 @pytest.mark.parametrize(
@@ -59,9 +62,21 @@ def test_differentials_do_not_print_by_default():
     assert by_key["red_flags"]["visible_in_print"] is False
 
 
-def test_only_diagnosis_and_advice_carry_forward_by_default():
+def test_only_the_standing_sections_carry_forward_by_default():
+    """What was true last visit and is still true today.
+
+    The doctor's own notes carry too — they are where a thought for the next
+    visit is written, which is worthless if it does not survive to it. The pad
+    labels a carried section with the visit it came from, so it cannot be read
+    as something written today.
+    """
     carried = {section["key"] for section in _opd() if section["carry_forward"]}
-    assert carried == {"diagnosis", "advice"}
+    assert carried == {"diagnosis", "advice", "doctor_notes"}
+
+
+def test_the_doctors_notes_stay_off_the_patients_copy():
+    notes = next(section for section in _opd() if section["key"] == "doctor_notes")
+    assert notes["visible_in_print"] is False
 
 
 # -------------------------------------------------------------------- values
@@ -191,13 +206,24 @@ DOSSIER = {
 
 def test_ai_sections_are_drafted_from_the_intake_and_marked():
     values, provenance = rules.draft_from_intake(_opd(), DOSSIER)
-    assert values["intake_summary"]["text"] == "Right knee pain for one month."
-    assert values["red_flags"]["items"] == ["Night pain", "Weight loss"]
-    assert values["differentials"]["items"] == [
+    # Everything the model produced arrives as a suggestion: the section is
+    # empty until the doctor taps the lines they agree with.
+    assert values["intake_summary"]["items"] == []
+    assert values["intake_summary"]["suggestions"] == ["Right knee pain for one month."]
+    assert values["red_flags"]["suggestions"] == ["Night pain", "Weight loss"]
+    assert values["differentials"]["suggestions"] == [
         "Osteoarthritis (high likelihood)", "Gout (low likelihood)",
     ]
-    assert values["investigations"]["items"] == ["X-ray knee AP/Lat", "Uric acid"]
-    assert set(provenance) == {"intake_summary", "red_flags", "differentials", "investigations"}
+    # Advised tests now arrive as suggestions the doctor taps across, never
+    # as advice already given in their name.
+    assert values["investigations"]["investigations"] == []
+    assert [row["name"] for row in values["investigations"]["suggestions"]] == [
+        "X-ray knee AP/Lat", "Uric acid",
+    ]
+    # The background section draws on the same dossier, so it is drafted too.
+    assert set(provenance) == {
+        "intake_summary", "background", "red_flags", "differentials", "investigations",
+    }
     assert all(origin["source"].startswith("ai:") for origin in provenance.values())
 
 
@@ -234,7 +260,8 @@ def test_intake_flag_codes_are_shown_as_words():
     values, _ = rules.draft_from_intake(
         _opd(), {"medical_json": {"red_flags": ["severe_pain", "Night pain", "Severe pain"]}}
     )
-    assert values["red_flags"]["items"] == ["Severe pain", "Night pain"]
+    assert values["red_flags"]["suggestions"] == ["Severe pain", "Night pain"]
+    assert values["red_flags"]["items"] == []
 
 
 # ------------------------------------------------------------- intake vitals
@@ -282,3 +309,122 @@ def test_validated_builtin_layout_carries_every_switch():
     # pad rendered empty.
     for section in _opd():
         assert {"visible_in_pad", "visible_in_print", "carry_forward", "fields"} <= set(section)
+
+
+# --------------------------------------------- medicines and investigations
+MEDICINE_LAYOUT = [
+    {"key": "medicines", "title": "Medicines", "kind": "medicines"},
+]
+INVESTIGATION_LAYOUT = [
+    {"key": "investigations", "title": "Investigations advised",
+     "kind": "investigations", "ai_source": "suggested_investigations"},
+]
+
+
+def test_a_medicine_keeps_the_parts_a_prescription_needs():
+    cleaned = rules.clean_values(MEDICINE_LAYOUT, {
+        "medicines": {"medicines": [{
+            "name": "Pantoprazole", "strength": "40 mg", "form": "Tablet",
+            "dosage": "1", "frequency_text": "Twice a day", "duration": "2 weeks",
+            "timing": "Before food", "source": "dictated",
+        }]}
+    })
+    row = cleaned["medicines"]["medicines"][0]
+    assert row["name"] == "Pantoprazole"
+    assert row["frequency_text"] == "Twice a day"
+    assert row["source"] == "dictated"
+
+
+def test_a_medicine_with_no_name_is_dropped():
+    """A blank row on a printed prescription is worse than a lost one."""
+    cleaned = rules.clean_values(MEDICINE_LAYOUT, {
+        "medicines": {"medicines": [{"dosage": "1", "duration": "5 days"},
+                                    {"name": "Ondansetron"}]}
+    })
+    assert [row["name"] for row in cleaned["medicines"]["medicines"]] == ["Ondansetron"]
+
+
+def test_an_unknown_source_falls_back_to_manual():
+    cleaned = rules.clean_values(MEDICINE_LAYOUT, {
+        "medicines": {"medicines": [{"name": "Rabeprazole", "source": "guessed"}]}
+    })
+    assert cleaned["medicines"]["medicines"][0]["source"] == "manual"
+
+
+def test_suggestions_are_kept_apart_from_what_is_prescribed():
+    """Nothing reaches the prescription until the doctor taps it across."""
+    cleaned = rules.clean_values(MEDICINE_LAYOUT, {
+        "medicines": {
+            "medicines": [{"name": "Pantoprazole"}],
+            "suggestions": [{"name": "Domperidone", "source": "dictated"}],
+        }
+    })
+    assert [row["name"] for row in cleaned["medicines"]["medicines"]] == ["Pantoprazole"]
+    assert [row["name"] for row in cleaned["medicines"]["suggestions"]] == ["Domperidone"]
+
+
+def test_a_section_holding_only_suggestions_prints_nothing():
+    value = {"medicines": [], "suggestions": [{"name": "Domperidone"}]}
+    assert rules.is_empty(MEDICINE_LAYOUT[0], value) is True
+
+
+def test_an_accepted_medicine_is_not_empty():
+    value = {"medicines": [{"name": "Pantoprazole"}], "suggestions": []}
+    assert rules.is_empty(MEDICINE_LAYOUT[0], value) is False
+
+
+def test_suggested_investigations_arrive_as_suggestions_not_as_orders():
+    """The AI advises; the doctor decides. An order is never drafted."""
+    values, provenance = rules.draft_from_intake(
+        INVESTIGATION_LAYOUT,
+        {"investigations": {"investigations": [
+            {"test": "Ultrasound abdomen", "reason": "Right upper quadrant pain"},
+            {"test": "Liver function tests"},
+        ]}},
+    )
+    entry = values["investigations"]
+    assert entry["investigations"] == []
+    assert [row["name"] for row in entry["suggestions"]] == [
+        "Ultrasound abdomen", "Liver function tests"
+    ]
+    assert entry["suggestions"][0]["note"] == "Right upper quadrant pain"
+    assert provenance["investigations"]["source"] == "ai:suggested_investigations"
+
+
+def test_a_medicines_section_cannot_define_fields():
+    with pytest.raises(rules.LayoutError):
+        rules.validate_layout([
+            {"key": "medicines", "title": "Medicines", "kind": "medicines",
+             "fields": [{"key": "dose", "label": "Dose"}]}
+        ])
+
+
+def test_the_background_the_patient_brings_is_offered_too():
+    """Silence is reported as silence, never as "no allergies"."""
+    values, _ = rules.draft_from_intake(_opd(), {"medical_json": {
+        "allergies": ["Penicillin"], "current_medicines": ["Amlodipine"],
+    }})
+    offered = values["background"]["suggestions"]
+    assert "Allergies: Penicillin" in offered
+    assert "Already taking: Amlodipine" in offered
+    assert "Previous surgery: not recorded at intake" in offered
+
+
+def test_the_history_is_offered_in_hindi_as_well():
+    values, _ = rules.draft_from_intake(_opd(), {"clinical_summary": {
+        "history_points": ["Knee pain for one month"],
+        "history_points_hi": ["एक महीने से घुटने में दर्द"],
+    }})
+    assert values["intake_summary"]["suggestions"] == ["Knee pain for one month"]
+    assert values["intake_summary_hi"]["suggestions"] == [
+        "एक महीने से घुटने में दर्द"
+    ]
+
+
+def test_older_prose_history_still_becomes_bullets():
+    values, _ = rules.draft_from_intake(_opd(), {"clinical_summary": {
+        "history_of_present_illness": "Knee pain for one month. Worse at night.",
+    }})
+    assert values["intake_summary"]["suggestions"] == [
+        "Knee pain for one month.", "Worse at night.",
+    ]

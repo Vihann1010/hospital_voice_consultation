@@ -37,7 +37,9 @@ import {
   ListOrdered,
   Loader2,
   PenLine,
+  Plus,
   Printer,
+  Send,
   Sparkles,
   X,
 } from "lucide-react";
@@ -46,6 +48,8 @@ import type {
   FieldSpec,
   FieldValue,
   PadDocument,
+  PadInvestigation,
+  PadMedicine,
   PadTemplate,
   SectionOrigin,
   SectionSpec,
@@ -69,6 +73,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { ReasonDialog, type ReasonRequest } from "@/components/ui/reason-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MedicineSection } from "@/components/pad/medicine-section";
+import { InvestigationSection } from "@/components/pad/investigation-section";
+import type { SafetyAlert } from "@/lib/types/prescriptions";
 import { cn } from "@/lib/utils";
 
 type SaveState = "idle" | "pending" | "saving" | "saved" | "conflict" | "error";
@@ -81,6 +88,9 @@ function isBlank(section: SectionSpec, value?: SectionValue): boolean {
   if (!value) return true;
   if (value.text && value.text.trim()) return false;
   if (value.items && value.items.length) return false;
+  // Suggestions do not count: a section holding only what was offered has
+  // nothing the doctor has actually written.
+  if (value.medicines?.length || value.investigations?.length) return false;
   const fields = value.fields ?? {};
   return section.fields.every((spec) => {
     const item = fields[spec.key];
@@ -275,14 +285,44 @@ function SectionBody({
   section,
   value,
   editable,
+  patientId,
+  department,
+  transcript,
   onChange,
 }: {
   section: SectionSpec;
   value: SectionValue | undefined;
   editable: boolean;
+  patientId?: string;
+  department?: string;
+  transcript?: string;
   onChange: (value: SectionValue) => void;
 }) {
   const holdsText = section.kind === "text" || (section.kind === "ai" && aiHoldsText(section));
+
+  if (section.kind === "medicines") {
+    return (
+      <MedicineSection
+        medicines={value?.medicines ?? []}
+        suggestions={(value?.suggestions ?? []) as PadMedicine[]}
+        editable={editable}
+        patientId={patientId}
+        onChange={(next) => onChange({ ...value, ...next })}
+      />
+    );
+  }
+
+  if (section.kind === "investigations") {
+    return (
+      <InvestigationSection
+        investigations={value?.investigations ?? []}
+        suggestions={(value?.suggestions ?? []) as PadInvestigation[]}
+        editable={editable}
+        department={department}
+        onChange={(next) => onChange({ ...value, ...next })}
+      />
+    );
+  }
 
   if (section.kind === "fields") {
     const fields = value?.fields ?? {};
@@ -322,14 +362,68 @@ function SectionBody({
     );
   }
 
+  // A list section's suggestions are plain lines; the row kinds hold their
+  // own shapes and render themselves.
+  const suggestions = (value?.suggestions ?? []).filter(
+    (item): item is string => typeof item === "string"
+  );
+
   return (
-    <ItemList
-      items={value?.items ?? []}
-      editable={editable}
-      category={section.catalogue_category}
-      placeholder={section.placeholder}
-      onChange={(items) => onChange({ ...value, items })}
-    />
+    <div className="space-y-2">
+      <ItemList
+        items={value?.items ?? []}
+        editable={editable}
+        category={section.catalogue_category}
+        placeholder={section.placeholder}
+        onChange={(items) => onChange({ ...value, items })}
+      />
+
+      {/* What the intake offered, still waiting to be taken. Nothing here is
+          part of the record or printed until the doctor taps it. */}
+      {editable && suggestions.length > 0 && (
+        <div className="rounded-lg border border-dashed border-pine/40 bg-pine/5 p-2">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1 text-[11px] font-medium text-pine">
+              <Sparkles className="h-3 w-3" />
+              Suggested from the intake — tap to add
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px]"
+              onClick={() =>
+                onChange({
+                  ...value,
+                  items: [...(value?.items ?? []), ...suggestions],
+                  suggestions: [],
+                })
+              }
+            >
+              Add all
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((item, index) => (
+              <button
+                key={index}
+                type="button"
+                className="rounded-full border border-pine/30 bg-white px-2.5 py-1 text-left text-xs text-ink hover:border-pine hover:bg-mint"
+                onClick={() =>
+                  onChange({
+                    ...value,
+                    items: [...(value?.items ?? []), item],
+                    suggestions: suggestions.filter((_, at) => at !== index),
+                  })
+                }
+              >
+                <Plus className="mr-1 inline h-3 w-3 text-pine" />
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -341,8 +435,12 @@ export function VisitPad({
   surgeryId,
   documentType = "opd_visit",
   documentId,
+  // What was said in the consultation. Medicines are read off it on request,
+  // which is the only way a drug reaches the pad without being typed.
+  transcript,
   onChanged,
 }: {
+  transcript?: string;
   /** An OPD pad, opened for this consultation. */
   consultationId?: string;
   /** An inpatient document, opened for this admission. */
@@ -376,6 +474,11 @@ export function VisitPad({
   const [templateName, setTemplateName] = useState("");
   const [templateShared, setTemplateShared] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
+  // What the prescription on this pad raises, and whether the doctor has said
+  // they mean it anyway.
+  const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [checkingSafety, setCheckingSafety] = useState(false);
   const [amendRequest, setAmendRequest] = useState<ReasonRequest | null>(null);
 
   // Refs hold what async callbacks must read fresh: the latest typed values,
@@ -560,6 +663,13 @@ export function VisitPad({
     [flush]
   );
 
+  const sendWhatsApp = () =>
+    act("whatsapp", async () => {
+      if (!doc?.prescription_id) return;
+      await staffApi.sendPrescriptionWhatsApp(doc.prescription_id);
+      setNotice("Sent on WhatsApp to the patient's registered number.");
+    });
+
   const print = () =>
     act("print", async () => {
       const current = docRef.current;
@@ -637,11 +747,42 @@ export function VisitPad({
       setArranging(false);
     });
 
+  /** Every medicine written on the pad, whichever section holds them. */
+  const prescribed = useMemo(
+    () =>
+      order
+        .filter((section) => section.kind === "medicines")
+        .flatMap((section) => values[section.key]?.medicines ?? []),
+    [order, values]
+  );
+
+  /**
+   * Ask about the prescription before the dialog offers to sign.
+   *
+   * The server refuses a signature while a serious warning stands. Asking here
+   * as well is not duplication: it is what turns "refused" into something the
+   * doctor can read and answer.
+   */
+  const openSignDialog = () => {
+    setAlerts([]);
+    setAcknowledged(false);
+    setSignOpen(true);
+    if (prescribed.length === 0 || !doc?.patient_id) return;
+    setCheckingSafety(true);
+    void staffApi
+      .safetyCheck(doc.patient_id, prescribed as unknown as Record<string, unknown>[])
+      .then((result) => setAlerts(result.alerts))
+      .catch(() => setAlerts([]))
+      .finally(() => setCheckingSafety(false));
+  };
+
+  const serious = alerts.filter((alert) => alert.severity === "serious");
+
   const sign = () =>
     act("sign", async () => {
       const current = docRef.current;
       if (!current) return;
-      accept(await staffApi.signPad(current.id));
+      accept(await staffApi.signPad(current.id, serious));
       setSignOpen(false);
       onChanged?.();
       setNotice("Signed. The pad is now part of the record and can only be corrected by a new version.");
@@ -853,10 +994,30 @@ export function VisitPad({
               </>
             )}
             {!arranging && (
+              <>
+              {/* The pad is the prescription, so it is the pad that gets
+                  sent. Only offered once signed: an unsigned draft is not a
+                  prescription and must not reach a patient's phone. */}
+              {doc?.prescription_id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() => void sendWhatsApp()}
+                >
+                  {busy === "whatsapp" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  Send on WhatsApp
+                </Button>
+              )}
               <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void print()}>
                 {busy === "print" ? <Loader2 className="animate-spin" /> : <Printer />}
                 {doc.status === "draft" ? "Print draft" : "Print"}
               </Button>
+              </>
             )}
             {editable && !arranging && doc.version > 1 && (
               <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void discardCorrection()}>
@@ -864,7 +1025,7 @@ export function VisitPad({
               </Button>
             )}
             {editable && !arranging && (
-              <Button size="sm" disabled={busy !== null} onClick={() => setSignOpen(true)}>
+              <Button size="sm" disabled={busy !== null} onClick={openSignDialog}>
                 <CheckCircle2 /> Sign
               </Button>
             )}
@@ -988,6 +1149,9 @@ export function VisitPad({
                   section={section}
                   value={values[section.key]}
                   editable={editable}
+                  patientId={doc?.patient_id}
+                  department={doc?.department ?? undefined}
+                  transcript={transcript}
                   onChange={(next) => update(section.key, next)}
                 />
               </CardContent>
@@ -1117,11 +1281,66 @@ export function VisitPad({
               checked them.
             </p>
           )}
+
+          {checkingSafety && (
+            <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+              <Loader2 className="h-3 w-3 animate-spin" /> Checking the prescription…
+            </p>
+          )}
+
+          {serious.length > 0 && (
+            <div className="space-y-2 rounded-md border border-clay/40 bg-clay/5 px-3 py-2">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-clay">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {serious.length === 1 ? "A serious warning" : `${serious.length} serious warnings`}
+              </p>
+              <ul className="space-y-1.5">
+                {serious.map((alert, index) => (
+                  <li key={index} className="text-xs text-ink">
+                    <span className="font-medium">{alert.medicines.join(" + ") || "Prescription"}</span>
+                    {" — "}
+                    {alert.description}
+                    {alert.suggested_action && (
+                      <span className="block text-ink-muted">{alert.suggested_action}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <label className="flex items-start gap-2 text-xs text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={acknowledged}
+                  onChange={(event) => setAcknowledged(event.target.checked)}
+                />
+                I have read these and mean to prescribe anyway.
+              </label>
+            </div>
+          )}
+
+          {/* Anything not serious is worth reading but does not stand in the
+              way of a signature. */}
+          {alerts.length > serious.length && (
+            <ul className="space-y-1">
+              {alerts
+                .filter((alert) => alert.severity !== "serious")
+                .map((alert, index) => (
+                  <li key={index} className="text-[11px] text-ink-muted">
+                    {alert.description}
+                  </li>
+                ))}
+            </ul>
+          )}
+
           {actionError && <p className="text-xs text-clay">{actionError}</p>}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSignOpen(false)}>Not yet</Button>
-            <Button disabled={busy !== null} onClick={() => void sign()}>
-              {busy === "sign" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} Sign
+            <Button
+              disabled={busy !== null || checkingSafety || (serious.length > 0 && !acknowledged)}
+              onClick={() => void sign()}
+            >
+              {busy === "sign" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+              {serious.length > 0 ? "Acknowledge and sign" : "Sign"}
             </Button>
           </DialogFooter>
         </DialogContent>

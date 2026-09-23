@@ -33,6 +33,9 @@ class PadDocumentOut(BaseModel):
     amendment_reason: Optional[str] = None
     print_count: int
     serial_number: Optional[str] = None
+    # What signing issued, so the pad can offer to send it.
+    prescription_id: Optional[uuid.UUID] = None
+    investigation_order_id: Optional[uuid.UUID] = None
     order_item_id: Optional[uuid.UUID] = None
     paper_signed_at: Optional[datetime] = None
     paper_signed_by_name: Optional[str] = None
@@ -134,3 +137,15 @@ class PadLayoutIn(BaseModel):
 class CatalogueSuggestionOut(BaseModel):
     text: str
     use_count: int
+
+
+class PadSignRequest(BaseModel):
+    """Signing a pad that prescribes.
+
+    The warnings the doctor has seen and accepted travel with the signature,
+    because a blocking warning refuses the signature until it is answered.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    acknowledged_alerts: List[Dict[str, Any]] = Field(default_factory=list)

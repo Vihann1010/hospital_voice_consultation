@@ -38,6 +38,11 @@ class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
             "prose, standard abbreviations fine, no hedging filler, no invented findings. "
             "one_liner: age/gender + chief complaint + duration in one sentence. "
             "history_of_present_illness: 3-6 sentences in chronological order. "
+            "history_points: the same history as 3-6 short bullets, one fact each, "
+            "in chronological order. "
+            "history_points_hi: exactly those bullets in Hindi, in Devanagari, in the "
+            "same order and the same number, worded as a patient would understand them. "
+            "Translate only what the English bullet says; add nothing. "
             "pertinent_negatives: only genuinely informative denials. "
             "summary_for_doctor: the single paragraph you'd say aloud handing over the patient."
         )

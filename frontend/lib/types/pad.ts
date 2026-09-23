@@ -1,7 +1,15 @@
 /** Contracts for the Visit Pad (mirrors backend/app/schemas/pad_schemas.py). */
 import type { Department } from "@/lib/types/core";
 
-export type SectionKind = "text" | "fields" | "list" | "ai";
+export type SectionKind =
+  | "text"
+  | "fields"
+  | "list"
+  | "ai"
+  /** Prescribed lines. Signing the pad issues the prescription from them. */
+  | "medicines"
+  /** Advised tests. Signing the pad places the order for the coded ones. */
+  | "investigations";
 export type FieldType =
   | "text"
   | "textarea"
@@ -41,11 +49,45 @@ export interface SectionSpec {
 
 export type FieldValue = string | number | boolean | string[] | null;
 
+/** One prescribed line as the pad holds it, in the prescription's own shape. */
+export interface PadMedicine {
+  name: string;
+  formulary_code?: string | null;
+  generic?: string | null;
+  form?: string | null;
+  strength?: string | null;
+  dosage?: string | null;
+  frequency_code?: string | null;
+  frequency_text?: string | null;
+  duration?: string | null;
+  timing?: string | null;
+  route?: string | null;
+  instructions?: string | null;
+  /** How the line arrived: read off a dictation, picked, or typed. */
+  source?: "dictated" | "catalog" | "manual";
+}
+
+/** One advised test. Without a code it prints as advice but places no order. */
+export interface PadInvestigation {
+  code?: string | null;
+  name: string;
+  note?: string | null;
+}
+
 /** One section's content. Which keys are present depends on the kind. */
 export interface SectionValue {
   text?: string;
   items?: string[];
   fields?: Record<string, FieldValue>;
+  /** What the doctor has accepted. Only these are prescribed or ordered. */
+  medicines?: PadMedicine[];
+  investigations?: PadInvestigation[];
+  /**
+   * Waiting to be tapped across — heard in the dictation, or advised by the
+   * intake. Nothing here is prescribed, ordered or printed. Plain strings on
+   * a list section, rows on a medicines or investigations one.
+   */
+  suggestions?: string[] | PadMedicine[] | PadInvestigation[];
 }
 
 export interface SectionOrigin {
@@ -88,6 +130,9 @@ export interface PadDocument {
   document_type: string;
   title: string;
   patient_id: string;
+  /** The prescription this pad issued when it was signed. */
+  prescription_id?: string | null;
+  investigation_order_id?: string | null;
   consultation_id?: string | null;
   admission_id?: string | null;
   surgery_id?: string | null;
