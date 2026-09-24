@@ -226,8 +226,8 @@ export function LiveIntakeWorkspace({
             <Image
               src="/brand/intake-assistant.webp"
               alt=""
-              width={1400}
-              height={584}
+              width={1600}
+              height={600}
               // The banner is the width of the conversation panel, a little
               // over two thirds of a tablet's screen; without this the
               // browser picks a 700px copy and upscales it.
