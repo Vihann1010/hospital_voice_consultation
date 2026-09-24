@@ -194,14 +194,19 @@ The lab terminal has: **Worklist**, **Test list**, **Reports**.
 
 ## 6. Manager and Accounts
 
-Menu items for you: **Finance**, **Accounts**, **Insurance claims**, **Reports**, **Settings**.
+Menu items for you: **Accounts**, **Insurance claims**, **Reports**, **Settings**.
 
 ### Finance PIN
-**Finance** and **Accounts** ask for the four-digit **finance PIN** once per browser session.
+**Accounts**, the price list and the money reports ask for the four-digit
+**finance PIN** once per browser session.
 
-### Finance
-The day's billed amount, collections by payment mode, refunds and outstanding bills.
-Insurance amounts put on a bill are **not** counted as cash collected — that money arrives later from the TPA.
+### The day's takings
+There is no separate Finance screen: the same figures are in **Reports**.
+**Collection summary** gives each operator's takings by payment mode, with
+refunds and advances, which is what a cash handover needs; **Department
+billing** gives billed against collected per department. Insurance amounts
+put on a bill are **not** counted as cash collected — that money arrives
+later from the TPA.
 
 ### Accounts (double-entry books)
 Tabs: **Books**, **Ledgers**, **Day book**, **Consultant payouts**.

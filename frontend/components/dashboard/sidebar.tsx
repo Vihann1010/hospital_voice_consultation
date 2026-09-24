@@ -21,7 +21,6 @@ import {
   Landmark,
   UtensilsCrossed,
   Users,
-  Wallet,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -63,7 +62,6 @@ const NAV: {
   { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward",
     roles: ["admin", "doctor"], module: "laboratory" },
   // Hospital-wide takings: finance:read is held by admin and manager only.
-  { href: "/finance", label: "Finance", icon: Wallet, group: "desk", roles: ["admin", "manager"] },
   { href: "/finance/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
   { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
     roles: ["admin", "manager", "doctor", "supervisor", "reception"], module: "insurance" },

@@ -154,18 +154,6 @@ export interface QueuedPatient {
   };
 }
 
-export interface CollectionSummary {
-  on: string;
-  invoice_count: number;
-  patient_count: number;
-  billed_paise: number;
-  discount_paise: number;
-  collected_paise: number;
-  refunded_paise: number;
-  outstanding_paise: number;
-  by_mode: Record<string, number>;
-  by_department: Record<string, number>;
-}
 
 export interface CashSession {
   id: string;

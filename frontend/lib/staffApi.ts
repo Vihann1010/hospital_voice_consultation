@@ -72,7 +72,6 @@ import type {
 import type {
   CashSession,
   QueuedPatient,
-  CollectionSummary,
   Invoice,
   PatientCard,
   PaymentRecord,
@@ -703,8 +702,6 @@ export const staffApi = {
   saveService: (code: string, payload: Record<string, unknown>) =>
     request<ServiceItem>(`/finance/services/${code}`, { method: "PUT", body: JSON.stringify(payload) }),
 
-  collections: (on?: string) =>
-    request<CollectionSummary>(`/finance/collections${query({ on })}`),
 
   outstandingInvoices: () =>
     request<{ count: number; total_outstanding_paise: number; invoices: Record<string, unknown>[] }>(
