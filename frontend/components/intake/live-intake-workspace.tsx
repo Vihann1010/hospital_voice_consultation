@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Clock, Loader2, Mic, Save } from "lucide-react";
 import { useConsultation } from "@/lib/hooks/useConsultation";
@@ -214,6 +215,30 @@ export function LiveIntakeWorkspace({
             <CardTitle className="flex items-center gap-2"><Mic className="h-4 w-4 text-pine" /> Conversation</CardTitle>
             <span className="text-xs text-ink-muted">{entries.length} turns · verbatim record</span>
           </CardHeader>
+          {/* The assistant, at the head of the conversation and staying
+              there: the tablet faces the patient, and a face to speak to
+              carries a voice call that is otherwise a wall of text. It sits
+              outside the scrolling area on purpose — only the conversation
+              moves, as it always has. */}
+          <div className="relative shrink-0 overflow-hidden border-b border-border">
+            <Image
+              src="/brand/intake-assistant.webp"
+              alt=""
+              width={1400}
+              height={584}
+              // The banner is the width of the conversation panel, a little
+              // over two thirds of a tablet's screen; without this the
+              // browser picks a 700px copy and upscales it.
+              sizes="(max-width: 1024px) 100vw, 70vw"
+              priority
+              className="h-36 w-full object-cover object-[center_28%] sm:h-44"
+            />
+            {/* Said plainly, because the picture does not say it: the voice
+                is an assistant preparing the visit, not a doctor. */}
+            <span className="absolute bottom-2 left-3 rounded-full bg-pine-deep/80 px-2.5 py-1 text-[11px] font-medium text-mint">
+              AI intake assistant — not a doctor
+            </span>
+          </div>
           <CardContent ref={transcriptRef} className="thin-scroll min-h-0 flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-live="polite">
             {entries.length === 0 && <p className="py-12 text-center text-sm text-ink-faint">The conversation will appear here as the patient speaks.</p>}
             {entries.map((entry) => (
