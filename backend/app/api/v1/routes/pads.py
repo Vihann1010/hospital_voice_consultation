@@ -31,6 +31,7 @@ from app.schemas.pad_schemas import (
     PadLayoutIn,
     PadLayoutOut,
     PadSaveIn,
+    PadSignRequest,
     PadTemplateIn,
     PadTemplateOut,
 )
@@ -420,11 +421,16 @@ async def discard_document(document_id: uuid.UUID, service: Service, user: Curre
 
 @router.post("/documents/{document_id}/sign", response_model=PadDocumentOut, dependencies=[Depends(READ)])
 async def sign_document(
-    document_id: uuid.UUID, service: Service, user: CurrentUser, request: Request
+    document_id: uuid.UUID, service: Service, user: CurrentUser, request: Request,
+    payload: Optional[PadSignRequest] = None,
 ) -> PadDocumentOut:
     await _authorise(service, user, document_id, sign=True)
     try:
-        document = await service.sign(document_id, user=user)
+        document = await service.sign(
+            document_id,
+            user=user,
+            acknowledged_alerts=payload.acknowledged_alerts if payload else [],
+        )
     except PadError as exc:
         raise _fail(exc) from exc
     await audit_record(
@@ -433,7 +439,14 @@ async def sign_document(
         entity_type="pad_document", entity_id=document.id, patient_id=document.patient_id,
         ip_address=client_ip(request),
         detail={"document_type": document.document_type, "version": document.version,
-                "supersedes": str(document.supersedes_id) if document.supersedes_id else None},
+                "supersedes": str(document.supersedes_id) if document.supersedes_id else None,
+                # What the signature issued, so the audit trail answers
+                # "where did this prescription come from?" in one hop.
+                "prescription": str(document.prescription_id) if document.prescription_id else None,
+                "investigation_order": (
+                    str(document.investigation_order_id)
+                    if document.investigation_order_id else None
+                )},
     )
     return PadDocumentOut.model_validate(document)
 

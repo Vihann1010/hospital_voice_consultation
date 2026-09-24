@@ -15,7 +15,8 @@ Section rules — what a value may hold, how templates merge, what carries
 forward — are in `app/pads/sections.py`, which has no database in it.
 """
 import uuid
-from datetime import datetime, timezone
+import re
+from datetime import datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, case, delete, func, or_, select
@@ -36,6 +37,8 @@ from app.pads import sections as rules
 from app.pads.defaults import DOCUMENT_TYPES, PROTECTED_SECTIONS, default_layout
 from app.pads.defaults import document_type as type_spec
 from app.models.ipd import Admission
+from app.models.consultant import Consultant
+from app.services.prescription_service import PrescriptionService
 
 logger = get_logger(__name__)
 
@@ -96,6 +99,32 @@ SCOPES = ("personal", "department", "hospital")
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _review_date(follow_up: Dict[str, Any]) -> Optional[datetime]:
+    """When the patient is to be seen again.
+
+    The pad asks for a number of days, because that is how it is said in the
+    room. A date is what the patient's copy needs, so the count is turned into
+    one here — from today, the day the pad is signed.
+
+    "Only if needed" is not a date and must not become one: a follow-up nobody
+    asked for would appear in the appointment book.
+    """
+    chosen = str(follow_up.get("after_days") or "").strip()
+    match = re.match(r"^(\d{1,3})\s*day", chosen, re.IGNORECASE)
+    if match:
+        return datetime.combine(
+            local_today() + timedelta(days=int(match.group(1))), time.min, tzinfo=timezone.utc
+        )
+    # Layouts written before the pad asked in days may still hold a date.
+    legacy = follow_up.get("date")
+    if legacy:
+        try:
+            return datetime.fromisoformat(str(legacy))
+        except ValueError:
+            return None
+    return None
 
 
 class PadService:
@@ -285,14 +314,75 @@ class PadService:
 
         existing = await self._draft_for(consultation_id, document_type)
         if existing is not None:
+            # A draft carries the layout it was made with, which is right for
+            # a signed document and wrong for one still being written: a pad
+            # opened this morning would keep yesterday's sections for as long
+            # as it stayed a draft, so a new field never reaches the doctor
+            # who already has the patient in front of them. An unsigned draft
+            # therefore takes the current layout, keeping everything written
+            # under a section that still exists.
+            layout, current_sections, _scope = await self.resolve_layout(
+                document_type, department=consultation.department, user_id=user.id
+            )
+            changed = False
+            if existing.sections != current_sections:
+                # Anything typed under a section that no longer exists would be
+                # dropped by the clean below, so it is carried across first.
+                # The free-text History became the same section the intake
+                # drafts, and a doctor's own words must survive the move.
+                carried = dict(existing.values or {})
+                dropped = {section["key"] for section in existing.sections} - {
+                    section["key"] for section in current_sections
+                }
+                if "history" in dropped:
+                    written = str((carried.get("history") or {}).get("text") or "").strip()
+                    if written:
+                        # One history, one shape: the drafted prose and the
+                        # doctor's own words become a single list of lines
+                        # rather than a paragraph with bullets under it.
+                        summary = dict(carried.get("intake_summary") or {})
+                        lines = list(summary.get("items") or [])
+                        lines += rules.sentences(summary.pop("text", ""))
+                        lines += rules.sentences(written)
+                        summary["items"] = list(dict.fromkeys(lines))
+                        carried["intake_summary"] = summary
+                        # These are the doctor's own words, so the section is
+                        # marked as theirs: otherwise the refresh below would
+                        # read it as an untouched draft and offer them back as
+                        # suggestions to accept.
+                        origins = dict(existing.provenance or {})
+                        origin = dict(origins.get("intake_summary") or {})
+                        origin["edited"] = True
+                        origins["intake_summary"] = origin
+                        existing.provenance = origins
+
+                existing.sections = current_sections
+                existing.layout_id = layout.id if layout else None
+                existing.layout_revision = layout.revision if layout else 0
+                existing.values = rules.clean_values(current_sections, carried)
+                changed = True
+
+            # Lines the intake offered: brought in for sections that are still
+            # empty, and handed back as suggestions where an older draft had
+            # them written in unasked.
+            values, provenance, offered = rules.refresh_intake_suggestions(
+                existing.sections, existing.values, existing.provenance,
+                consultation.medical_json,
+            )
+            if offered:
+                existing.values = values
+                existing.provenance = provenance
+                changed = True
+
             # Vitals saved at intake after this draft was made are brought in
             # when the pad is opened — never while it is open, which would
             # collide with the doctor's autosave — and only where the doctor
             # has not typed their own readings.
-            values, provenance, changed = rules.refresh_intake_vitals(
+            values, provenance, vitals_changed = rules.refresh_intake_vitals(
                 existing.sections, existing.values, existing.provenance,
                 (consultation.medical_json or {}).get("vitals"),
             )
+            changed = changed or vitals_changed
             if changed:
                 existing.values = values
                 existing.provenance = provenance
@@ -1101,7 +1191,161 @@ class PadService:
         logger.info("pad_draft_discarded", extra={"document_id": str(document_id), "by": user.full_name})
 
     # ------------------------------------------------------------- signing
-    async def sign(self, document_id: uuid.UUID, *, user: User) -> PadDocument:
+
+    # ------------------------------------------------ what a pad issues
+    def _rows(self, document: PadDocument, kind: str, key: str) -> List[Dict[str, Any]]:
+        """Every accepted row of one section kind, in the order written.
+
+        Suggestions are ignored on purpose: only what the doctor accepted is
+        prescribed or ordered.
+        """
+        rows: List[Dict[str, Any]] = []
+        for section in document.sections:
+            if section["kind"] != kind:
+                continue
+            value = (document.values or {}).get(section["key"]) or {}
+            rows.extend(value.get(key) or [])
+        return rows
+
+    def _section_items(self, document: PadDocument, key: str) -> List[str]:
+        value = (document.values or {}).get(key) or {}
+        return [item for item in (value.get("items") or []) if item]
+
+    async def _check_prescribing(
+        self, document: PadDocument, acknowledged_alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Refuse the signature while a serious medication warning stands.
+
+        Checked before anything is written, not after: a signature is the
+        doctor taking responsibility, and it must not be possible to sign and
+        then be told the patient is allergic to what was just prescribed.
+        """
+        medicines = self._rows(document, "medicines", "medicines")
+        if not medicines:
+            return
+        from app.prescriptions import safety
+
+        prescriptions = PrescriptionService(self.session)
+        patient = await self.session.get(Patient, document.patient_id)
+        alerts = safety.run_all(
+            medicines,
+            allergies=await prescriptions._known_allergies(document.patient_id),
+            pregnancy_possible=await prescriptions._pregnancy_possible(
+                document.patient_id, patient
+            ),
+        )
+        acknowledged = {
+            (item.get("kind"), tuple(sorted(item.get("medicines") or [])))
+            for item in acknowledged_alerts or []
+        }
+        standing = [
+            alert for alert in safety.blocking_alerts(alerts)
+            if (alert.kind, tuple(sorted(alert.medicines))) not in acknowledged
+        ]
+        if standing:
+            raise PadError(
+                "Acknowledge these safety warnings before signing: "
+                + "; ".join(alert.description for alert in standing)
+            )
+
+    async def _issue_from_pad(
+        self, document: PadDocument, *, user: User, acknowledged_alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Turn the signed pad into the prescription and the orders it records.
+
+        The pad is the only place the doctor writes; the prescription and the
+        investigation order are made from it, so the two can never disagree.
+        Both are linked back to the document.
+        """
+        medicines = self._rows(document, "medicines", "medicines")
+        investigations = self._rows(document, "investigations", "investigations")
+        if not medicines and not investigations:
+            return
+
+        department = document.department or user.department or Department.ORTHOPEDICS
+        signer = (
+            await self.session.execute(
+                select(Consultant).where(Consultant.user_id == user.id)
+            )
+        ).scalar_one_or_none()
+
+        if medicines and document.prescription_id is None:
+            diagnosis = "; ".join(self._section_items(document, "diagnosis"))
+            if not diagnosis:
+                raise PadError(
+                    "Write the diagnosis before signing — a prescription cannot be "
+                    "issued without one."
+                )
+            follow_up = ((document.values or {}).get("follow_up") or {}).get("fields") or {}
+            review_on = _review_date(follow_up)
+            prescription = await PrescriptionService(self.session).create(
+                patient_id=document.patient_id,
+                consultation_id=document.consultation_id,
+                department=department,
+                doctor_id=user.id,
+                doctor_name=user.full_name,
+                doctor_qualification=signer.qualification if signer else None,
+                doctor_registration=signer.registration_number if signer else None,
+                medicines=medicines,
+                diagnosis=diagnosis,
+                cause=None,
+                chief_complaint="; ".join(self._section_items(document, "complaints")) or None,
+                clinical_findings=(
+                    "; ".join(self._section_items(document, "examination")) or None
+                ),
+                investigations=[row["name"] for row in investigations],
+                general_instructions=(
+                    "; ".join(self._section_items(document, "advice")) or None
+                ),
+                follow_up_notes=follow_up.get("notes"),
+                follow_up_date=review_on,
+                dictation_transcript=None,
+                acknowledged_alerts=acknowledged_alerts or [],
+                issue=True,
+            )
+            document.prescription_id = prescription.id
+
+        # Only a test that resolves in the catalogue can be ordered. One typed
+        # as free text still prints on the pad as advice, but the laboratory
+        # never receives an order it cannot act on.
+        codes = [row["code"] for row in investigations if row.get("code")]
+        if codes and document.investigation_order_id is None:
+            from app.services.investigation_service import (
+                InvestigationError,
+                InvestigationService,
+            )
+            from app.models.enums import InvestigationPriority
+
+            try:
+                order = await InvestigationService(self.session).create_order(
+                    patient_id=document.patient_id,
+                    consultation_id=document.consultation_id,
+                    department=department,
+                    codes=codes,
+                    priority=InvestigationPriority.ROUTINE,
+                    clinical_notes=None,
+                    provisional_diagnosis=(
+                        "; ".join(self._section_items(document, "diagnosis")) or None
+                    ),
+                    doctor_id=user.id,
+                    doctor_name=user.full_name,
+                    item_instructions={
+                        row["code"]: row["note"]
+                        for row in investigations
+                        if row.get("code") and row.get("note")
+                    },
+                )
+            except InvestigationError as exc:
+                raise PadError(str(exc)) from exc
+            document.investigation_order_id = order.id
+
+    async def sign(
+        self,
+        document_id: uuid.UUID,
+        *,
+        user: User,
+        acknowledged_alerts: Optional[List[Dict[str, Any]]] = None,
+    ) -> PadDocument:
         document = (
             await self.session.execute(
                 select(PadDocument).where(PadDocument.id == document_id).with_for_update()
@@ -1128,6 +1372,8 @@ class PadService:
         ]
         if missing:
             raise PadError("Required before signing — " + "; ".join(missing[:5]))
+
+        await self._check_prescribing(document, acknowledged_alerts or [])
 
         spec = type_spec(document.document_type)
         if spec is not None and spec.family:
@@ -1188,6 +1434,10 @@ class PadService:
             diagnoses = ((document.values or {}).get("final_diagnosis") or {}).get("items") or []
             if admission is not None and diagnoses:
                 admission.final_diagnosis = "; ".join(diagnoses)[:2000]
+
+        await self._issue_from_pad(
+            document, user=user, acknowledged_alerts=acknowledged_alerts or []
+        )
 
         await self._learn(document)
         await self.session.commit()

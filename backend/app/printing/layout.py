@@ -101,8 +101,21 @@ def resolve_fonts(family: str) -> tuple:
     """
     from reportlab.pdfbase import pdfmetrics
 
+    # Registering here rather than trusting an earlier import: a pad printed
+    # before any prescription would otherwise fall back to Helvetica, which
+    # has no Devanagari at all — the Hindi history came out as empty boxes.
+    from app.prescriptions.pdf import _register_fonts
+
+    _register_fonts()
+    from app.prescriptions import pdf as prescription_pdf
+
     available = set(pdfmetrics.getRegisteredFontNames())
-    regular = family if family in available else "Helvetica"
+    fallback = (
+        prescription_pdf.FONT_REGULAR
+        if prescription_pdf.FONT_REGULAR in available
+        else "Helvetica"
+    )
+    regular = family if family in available else fallback
     bold = f"{regular}-Bold"
     if bold not in available:
         bold = "Helvetica-Bold" if regular == "Helvetica" else regular

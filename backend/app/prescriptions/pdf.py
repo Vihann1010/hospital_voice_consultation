@@ -61,6 +61,14 @@ _FONT_CANDIDATES = [
         "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
     ),
     (
+        # Ships with Debian's Indic font packages and covers Devanagari
+        # properly, conjuncts included. Preferred over FreeSans, which has the
+        # code points but draws them as empty boxes.
+        "SatyaSans",
+        "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+        "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+    ),
+    (
         "SatyaSans",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",

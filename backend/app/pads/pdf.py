@@ -88,6 +88,30 @@ def _field_value(spec: Dict[str, Any], value: Any) -> Optional[str]:
     return f"{text} {spec['unit']}" if spec.get("unit") else text
 
 
+def _medicine_line(row: Dict[str, Any]) -> str:
+    """One prescribed medicine as a single readable line.
+
+    Nothing is invented to fill a gap: a medicine dictated without a duration
+    prints without one, because a plausible-looking "for 5 days" nobody said
+    is how a patient takes something for the wrong length of time.
+    """
+    head = " ".join(
+        part for part in (row.get("name"), row.get("strength"), row.get("form")) if part
+    )
+    rest = [
+        part
+        for part in (
+            row.get("dosage"),
+            row.get("frequency_text") or row.get("frequency_code"),
+            row.get("duration"),
+            row.get("timing"),
+            row.get("route"),
+        )
+        if part
+    ]
+    return f"{head} — {', '.join(rest)}" if rest else head
+
+
 def _section_flowables(
     section: Dict[str, Any],
     value: Dict[str, Any],
@@ -114,6 +138,21 @@ def _section_flowables(
                 styles["body"],
             )
         )
+    elif kind == "medicines":
+        # Written the way a prescription is read aloud at the counter: the
+        # drug first, then how much, how often and for how long.
+        for row in value.get("medicines") or []:
+            body.append(
+                Paragraph(_text(_medicine_line(row)), styles["bullet"], bulletText="•")
+            )
+            if row.get("instructions"):
+                body.append(Paragraph(_text(row["instructions"]), styles["note"]))
+    elif kind == "investigations":
+        for row in value.get("investigations") or []:
+            line = row["name"]
+            if row.get("note"):
+                line += f" — {row['note']}"
+            body.append(Paragraph(_text(line), styles["bullet"], bulletText="•"))
     else:
         if value.get("text"):
             body.append(Paragraph(_text(value["text"]), styles["body"]))

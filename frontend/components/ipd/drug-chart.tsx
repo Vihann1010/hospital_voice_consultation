@@ -84,7 +84,8 @@ function shiftDay(day: string, by: number): string {
 
 function dayLabel(day: string): string {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-IN", {
-    weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Kolkata",
+    timeZone: "Asia/Kolkata",
+    weekday: "short", day: "numeric", month: "short",
   });
 }
 

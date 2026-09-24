@@ -34,6 +34,7 @@ const SELECT =
 
 const KIND_LABEL: Record<SectionKind, string> = {
   text: "Free text", list: "List", fields: "Fields", ai: "AI draft",
+  medicines: "Medicines", investigations: "Investigations",
 };
 const FIELD_TYPES: { key: FieldType; label: string }[] = [
   { key: "text", label: "Short text" }, { key: "textarea", label: "Long text" },

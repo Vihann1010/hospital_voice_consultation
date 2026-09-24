@@ -154,6 +154,14 @@ class PadDocument(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Certificates and consent forms only. The serial is given at first
     # signing and kept by corrections; the paper columns record that the
     # patient's signed copy of a consent form came back.
+    # What signing this document issued. Filled once, when it is signed.
+    prescription_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prescriptions.id", ondelete="SET NULL")
+    )
+    investigation_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("investigation_orders.id", ondelete="SET NULL")
+    )
+
     serial_number: Mapped[Optional[str]] = mapped_column(String(24), index=True)
     #: A radiology report's imaging order item.
     order_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(

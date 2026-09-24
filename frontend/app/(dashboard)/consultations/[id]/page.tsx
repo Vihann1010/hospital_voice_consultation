@@ -20,7 +20,6 @@ import {
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatusBadge, AiBadge } from "@/components/dashboard/badges";
 import { TranscriptView } from "@/components/dashboard/transcript-view";
-import { PrescriptionsTab } from "@/components/prescriptions/prescriptions-tab";
 import { BroughtReports } from "@/components/investigations/brought-reports";
 import { VisitPad } from "@/components/pad/visit-pad";
 import { PatientForms } from "@/components/pad/patient-forms";
@@ -69,11 +68,28 @@ export default function ConsultationDetailPage() {
     void load();
   }, [load]);
 
-  // Live consultations keep refreshing so the doctor sees the intake unfold.
+  // A live consultation refreshes so the doctor sees the intake unfold, but
+  // only while this tab is actually being looked at. A screen left open on a
+  // second monitor used to reload every six seconds all afternoon.
   useEffect(() => {
     if (data?.status !== "in_progress") return;
-    const timer = setInterval(() => void load(), 6000);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (timer === null) timer = setInterval(() => void load(), 15000);
+    };
+    const stop = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const onVisibility = () => (document.hidden ? stop() : (void load(), start()));
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [data?.status, load]);
 
   async function markReviewed() {
@@ -113,14 +129,6 @@ export default function ConsultationDetailPage() {
   const vitals = intakeVitals((dossier as { vitals?: Record<string, unknown> } | null | undefined)?.vitals);
   const reviewed = Boolean(dossier?.reviewed_at);
   const live = data.status === "in_progress";
-  const intakePoints = [
-    summary?.one_liner,
-    summary?.history_of_present_illness,
-    ...(summary?.pertinent_positives ?? []),
-    record?.chief_complaint ? `Complaint: ${record.chief_complaint}` : null,
-    record?.duration ? `Duration: ${record.duration}` : null,
-    record?.pain?.location ? `Pain site: ${record.pain.location}` : null,
-  ].filter((point): point is string => Boolean(point?.trim()));
 
   return (
     <>
@@ -159,7 +167,6 @@ export default function ConsultationDetailPage() {
               <TabsTrigger value="record">Record</TabsTrigger>
               <TabsTrigger value="pad">Visit Pad</TabsTrigger>
               <TabsTrigger value="forms">Certificates</TabsTrigger>
-              <TabsTrigger value="prescriptions">Prescription</TabsTrigger>
               <TabsTrigger value="reports">
                 <FlaskConical className="h-3.5 w-3.5" /> Reports brought
               </TabsTrigger>
@@ -206,23 +213,6 @@ export default function ConsultationDetailPage() {
 
               <div className="space-y-4">
                 <Card>
-                  <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-                    <CardTitle>Key points from intake</CardTitle><AiBadge />
-                  </CardHeader>
-                  <CardContent>
-                    {intakePoints.length > 0 ? (
-                      <ul className="space-y-1.5 text-sm leading-snug text-ink">
-                        {intakePoints.map((point) => (
-                          <li key={point} className="flex min-w-0 items-start gap-2">
-                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-marigold-deep" />
-                            <span className="min-w-0 whitespace-normal break-words">{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : <p className="text-sm text-ink-muted">No intake points recorded yet.</p>}
-                  </CardContent>
-                </Card>
-                <Card>
                   <CardHeader className="pb-3"><CardTitle>Vitals</CardTitle></CardHeader>
                   <CardContent>
                     {vitals.length > 0 ? (
@@ -238,7 +228,7 @@ export default function ConsultationDetailPage() {
             {/* The OCR analysis has existed for months with nowhere to
                 appear. This is where the doctor finally sees it. */}
             <TabsContent value="pad">
-              <VisitPad consultationId={data.id} />
+              <VisitPad consultationId={data.id} transcript={data.transcript ?? undefined} />
             </TabsContent>
 
             <TabsContent value="forms">
@@ -260,20 +250,6 @@ export default function ConsultationDetailPage() {
             </TabsContent>
 
 
-            <TabsContent value="prescriptions">
-              <PrescriptionsTab
-                patientId={data.patient.id}
-                consultationId={data.id}
-                department={data.department}
-                prefill={{
-                  diagnosis: dossier?.clinical_summary?.one_liner ?? record?.chief_complaint ?? null,
-                  chiefComplaint: record?.chief_complaint ?? null,
-                  investigations: (dossier?.investigations?.investigations ?? []).map(
-                    (item) => item.test
-                  ),
-                }}
-              />
-            </TabsContent>
         </Tabs>
       </div>
     </>

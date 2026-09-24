@@ -73,14 +73,46 @@ def _vitals(*extra: Dict[str, Any], title: str = "Vitals") -> Dict[str, Any]:
 
 _ABSENT_PRESENT = ["Absent", "Present"]
 
+#: How soon the patient is seen again. Plain day counts: a follow-up is
+#: counted in days at the desk, and "1 week" would have to be turned back into
+#: one somewhere less visible.
+FOLLOW_UP_CHOICES = [
+    "3 days", "5 days", "7 days", "10 days", "14 days", "21 days",
+    "30 days", "45 days", "60 days", "90 days", "Only if needed",
+]
+
+
 # ------------------------------------------------------------------ OPD
 _OPD_VISIT: List[Dict[str, Any]] = [
-    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+    {"key": "intake_summary", "title": "History", "kind": "ai",
      "ai_source": "intake_summary", "visible_in_print": True},
+    # The same history in Hindi. Kept as its own section rather than mixed
+    # into the English one so either can be turned off, and so the patient's
+    # copy reads as one list rather than alternating languages.
+    {"key": "intake_summary_hi", "title": "मरीज़ का विवरण (Hindi)", "kind": "ai",
+     "ai_source": "intake_summary_hi", "visible_in_print": True},
+    {
+        "key": "background",
+        "title": "Background",
+        "kind": "fields",
+        "ai_source": "background",
+        "carry_forward": True,
+        "fields": [
+            {"key": "current_medicines", "label": "Current medicines", "type": "text"},
+            {"key": "dosage", "label": "Dosage", "type": "text"},
+            {"key": "past_history", "label": "Past history", "type": "text"},
+            {"key": "previous_surgeries", "label": "Previous surgeries", "type": "text"},
+            {"key": "allergies", "label": "Allergies", "type": "text"},
+        ],
+    },
+    # Asked of the patient, not drawn from the intake: the voice intake does
+    # not cover it today, so the box starts empty rather than pretending to.
+    {"key": "family_history", "title": "Family history", "kind": "list",
+     "catalogue_category": "family_history", "carry_forward": True,
+     "placeholder": "Diabetes, heart disease, cancer in the family\u2026"},
     {"key": "complaints", "title": "Chief complaints", "kind": "list",
-     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
-    {"key": "history", "title": "History", "kind": "text",
-     "placeholder": "Onset, progression, relevant history"},
+     "ai_source": "chief_complaint", "catalogue_category": "complaint",
+     "placeholder": "Add a complaint"},
     {
         "key": "vitals",
         "title": "Vitals",
@@ -98,21 +130,40 @@ _OPD_VISIT: List[Dict[str, Any]] = [
      "catalogue_category": "examination", "placeholder": "Add a finding"},
     {"key": "red_flags", "title": "Red flags", "kind": "ai",
      "ai_source": "red_flags", "visible_in_print": False},
-    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
-     "ai_source": "differentials", "visible_in_print": False},
+    # What the intake thought it might be is offered here rather than in a
+    # section of its own: two lists of conditions side by side is one list
+    # the doctor keeps and one they ignore.
     {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
-     "catalogue_category": "diagnosis", "carry_forward": True,
-     "placeholder": "Add a diagnosis"},
-    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+     "ai_source": "differentials", "catalogue_category": "diagnosis",
+     "carry_forward": True, "placeholder": "Add a diagnosis"},
+    # Advised tests and prescribed medicines are rows, not prose: signing the
+    # pad places the orders and issues the prescription from exactly what is
+    # written here, so there is no second screen to keep in step.
+    {"key": "investigations", "title": "Investigations advised", "kind": "investigations",
      "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
-    {"key": "advice", "title": "Advice", "kind": "list",
-     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    {"key": "medicines", "title": "Medicines", "kind": "medicines"},
+    {"key": "advice", "title": "Instructions (English)", "kind": "list",
+     "ai_source": "advice", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "Add an instruction"},
+    {"key": "advice_hi", "title": "\u0928\u093f\u0930\u094d\u0926\u0947\u0936 (Hindi)", "kind": "list",
+     "ai_source": "advice_hi", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "\u0928\u093f\u0930\u094d\u0926\u0947\u0936 \u091c\u094b\u0921\u093c\u0947\u0902"},
+    # The doctor's own working note. Kept off the patient's copy by default:
+    # it is where a doubt or a thought for next time is written, and neither
+    # belongs on a slip the patient carries home.
+    {"key": "doctor_notes", "title": "Doctor's notes", "kind": "text",
+     "visible_in_print": False, "carry_forward": True,
+     "placeholder": "Notes for yourself and the next visit"},
     {
         "key": "follow_up",
         "title": "Follow-up",
         "kind": "fields",
         "fields": [
-            {"key": "date", "label": "Review on", "type": "date"},
+            # Chosen as a number of days, which is how it is said in the room —
+            # "come back in a week" — and turned into a date when the pad is
+            # signed, so the patient's copy still carries a real date.
+            {"key": "after_days", "label": "Review in", "type": "select",
+             "options": FOLLOW_UP_CHOICES},
             {"key": "notes", "label": "Notes", "type": "text"},
         ],
     },
@@ -768,11 +819,35 @@ PROTECTED_SECTIONS: Dict[str, Dict[str, List[str]]] = {
 # from the Pad layouts screen — this only decides where they start from.
 
 _OPD_VISIT_GASTRO: List[Dict[str, Any]] = [
-    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+    {"key": "intake_summary", "title": "History", "kind": "ai",
      "ai_source": "intake_summary", "visible_in_print": True},
+    # The same history in Hindi, as on the general pad: either can be turned
+    # off, and the patient's copy reads as one list rather than alternating.
+    {"key": "intake_summary_hi", "title": "मरीज़ का विवरण (Hindi)", "kind": "ai",
+     "ai_source": "intake_summary_hi", "visible_in_print": True},
+    {
+        "key": "background",
+        "title": "Background",
+        "kind": "fields",
+        "ai_source": "background",
+        "carry_forward": True,
+        "fields": [
+            {"key": "current_medicines", "label": "Current medicines", "type": "text"},
+            {"key": "dosage", "label": "Dosage", "type": "text"},
+            {"key": "past_history", "label": "Past history", "type": "text"},
+            {"key": "previous_surgeries", "label": "Previous surgeries", "type": "text"},
+            {"key": "allergies", "label": "Allergies", "type": "text"},
+        ],
+    },
+    # Bowel and stomach cancer run in families, and it is the answer that
+    # decides whether a change in bowel habit is scoped now or watched.
+    {"key": "family_history", "title": "Family history", "kind": "list",
+     "catalogue_category": "family_history", "carry_forward": True,
+     "placeholder": "Bowel or stomach cancer, liver disease, IBD in the family…"},
     {"key": "complaints", "title": "Chief complaints", "kind": "list",
-     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
-    {"key": "history", "title": "History", "kind": "text",
+     "ai_source": "chief_complaint", "catalogue_category": "complaint",
+     "placeholder": "Add a complaint"},
+    {"key": "history", "title": "History of present illness", "kind": "text",
      "placeholder": "Onset, progression, relation to food, weight change"},
     # The four questions a gastroenterologist asks every patient, as their own
     # boxes rather than buried in free text: they are what the next visit is
@@ -811,30 +886,37 @@ _OPD_VISIT_GASTRO: List[Dict[str, Any]] = [
      "placeholder": "Tenderness, organomegaly, masses, bowel sounds"},
     {"key": "red_flags", "title": "Red flags", "kind": "ai",
      "ai_source": "red_flags", "visible_in_print": False},
-    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
-     "ai_source": "differentials", "visible_in_print": False},
     {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
-     "catalogue_category": "diagnosis", "carry_forward": True,
-     "placeholder": "Add a diagnosis"},
+     "ai_source": "differentials", "catalogue_category": "diagnosis",
+     "carry_forward": True, "placeholder": "Add a diagnosis"},
     # Carried forward on purpose: what the last scope showed is the context for
     # every visit after it, and a doctor should not have to open another screen
     # to remember it.
     {"key": "endoscopy_history", "title": "Previous endoscopy", "kind": "text",
      "carry_forward": True,
      "placeholder": "Date, procedure, findings, biopsy result"},
-    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+    {"key": "investigations", "title": "Investigations advised", "kind": "investigations",
      "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
+    {"key": "medicines", "title": "Medicines", "kind": "medicines"},
+    {"key": "advice", "title": "Instructions (English)", "kind": "list",
+     "ai_source": "advice", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "Add an instruction"},
+    {"key": "advice_hi", "title": "निर्देश (Hindi)", "kind": "list",
+     "ai_source": "advice_hi", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "निर्देश जोड़ें"},
+    {"key": "doctor_notes", "title": "Doctor's notes", "kind": "text",
+     "visible_in_print": False, "carry_forward": True,
+     "placeholder": "Notes for yourself and the next visit"},
     {"key": "diet_advice", "title": "Diet advice", "kind": "list",
      "catalogue_category": "advice", "carry_forward": True,
      "placeholder": "Meal timing, what to avoid, alcohol"},
-    {"key": "advice", "title": "Advice", "kind": "list",
-     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
     {
         "key": "follow_up",
         "title": "Follow-up",
         "kind": "fields",
         "fields": [
-            {"key": "date", "label": "Review on", "type": "date"},
+            {"key": "after_days", "label": "Review in", "type": "select",
+             "options": FOLLOW_UP_CHOICES},
             {"key": "notes", "label": "Notes", "type": "text"},
         ],
     },
@@ -842,10 +924,15 @@ _OPD_VISIT_GASTRO: List[Dict[str, Any]] = [
 
 #: (document type, department) -> the sections that department starts from.
 _OPD_VISIT_DENTAL: List[Dict[str, Any]] = [
-    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+    {"key": "intake_summary", "title": "History", "kind": "ai",
      "ai_source": "intake_summary", "visible_in_print": True},
+    # The same history in Hindi, as on the general pad: either can be turned
+    # off, and the patient's copy reads as one list rather than alternating.
+    {"key": "intake_summary_hi", "title": "मरीज़ का विवरण (Hindi)", "kind": "ai",
+     "ai_source": "intake_summary_hi", "visible_in_print": True},
     {"key": "complaints", "title": "Chief complaints", "kind": "list",
-     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
+     "ai_source": "chief_complaint", "catalogue_category": "complaint",
+     "placeholder": "Add a complaint"},
     {"key": "history", "title": "History", "kind": "text",
      "placeholder": "Which tooth, what brings the pain on, how long, swelling"},
     {
@@ -924,11 +1011,9 @@ _OPD_VISIT_DENTAL: List[Dict[str, Any]] = [
     },
     {"key": "red_flags", "title": "Red flags", "kind": "ai",
      "ai_source": "red_flags", "visible_in_print": False},
-    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
-     "ai_source": "differentials", "visible_in_print": False},
     {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
-     "catalogue_category": "diagnosis", "carry_forward": True,
-     "placeholder": "With the tooth: e.g. Irreversible pulpitis 36"},
+     "ai_source": "differentials", "catalogue_category": "diagnosis",
+     "carry_forward": True, "placeholder": "With the tooth: e.g. Irreversible pulpitis 36"},
     # The treatment plan runs over several visits (a root canal is three
     # sittings, a crown two), so it is carried forward and ticked off: each
     # sitting is booked as a procedure and billed to the visit it happens in.
@@ -937,16 +1022,25 @@ _OPD_VISIT_DENTAL: List[Dict[str, Any]] = [
      "placeholder": "Tooth and procedure, in order: e.g. 36 RCT, 36 crown"},
     {"key": "done_today", "title": "Done today", "kind": "text",
      "placeholder": "By tooth"},
-    {"key": "investigations", "title": "Investigations advised", "kind": "ai",
+    {"key": "investigations", "title": "Investigations advised", "kind": "investigations",
      "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
-    {"key": "advice", "title": "Advice", "kind": "list",
-     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    {"key": "medicines", "title": "Medicines", "kind": "medicines"},
+    {"key": "advice", "title": "Instructions (English)", "kind": "list",
+     "ai_source": "advice", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "Add an instruction"},
+    {"key": "advice_hi", "title": "निर्देश (Hindi)", "kind": "list",
+     "ai_source": "advice_hi", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "निर्देश जोड़ें"},
+    {"key": "doctor_notes", "title": "Doctor's notes", "kind": "text",
+     "visible_in_print": False, "carry_forward": True,
+     "placeholder": "Notes for yourself and the next visit"},
     {
         "key": "follow_up",
         "title": "Next sitting",
         "kind": "fields",
         "fields": [
-            {"key": "date", "label": "Next sitting on", "type": "date"},
+            {"key": "after_days", "label": "Next sitting in", "type": "select",
+             "options": FOLLOW_UP_CHOICES},
             {"key": "notes", "label": "For", "type": "text"},
         ],
     },
