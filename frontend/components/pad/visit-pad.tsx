@@ -44,6 +44,7 @@ import {
   X,
 } from "lucide-react";
 import { ApiError, staffApi } from "@/lib/staffApi";
+import { getToken } from "@/lib/auth";
 import type {
   FieldSpec,
   FieldValue,
@@ -55,7 +56,7 @@ import type {
   SectionSpec,
   SectionValue,
 } from "@/lib/types/pad";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import { PhraseInput } from "@/components/pad/phrase-input";
 import { useShortcut } from "@/components/keyboard/keyboard-provider";
 import { AiBadge } from "@/components/dashboard/badges";
@@ -250,11 +251,38 @@ function ItemList({
         <ul className="space-y-1">
           {items.map((item, index) => (
             <li
-              key={`${item}-${index}`}
+              key={index}
               className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-mint/50"
             >
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-pine/50" />
-              <span className="min-w-0 flex-1 text-sm text-ink">{item}</span>
+              {/* A line the doctor accepted is theirs to reword. A drafted
+                  differential usually wants a word changed, not deleting and
+                  typing again from nothing. Empty on blur means removed. */}
+              {editable ? (
+                <textarea
+                  value={item}
+                  rows={1}
+                  aria-label={`Edit ${item}`}
+                  onChange={(event) =>
+                    onChange(
+                      items.map((existing, at) => (at === index ? event.target.value : existing))
+                    )
+                  }
+                  onBlur={(event) => {
+                    if (!event.target.value.trim()) {
+                      onChange(items.filter((_, at) => at !== index));
+                    }
+                  }}
+                  onInput={(event) => {
+                    const box = event.currentTarget;
+                    box.style.height = "auto";
+                    box.style.height = `${box.scrollHeight}px`;
+                  }}
+                  className="min-w-0 flex-1 resize-none overflow-hidden border-0 border-b border-transparent bg-transparent p-0 text-sm leading-6 text-ink focus:border-pine/40 focus:outline-none focus:ring-0"
+                />
+              ) : (
+                <span className="min-w-0 flex-1 text-sm text-ink">{item}</span>
+              )}
               {editable && (
                 <button
                   type="button"
@@ -298,7 +326,13 @@ function SectionBody({
   transcript?: string;
   onChange: (value: SectionValue) => void;
 }) {
-  const holdsText = section.kind === "text" || (section.kind === "ai" && aiHoldsText(section));
+  // An AI section drafted as prose still shows a textarea, but once it holds
+  // bullets — or has bullets waiting to be tapped — it is a list.
+  const holdsText =
+    section.kind === "text" ||
+    (section.kind === "ai" &&
+      aiHoldsText(section) &&
+      !(value?.items?.length || value?.suggestions?.length));
 
   if (section.kind === "medicines") {
     return (
@@ -674,7 +708,24 @@ export function VisitPad({
     act("print", async () => {
       const current = docRef.current;
       if (!current) return;
-      openBlob(await staffApi.padPdf(current.id));
+      // Once the pad has issued a prescription, that is what the patient is
+      // handed: the printed prescription with the Rx heading, the medicines
+      // laid out to be read at a chemist's counter and the doctor's
+      // registration under the signature. The pad's own sheet is the clinical
+      // record, and is what prints while the document is still a draft.
+      // Fetched with the login token rather than opened as a plain URL: the
+      // PDF endpoints need the Authorization header, and a bare window.open
+      // reaches them signed out and comes back 401.
+      if (current.prescription_id) {
+        const response = await fetch(
+          staffApi.prescriptionPdfUrl(current.prescription_id),
+          { headers: { Authorization: `Bearer ${getToken() ?? ""}` }, cache: "no-store" }
+        );
+        if (!response.ok) throw new Error("The prescription could not be printed.");
+        openBlob(await response.blob());
+      } else {
+        openBlob(await staffApi.padPdf(current.id));
+      }
       if (current.status !== "draft") accept(await staffApi.padDocument(current.id));
     });
 
@@ -933,7 +984,7 @@ export function VisitPad({
                     : saveState === "error"
                       ? "Not saved — will retry on the next change"
                       : savedAt
-                        ? `Saved ${savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        ? `Saved ${formatTime(savedAt.toISOString())}`
                         : `Started by ${doc.author_name}`}
               {doc.amendment_reason && doc.version > 1 ? ` · Correcting: ${doc.amendment_reason}` : ""}
             </p>
@@ -993,45 +1044,9 @@ export function VisitPad({
                 </Button>
               </>
             )}
-            {!arranging && (
-              <>
-              {/* The pad is the prescription, so it is the pad that gets
-                  sent. Only offered once signed: an unsigned draft is not a
-                  prescription and must not reach a patient's phone. */}
-              {doc?.prescription_id && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy !== null}
-                  onClick={() => void sendWhatsApp()}
-                >
-                  {busy === "whatsapp" ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Send className="h-3.5 w-3.5" />
-                  )}
-                  Send on WhatsApp
-                </Button>
-              )}
-              <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void print()}>
-                {busy === "print" ? <Loader2 className="animate-spin" /> : <Printer />}
-                {doc.status === "draft" ? "Print draft" : "Print"}
-              </Button>
-              </>
-            )}
             {editable && !arranging && doc.version > 1 && (
               <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void discardCorrection()}>
                 Discard correction
-              </Button>
-            )}
-            {editable && !arranging && (
-              <Button size="sm" disabled={busy !== null} onClick={openSignDialog}>
-                <CheckCircle2 /> Sign
-              </Button>
-            )}
-            {doc.status === "signed" && !readOnlyNote && (
-              <Button size="sm" variant="outline" disabled={busy !== null} onClick={startCorrection}>
-                <PenLine /> Correct
               </Button>
             )}
           </div>
@@ -1164,6 +1179,46 @@ export function VisitPad({
         <Card>
           <CardContent className="py-8 text-center text-sm text-ink-muted">
             Nothing was written on this pad.
+          </CardContent>
+        </Card>
+      )}
+
+      {/* --------------------------------------------- finishing the pad --
+          Signing and printing come after the last section, where the doctor
+          arrives having read what they are putting their name to, rather than
+          at the top where they meet them before writing anything. */}
+      {!arranging && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-end gap-1.5 p-3">
+            {doc.prescription_id && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => void sendWhatsApp()}
+              >
+                {busy === "whatsapp" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Send on WhatsApp
+              </Button>
+            )}
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void print()}>
+              {busy === "print" ? <Loader2 className="animate-spin" /> : <Printer />}
+              {doc.status === "draft" ? "Print draft" : "Print"}
+            </Button>
+            {doc.status === "signed" && !readOnlyNote && (
+              <Button size="sm" variant="outline" disabled={busy !== null} onClick={startCorrection}>
+                <PenLine /> Correct
+              </Button>
+            )}
+            {editable && (
+              <Button size="sm" disabled={busy !== null} onClick={openSignDialog}>
+                <CheckCircle2 /> Sign
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

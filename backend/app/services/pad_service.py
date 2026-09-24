@@ -310,14 +310,75 @@ class PadService:
 
         existing = await self._draft_for(consultation_id, document_type)
         if existing is not None:
+            # A draft carries the layout it was made with, which is right for
+            # a signed document and wrong for one still being written: a pad
+            # opened this morning would keep yesterday's sections for as long
+            # as it stayed a draft, so a new field never reaches the doctor
+            # who already has the patient in front of them. An unsigned draft
+            # therefore takes the current layout, keeping everything written
+            # under a section that still exists.
+            layout, current_sections, _scope = await self.resolve_layout(
+                document_type, department=consultation.department, user_id=user.id
+            )
+            changed = False
+            if existing.sections != current_sections:
+                # Anything typed under a section that no longer exists would be
+                # dropped by the clean below, so it is carried across first.
+                # The free-text History became the same section the intake
+                # drafts, and a doctor's own words must survive the move.
+                carried = dict(existing.values or {})
+                dropped = {section["key"] for section in existing.sections} - {
+                    section["key"] for section in current_sections
+                }
+                if "history" in dropped:
+                    written = str((carried.get("history") or {}).get("text") or "").strip()
+                    if written:
+                        # One history, one shape: the drafted prose and the
+                        # doctor's own words become a single list of lines
+                        # rather than a paragraph with bullets under it.
+                        summary = dict(carried.get("intake_summary") or {})
+                        lines = list(summary.get("items") or [])
+                        lines += rules.sentences(summary.pop("text", ""))
+                        lines += rules.sentences(written)
+                        summary["items"] = list(dict.fromkeys(lines))
+                        carried["intake_summary"] = summary
+                        # These are the doctor's own words, so the section is
+                        # marked as theirs: otherwise the refresh below would
+                        # read it as an untouched draft and offer them back as
+                        # suggestions to accept.
+                        origins = dict(existing.provenance or {})
+                        origin = dict(origins.get("intake_summary") or {})
+                        origin["edited"] = True
+                        origins["intake_summary"] = origin
+                        existing.provenance = origins
+
+                existing.sections = current_sections
+                existing.layout_id = layout.id if layout else None
+                existing.layout_revision = layout.revision if layout else 0
+                existing.values = rules.clean_values(current_sections, carried)
+                changed = True
+
+            # Lines the intake offered: brought in for sections that are still
+            # empty, and handed back as suggestions where an older draft had
+            # them written in unasked.
+            values, provenance, offered = rules.refresh_intake_suggestions(
+                existing.sections, existing.values, existing.provenance,
+                consultation.medical_json,
+            )
+            if offered:
+                existing.values = values
+                existing.provenance = provenance
+                changed = True
+
             # Vitals saved at intake after this draft was made are brought in
             # when the pad is opened — never while it is open, which would
             # collide with the doctor's autosave — and only where the doctor
             # has not typed their own readings.
-            values, provenance, changed = rules.refresh_intake_vitals(
+            values, provenance, vitals_changed = rules.refresh_intake_vitals(
                 existing.sections, existing.values, existing.provenance,
                 (consultation.medical_json or {}).get("vitals"),
             )
+            changed = changed or vitals_changed
             if changed:
                 existing.values = values
                 existing.provenance = provenance

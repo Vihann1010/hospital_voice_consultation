@@ -36,6 +36,14 @@ AISource = Literal[
     "red_flags",
     "differentials",
     "suggested_investigations",
+    #: Self-care and when to come back, written for the patient by the
+    #: education stage. This is what the old prescription screen printed as
+    #: its general instructions.
+    "advice",
+    #: What the patient came in saying, in their own words.
+    "chief_complaint",
+    #: The same advice, wholly in Hindi.
+    "advice_hi",
 ]
 
 # Facts already recorded on the admission, copied into a new inpatient
@@ -155,9 +163,11 @@ class SectionSpec(BaseModel):
                 raise ValueError(f"Section {self.key!r} defines the same field twice.")
         if self.kind == "ai" and not self.ai_source:
             raise ValueError(f"AI section {self.key!r} does not say what it is drafted from.")
-        # An investigations section may also carry suggestions from the
-        # intake, which is how the doctor gets to add them with one tap.
-        if self.kind not in ("ai", "investigations") and self.ai_source:
+        # A list or investigations section may also carry suggestions from the
+        # intake, which is how the doctor gets to add them with one tap. A
+        # fields section can be filled from it outright, the way vitals are:
+        # these are the patient's own answers, not the model's opinion.
+        if self.kind not in ("ai", "list", "fields", "investigations") and self.ai_source:
             raise ValueError(f"Only an AI section can be drafted from the intake ({self.key!r}).")
         if self.kind == "investigations" and self.ai_source != "suggested_investigations":
             if self.ai_source is not None:
@@ -324,6 +334,8 @@ def clean_values(sections: List[Dict[str, Any]], values: Dict[str, Any]) -> Dict
             cleaned[key] = {"text": _clean_text(raw.get("text"))}
         elif kind == "list":
             cleaned[key] = {"items": _clean_items(raw.get("items"))}
+            if "suggestions" in raw:
+                cleaned[key]["suggestions"] = _clean_items(raw.get("suggestions"))
         elif kind == "fields":
             given = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
             cleaned[key] = {
@@ -578,6 +590,78 @@ def vitals_from_intake(section: Dict[str, Any], intake: Any) -> Optional[Dict[st
     return {"fields": cleaned} if cleaned else None
 
 
+def refresh_intake_suggestions(
+    sections: List[Dict[str, Any]],
+    values: Dict[str, Any],
+    provenance: Dict[str, Any],
+    dossier: Optional[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
+    """Offer the intake's lines instead of having written them in already.
+
+    Drafts opened before suggestions existed had the model's lines written
+    straight into the section, in the doctor's name. Where such a section is
+    still exactly as the model left it — drafted from the intake and never
+    edited — its lines are moved back to being offered, so the doctor taps the
+    ones they agree with. A section the doctor has touched is left alone.
+
+    Returns the values, the provenance and whether anything changed.
+    """
+    if not dossier:
+        return values, provenance, False
+
+    drafted, _ = draft_from_intake(sections, dossier)
+    values = dict(values or {})
+    changed = False
+
+    for section in sections:
+        if section["kind"] == "fields" and section.get("ai_source") == "background":
+            current = (values.get(section["key"]) or {}).get("fields") or {}
+            drafted_fields = (drafted.get(section["key"]) or {}).get("fields") or {}
+            merged = dict(current)
+            for key, value in drafted_fields.items():
+                if not str(current.get(key) or "").strip() and value:
+                    merged[key] = value
+            if merged != current:
+                values[section["key"]] = {"fields": merged}
+                changed = True
+            continue
+        # A list section counts only when the layout says where its
+        # suggestions come from; an ordinary list has nothing to offer.
+        if section["kind"] == "list" and not section.get("ai_source"):
+            continue
+        if section["kind"] not in ("ai", "list", "investigations"):
+            continue
+        key = section["key"]
+        origin = (provenance or {}).get(key) or {}
+        current = dict(values.get(key) or {})
+        offered = (drafted.get(key) or {}).get("suggestions") or []
+
+        untouched = str(origin.get("source", "")).startswith("ai:") and not origin.get("edited")
+        already_offered = current.get("suggestions")
+        written_in = current.get("items") or current.get("investigations") or current.get("text")
+
+        if already_offered:
+            continue
+        if untouched and written_in:
+            # Hand back what was written in unasked.
+            moved = current.get("items") or current.get("investigations") or []
+            if not moved and current.get("text"):
+                moved = sentences(current.get("text"))
+            if not moved:
+                continue
+            if section["kind"] == "investigations":
+                values[key] = {"investigations": [], "suggestions": moved}
+            else:
+                values[key] = {"items": [], "suggestions": moved}
+            changed = True
+        elif not written_in and offered:
+            # Nothing there at all, and the intake has something to offer.
+            values[key] = dict(drafted[key])
+            changed = True
+
+    return values, provenance, changed
+
+
 def refresh_intake_vitals(
     sections: List[Dict[str, Any]],
     values: Optional[Dict[str, Any]],
@@ -613,7 +697,7 @@ def refresh_intake_vitals(
 
 
 
-def _sentences(text: Optional[str]) -> List[str]:
+def sentences(text: Optional[str]) -> List[str]:
     """Break a paragraph into the points it is made of."""
     if not text:
         return []
@@ -621,26 +705,104 @@ def _sentences(text: Optional[str]) -> List[str]:
     return [part.strip() for part in parts if len(part.strip()) > 3]
 
 
-def _background_points(record: Dict[str, Any]) -> List[str]:
+def _complaint_points(record: Dict[str, Any]) -> List[str]:
+    """What the patient came in saying.
+
+    The complaint, and the two things always asked about it next — how long,
+    and where. Each as its own line so the doctor keeps the ones that are
+    right and rewords the rest.
+    """
+    points = []
+    complaint = str(record.get("chief_complaint") or "").strip()
+    if complaint:
+        points.append(complaint)
+    duration = str(record.get("duration") or "").strip()
+    if duration:
+        points.append(f"Duration: {duration}")
+    pain = record.get("pain") or {}
+    site = str(pain.get("location") or "").strip() if isinstance(pain, dict) else ""
+    if site:
+        points.append(f"Site: {site}")
+    return points
+
+
+def _advice_points(education: Dict[str, Any], *, hindi: bool = False) -> List[str]:
+    """What to tell the patient, one line at a time.
+
+    The old prescription screen ran these together into a single paragraph of
+    general instructions. As separate lines the doctor can drop the one that
+    does not apply instead of rewriting the paragraph.
+
+    Each language stays whole. An English "Come back at once if" above Hindi
+    warnings is the one line a patient who reads only Hindi cannot act on, so
+    the Hindi list carries the Hindi wording and falls back to nothing rather
+    than to English.
+    """
+    care_key = "general_self_care_hi" if hindi else "general_self_care"
+    warn_key = (
+        "warning_signs_return_immediately_hi"
+        if hindi
+        else "warning_signs_return_immediately"
+    )
+    points = [str(tip).strip() for tip in (education.get(care_key) or [])[:6]]
+    warnings = [str(sign).strip() for sign in (education.get(warn_key) or [])[:4]]
+    if warnings:
+        lead = (
+            "\u0907\u0928\u092e\u0947\u0902 \u0938\u0947 \u0915\u0941\u091b \u092d\u0940 \u0939\u094b \u0924\u094b \u0924\u0941\u0930\u0902\u0924 \u0935\u093e\u092a\u0938 \u0906\u090f\u0901: "
+            if hindi
+            else "Come back at once if: "
+        )
+        points.append(lead + "; ".join(warnings))
+    return [point for point in points if point]
+
+
+def _listed(values: Any) -> str:
+    """A list of answers as one readable line, in the order first given."""
+    items = []
+    for item in values or []:
+        text = str(item).strip()
+        if text:
+            items.append(text)
+    return ", ".join(dict.fromkeys(items))
+
+
+def _medicine_names(values: Any) -> Tuple[str, str]:
+    """The medicines a patient is already on, and how much of each.
+
+    The intake records each one as a name with a dose, so reading the whole
+    entry as text put a raw dictionary on the doctor's screen. Name and dose
+    are pulled out separately, because they belong in separate boxes.
+    """
+    names, doses = [], []
+    for item in values or []:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+            dose = str(item.get("dose_or_frequency") or "").strip()
+        else:
+            name, dose = str(item).strip(), ""
+        if not name:
+            continue
+        names.append(name)
+        if dose:
+            doses.append(f"{name}: {dose}")
+    return ", ".join(dict.fromkeys(names)), ", ".join(dict.fromkeys(doses))
+
+
+def _background_fields(record: Dict[str, Any]) -> Dict[str, Any]:
     """What the patient brings with them, as the intake recorded it.
 
-    Silence is reported as silence. "No allergies" would be a clinical claim
-    nobody made; "Allergies: not asked" is the truth and tells the doctor
-    there is a question still to ask.
+    Silence is left blank rather than filled with "none". "No allergies"
+    would be a clinical claim nobody made; an empty box is a question still
+    to ask, and the doctor can see which ones those are.
     """
-    def listed(values: Any) -> str:
-        items = [str(item).strip() for item in (values or []) if str(item).strip()]
-        return ", ".join(dict.fromkeys(items))
-
-    points = []
-    for label, value in (
-        ("Allergies", listed(record.get("allergies"))),
-        ("Already taking", listed(record.get("current_medicines"))),
-        ("Past history", listed(record.get("medical_history"))),
-        ("Previous surgery", listed(record.get("previous_surgeries"))),
-    ):
-        points.append(f"{label}: {value}" if value else f"{label}: not recorded at intake")
-    return points
+    medicines, doses = _medicine_names(record.get("current_medicines"))
+    return {
+        "current_medicines": medicines,
+        "dosage": doses,
+        "past_history": _listed(record.get("medical_history")),
+        "previous_surgeries": _listed(record.get("previous_surgeries")),
+        "allergies": _listed(record.get("allergies")),
+    }
 
 def draft_from_intake(
     sections: List[Dict[str, Any]], dossier: Optional[Dict[str, Any]]
@@ -663,7 +825,46 @@ def draft_from_intake(
     plan = dossier.get("investigations") or {}
     drafted_at = datetime.now(timezone.utc).isoformat()
 
+    education = dossier.get("patient_education") or {}
+
     for section in sections:
+        # The patient's own answers, copied into their boxes. Only where the
+        # doctor has written nothing: this runs again each time the pad is
+        # opened, and must never overwrite what they typed.
+        if section["kind"] == "fields" and section.get("ai_source") == "background":
+            filled = {
+                key: value for key, value in _background_fields(record).items() if value
+            }
+            if filled:
+                values[section["key"]] = {"fields": filled}
+                provenance[section["key"]] = {"source": "ai:background", "drafted_at": drafted_at}
+            continue
+        # A list section is only drafted when the layout says where from.
+        if section["kind"] == "list":
+            source = section.get("ai_source")
+            if source == "advice":
+                items = _dedupe(_advice_points(education))
+            elif source == "advice_hi":
+                items = _dedupe(_advice_points(education, hindi=True))
+            elif source == "chief_complaint":
+                items = _dedupe(_complaint_points(record))
+            elif source == "differentials":
+                # The condition alone. The model's own confidence was printed
+                # beside it as "(high likelihood)", which reads on a signed
+                # diagnosis as though the doctor had graded it.
+                items = _dedupe(
+                    str(item.get("condition") or "").strip()
+                    for item in differential.get("differentials") or []
+                    if isinstance(item, dict) and item.get("condition")
+                )
+            else:
+                continue
+            if items:
+                values[section["key"]] = {"items": [], "suggestions": items}
+                provenance[section["key"]] = {
+                    "source": f"ai:{source}", "drafted_at": drafted_at
+                }
+            continue
         # An investigations section takes the same suggestions, but they land
         # as suggestions rather than as advised tests: the doctor taps the
         # ones they want, and an order is placed for those alone.
@@ -707,7 +908,7 @@ def draft_from_intake(
                     or record.get("summary_for_doctor")
                     or summary.get("one_liner")
                 )
-                items = _dedupe(_sentences(text))
+                items = _dedupe(sentences(text))
             if items:
                 entry = {"items": [], "suggestions": items}
         elif source == "intake_summary_hi":
@@ -726,14 +927,7 @@ def draft_from_intake(
             )
             if items:
                 entry = {"items": [], "suggestions": items}
-        elif source == "differentials":
-            items = _dedupe(
-                f"{item.get('condition')} ({item.get('likelihood', 'moderate')} likelihood)"
-                for item in differential.get("differentials") or []
-                if isinstance(item, dict) and item.get("condition")
-            )
-            if items:
-                entry = {"items": [], "suggestions": items}
+
         elif source == "suggested_investigations":
             items = _dedupe(
                 item.get("test", "")

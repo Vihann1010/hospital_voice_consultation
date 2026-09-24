@@ -151,6 +151,10 @@ class PatientEducation(StageModel):
     what_to_expect_at_hospital: Optional[str] = None
     general_self_care: List[str] = Field(default_factory=list)
     warning_signs_return_immediately: List[str] = Field(default_factory=list)
+    #: The same advice again, wholly in Hindi, so the patient's copy can be
+    #: printed in one language rather than a mixture. Written in the same call.
+    general_self_care_hi: List[str] = Field(default_factory=list)
+    warning_signs_return_immediately_hi: List[str] = Field(default_factory=list)
     questions_to_ask_your_doctor: List[str] = Field(default_factory=list)
     disclaimer: str = (
         "General information only — your doctor's advice after examining you "

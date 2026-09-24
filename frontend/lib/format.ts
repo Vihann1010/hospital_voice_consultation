@@ -1,6 +1,17 @@
 /** Date, duration and name formatting used across the clinical dashboard. */
 
+/**
+ * The hospital's own clock, not the device's.
+ *
+ * Every stored timestamp is UTC and the server renders in Asia/Kolkata. A
+ * browser left on another timezone — a laptop brought from abroad, a cloud
+ * desktop, a phone that has not caught up — would otherwise show a different
+ * time for the same receipt than the printed copy carries.
+ */
+const HOSPITAL_ZONE = "Asia/Kolkata";
+
 const DATE_TIME = new Intl.DateTimeFormat("en-IN", {
+  timeZone: HOSPITAL_ZONE,
   day: "2-digit",
   month: "short",
   year: "numeric",
@@ -10,12 +21,14 @@ const DATE_TIME = new Intl.DateTimeFormat("en-IN", {
 });
 
 const TIME_ONLY = new Intl.DateTimeFormat("en-IN", {
+  timeZone: HOSPITAL_ZONE,
   hour: "numeric",
   minute: "2-digit",
   hour12: true,
 });
 
 const DATE_ONLY = new Intl.DateTimeFormat("en-IN", {
+  timeZone: HOSPITAL_ZONE,
   day: "2-digit",
   month: "short",
   year: "numeric",
@@ -33,7 +46,10 @@ export function formatTime(iso?: string | null): string {
   return Number.isNaN(date.getTime()) ? "—" : TIME_ONLY.format(date);
 }
 
-const WEEKDAY = new Intl.DateTimeFormat("en-IN", { weekday: "long" });
+const WEEKDAY = new Intl.DateTimeFormat("en-IN", {
+  timeZone: HOSPITAL_ZONE,
+  weekday: "long",
+});
 const LONG_DATE = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",
   month: "long",
@@ -120,16 +136,6 @@ export const DEPARTMENT_DOCTOR: Record<string, string> = {
   orthopedics: "Dr. A K Agarwal",
   gynecology: "Dr. Manisha Agarwal",
 };
-
-/** The hospital's own clock.
- *
- * The plain formatters above follow the reader's machine. That is right for
- * "3h ago" and wrong for an appointment: a nine o'clock slot is nine o'clock
- * in Kanpur whether the person looking at it is in the building or on a phone
- * in another timezone, and rendering it as 05:30 would be a booking error
- * waiting to happen.
- */
-const HOSPITAL_ZONE = "Asia/Kolkata";
 
 const HOSPITAL_TIME = new Intl.DateTimeFormat("en-IN", {
   hour: "numeric",

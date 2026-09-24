@@ -36,7 +36,12 @@ class PatientEducationService(BaseAIService[PatientEducation]):
             "doses, or prescription changes; self-care is only universally safe measures "
             "(rest, hydration, warm/cold compress where clearly appropriate, keeping reports "
             "handy). warning_signs_return_immediately must reflect this department and this "
-            "presentation. Tone: warm, calm, respectful — never alarming."
+            "presentation. Tone: warm, calm, respectful — never alarming. "
+            "Write general_self_care and warning_signs_return_immediately in simple Indian "
+            "English, and general_self_care_hi and warning_signs_return_immediately_hi as the "
+            "same advice wholly in Hindi, in Devanagari, line for line and in the same order. "
+            "The Hindi must contain no English words beyond a drug or test name that has no "
+            "Hindi equivalent: the patient's copy is printed in one language."
         )
         user = (
             f"Department: {memory.department.value}\n"

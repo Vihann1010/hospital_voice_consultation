@@ -56,10 +56,17 @@ def test_invalid_layouts_are_refused_with_a_reason(sections, message):
         rules.validate_layout(sections)
 
 
-def test_differentials_do_not_print_by_default():
+def test_red_flags_do_not_print_by_default():
+    """A red flag is a warning to the doctor, not a line on a patient's copy."""
     by_key = {section["key"]: section for section in _opd()}
-    assert by_key["differentials"]["visible_in_print"] is False
     assert by_key["red_flags"]["visible_in_print"] is False
+
+
+def test_there_is_one_list_of_conditions_not_two():
+    keys = {section["key"] for section in _opd()}
+    assert "differentials" not in keys
+    diagnosis = next(section for section in _opd() if section["key"] == "diagnosis")
+    assert diagnosis["ai_source"] == "differentials"
 
 
 def test_only_the_standing_sections_carry_forward_by_default():
@@ -71,7 +78,12 @@ def test_only_the_standing_sections_carry_forward_by_default():
     as something written today.
     """
     carried = {section["key"] for section in _opd() if section["carry_forward"]}
-    assert carried == {"diagnosis", "advice", "doctor_notes"}
+    # The background and the family's history are as true next visit as they
+    # are today, so they come across rather than being asked again.
+    assert carried == {
+        "diagnosis", "advice", "advice_hi", "doctor_notes", "background",
+        "family_history",
+    }
 
 
 def test_the_doctors_notes_stay_off_the_patients_copy():
@@ -153,11 +165,11 @@ def test_loading_a_template_never_rewrites_prose_already_typed():
     layout = _opd()
     merged = rules.merge_template(
         layout,
-        {"history": {"text": "Pain since a fall on Monday."}},
-        {"history": {"text": "Template history."}},
+        {"doctor_notes": {"text": "Pain since a fall on Monday."}},
+        {"doctor_notes": {"text": "Template note."}},
         replace=False,
     )
-    assert merged["history"]["text"] == "Pain since a fall on Monday."
+    assert merged["doctor_notes"]["text"] == "Pain since a fall on Monday."
 
 
 def test_replace_overwrites_sections_the_template_fills():
@@ -211,9 +223,10 @@ def test_ai_sections_are_drafted_from_the_intake_and_marked():
     assert values["intake_summary"]["items"] == []
     assert values["intake_summary"]["suggestions"] == ["Right knee pain for one month."]
     assert values["red_flags"]["suggestions"] == ["Night pain", "Weight loss"]
-    assert values["differentials"]["suggestions"] == [
-        "Osteoarthritis (high likelihood)", "Gout (low likelihood)",
-    ]
+    # The condition alone: the model's confidence is not the doctor's, and
+    # "(high likelihood)" on a signed diagnosis reads as though it were.
+    assert values["diagnosis"]["suggestions"] == ["Osteoarthritis", "Gout"]
+    assert values["diagnosis"]["items"] == []
     # Advised tests now arrive as suggestions the doctor taps across, never
     # as advice already given in their name.
     assert values["investigations"]["investigations"] == []
@@ -222,7 +235,7 @@ def test_ai_sections_are_drafted_from_the_intake_and_marked():
     ]
     # The background section draws on the same dossier, so it is drafted too.
     assert set(provenance) == {
-        "intake_summary", "background", "red_flags", "differentials", "investigations",
+        "intake_summary", "red_flags", "diagnosis", "investigations",
     }
     assert all(origin["source"].startswith("ai:") for origin in provenance.values())
 
@@ -399,15 +412,35 @@ def test_a_medicines_section_cannot_define_fields():
         ])
 
 
-def test_the_background_the_patient_brings_is_offered_too():
-    """Silence is reported as silence, never as "no allergies"."""
-    values, _ = rules.draft_from_intake(_opd(), {"medical_json": {
-        "allergies": ["Penicillin"], "current_medicines": ["Amlodipine"],
+def test_the_background_fills_its_own_boxes():
+    """Each answer in the box it belongs in, and a dose is not a drug name."""
+    values, provenance = rules.draft_from_intake(_opd(), {"medical_json": {
+        "allergies": ["Penicillin"],
+        "current_medicines": [
+            {"name": "Thyroxine", "dose_or_frequency": None},
+            {"name": "Amlodipine", "dose_or_frequency": "5 mg at night"},
+        ],
+        "medical_history": ["Thyroid problem"],
     }})
-    offered = values["background"]["suggestions"]
-    assert "Allergies: Penicillin" in offered
-    assert "Already taking: Amlodipine" in offered
-    assert "Previous surgery: not recorded at intake" in offered
+    fields = values["background"]["fields"]
+    assert fields["current_medicines"] == "Thyroxine, Amlodipine"
+    assert fields["dosage"] == "Amlodipine: 5 mg at night"
+    assert fields["past_history"] == "Thyroid problem"
+    assert fields["allergies"] == "Penicillin"
+    assert provenance["background"]["source"] == "ai:background"
+
+
+def test_an_unanswered_question_is_left_blank_not_filled_with_none():
+    """An empty box is a question still to ask; "none" would be a claim."""
+    values, _ = rules.draft_from_intake(_opd(), {"medical_json": {"allergies": ["Penicillin"]}})
+    assert values["background"]["fields"]["previous_surgeries"] is None
+    assert values["background"]["fields"]["allergies"] == "Penicillin"
+
+
+def test_the_pad_asks_after_the_family():
+    section = next(item for item in _opd() if item["key"] == "family_history")
+    assert section["kind"] == "list"
+    assert section["carry_forward"] is True
 
 
 def test_the_history_is_offered_in_hindi_as_well():
@@ -428,3 +461,25 @@ def test_older_prose_history_still_becomes_bullets():
     assert values["intake_summary"]["suggestions"] == [
         "Knee pain for one month.", "Worse at night.",
     ]
+
+
+def test_advice_is_offered_from_what_the_patient_was_told():
+    """The old screen's general instructions, as separate lines to tap."""
+    values, provenance = rules.draft_from_intake(_opd(), {"patient_education": {
+        "general_self_care": ["Drink plenty of water", "Avoid spicy food"],
+        "warning_signs_return_immediately": ["Vomiting blood"],
+    }})
+    assert values["advice"]["items"] == []
+    assert values["advice"]["suggestions"] == [
+        "Drink plenty of water", "Avoid spicy food",
+        "Come back at once if: Vomiting blood",
+    ]
+    assert provenance["advice"]["source"] == "ai:advice"
+
+
+def test_advice_the_doctor_accepted_survives_a_save():
+    cleaned = rules.clean_values(_opd(), {"advice": {
+        "items": ["Drink plenty of water"], "suggestions": ["Avoid spicy food"],
+    }})
+    assert cleaned["advice"]["items"] == ["Drink plenty of water"]
+    assert cleaned["advice"]["suggestions"] == ["Avoid spicy food"]

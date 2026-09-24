@@ -83,19 +83,35 @@ FOLLOW_UP_CHOICES = [
 
 # ------------------------------------------------------------------ OPD
 _OPD_VISIT: List[Dict[str, Any]] = [
-    {"key": "intake_summary", "title": "History from intake", "kind": "ai",
+    {"key": "intake_summary", "title": "History", "kind": "ai",
      "ai_source": "intake_summary", "visible_in_print": True},
     # The same history in Hindi. Kept as its own section rather than mixed
     # into the English one so either can be turned off, and so the patient's
     # copy reads as one list rather than alternating languages.
     {"key": "intake_summary_hi", "title": "मरीज़ का विवरण (Hindi)", "kind": "ai",
      "ai_source": "intake_summary_hi", "visible_in_print": True},
-    {"key": "background", "title": "Background", "kind": "ai",
-     "ai_source": "background", "visible_in_print": True},
+    {
+        "key": "background",
+        "title": "Background",
+        "kind": "fields",
+        "ai_source": "background",
+        "carry_forward": True,
+        "fields": [
+            {"key": "current_medicines", "label": "Current medicines", "type": "text"},
+            {"key": "dosage", "label": "Dosage", "type": "text"},
+            {"key": "past_history", "label": "Past history", "type": "text"},
+            {"key": "previous_surgeries", "label": "Previous surgeries", "type": "text"},
+            {"key": "allergies", "label": "Allergies", "type": "text"},
+        ],
+    },
+    # Asked of the patient, not drawn from the intake: the voice intake does
+    # not cover it today, so the box starts empty rather than pretending to.
+    {"key": "family_history", "title": "Family history", "kind": "list",
+     "catalogue_category": "family_history", "carry_forward": True,
+     "placeholder": "Diabetes, heart disease, cancer in the family\u2026"},
     {"key": "complaints", "title": "Chief complaints", "kind": "list",
-     "catalogue_category": "complaint", "placeholder": "Add a complaint"},
-    {"key": "history", "title": "History", "kind": "text",
-     "placeholder": "Onset, progression, relevant history"},
+     "ai_source": "chief_complaint", "catalogue_category": "complaint",
+     "placeholder": "Add a complaint"},
     {
         "key": "vitals",
         "title": "Vitals",
@@ -113,19 +129,24 @@ _OPD_VISIT: List[Dict[str, Any]] = [
      "catalogue_category": "examination", "placeholder": "Add a finding"},
     {"key": "red_flags", "title": "Red flags", "kind": "ai",
      "ai_source": "red_flags", "visible_in_print": False},
-    {"key": "differentials", "title": "Differential diagnosis", "kind": "ai",
-     "ai_source": "differentials", "visible_in_print": False},
+    # What the intake thought it might be is offered here rather than in a
+    # section of its own: two lists of conditions side by side is one list
+    # the doctor keeps and one they ignore.
     {"key": "diagnosis", "title": "Diagnosis", "kind": "list",
-     "catalogue_category": "diagnosis", "carry_forward": True,
-     "placeholder": "Add a diagnosis"},
+     "ai_source": "differentials", "catalogue_category": "diagnosis",
+     "carry_forward": True, "placeholder": "Add a diagnosis"},
     # Advised tests and prescribed medicines are rows, not prose: signing the
     # pad places the orders and issues the prescription from exactly what is
     # written here, so there is no second screen to keep in step.
     {"key": "investigations", "title": "Investigations advised", "kind": "investigations",
      "ai_source": "suggested_investigations", "catalogue_category": "investigation"},
     {"key": "medicines", "title": "Medicines", "kind": "medicines"},
-    {"key": "advice", "title": "Advice", "kind": "list",
-     "catalogue_category": "advice", "carry_forward": True, "placeholder": "Add advice"},
+    {"key": "advice", "title": "Instructions (English)", "kind": "list",
+     "ai_source": "advice", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "Add an instruction"},
+    {"key": "advice_hi", "title": "\u0928\u093f\u0930\u094d\u0926\u0947\u0936 (Hindi)", "kind": "list",
+     "ai_source": "advice_hi", "catalogue_category": "advice", "carry_forward": True,
+     "placeholder": "\u0928\u093f\u0930\u094d\u0926\u0947\u0936 \u091c\u094b\u0921\u093c\u0947\u0902"},
     # The doctor's own working note. Kept off the patient's copy by default:
     # it is where a doubt or a thought for next time is written, and neither
     # belongs on a slip the patient carries home.
