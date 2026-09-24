@@ -142,14 +142,16 @@ export function LiveIntakeWorkspace({
         <Button variant="ghost" size="sm" onClick={onBack} disabled={phase !== "ended" && phase !== "error"}>
           <ArrowLeft /> Queue
         </Button>
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-lg font-semibold text-pine">{patient.patient.name}</h1>
-          <p className="text-xs text-ink-muted">
+        {/* One line: who the patient is, then straight into the conversation.
+            Two stacked lines cost the photograph an inch of its height. */}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h1 className="truncate font-display text-base font-semibold text-pine">{patient.patient.name}</h1>
+          <p className="truncate text-xs text-ink-muted">
             {patient.patient.age} yrs · {patient.patient.gender} · {DEPARTMENT_LABEL[patient.department] ?? patient.department}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-full bg-marigold/20 px-3 py-1.5 text-xs font-semibold text-marigold-deep">
+          <span className="flex items-center gap-1.5 rounded-full bg-marigold/20 px-3 py-1 text-xs font-semibold text-marigold-deep">
             <Clock className="h-3.5 w-3.5" /> {phaseLabel}
           </span>
           {!readOnly && phase !== "ended" && phase !== "error" && (
@@ -211,7 +213,7 @@ export function LiveIntakeWorkspace({
         </div>
 
         <Card className="flex min-h-0 flex-col overflow-hidden">
-          <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border py-3">
+          <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border py-2">
             <CardTitle className="flex items-center gap-2"><Mic className="h-4 w-4 text-pine" /> Conversation</CardTitle>
             <span className="text-xs text-ink-muted">{entries.length} turns · verbatim record</span>
           </CardHeader>
@@ -231,7 +233,7 @@ export function LiveIntakeWorkspace({
               // browser picks a 700px copy and upscales it.
               sizes="(max-width: 1024px) 100vw, 70vw"
               priority
-              className="h-36 w-full object-cover object-[center_28%] sm:h-44"
+              className="h-52 w-full object-cover object-[center_30%] sm:h-64"
             />
             {/* Said plainly, because the picture does not say it: the voice
                 is an assistant preparing the visit, not a doctor. */}
