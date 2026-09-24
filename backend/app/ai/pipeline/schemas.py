@@ -5,9 +5,10 @@ validated models, and downstream stages consume `.model_dump()` of upstream
 stages. Fields are optional/defaulted so partially-informative model output
 still validates instead of failing the visit.
 """
+import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StageModel(BaseModel):
@@ -97,6 +98,35 @@ class RiskAssessment(StageModel):
     triage_priority: Literal["routine", "soon", "urgent", "immediate"] = "routine"
 
 
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def devanagari_lines(lines: List[str]) -> List[str]:
+    """Refuse Hindi written in Roman letters.
+
+    Asked for Hindi, a model mirrors the patient: an intake spoken in Hinglish
+    comes back as "daant mein tez dard", which is not what a patient reading
+    their printed copy needs, and not what the section says it is. A line is
+    accepted when it is mostly Devanagari — a drug name or a number in Latin
+    letters is normal and stays. Rejecting here is what triggers the stage's
+    repair round, with this sentence handed back to the model.
+    """
+    for line in lines:
+        text = (line or "").strip()
+        if not text:
+            continue
+        devanagari = len(_DEVANAGARI.findall(text))
+        latin = len(_LATIN.findall(text))
+        if devanagari == 0 or latin > devanagari:
+            raise ValueError(
+                "must be written in the Devanagari script, not Roman transliteration "
+                "(दांत में दर्द, not 'daant mein dard'); "
+                f"this line is not: {text[:60]!r}"
+            )
+    return lines
+
+
 # ------------------------------------------------------------------ summary
 class ClinicalSummary(StageModel):
     one_liner: Optional[str] = None
@@ -106,6 +136,9 @@ class ClinicalSummary(StageModel):
     #: reads the English, the patient reads the Hindi on the printed copy.
     history_points: List[str] = Field(default_factory=list)
     history_points_hi: List[str] = Field(default_factory=list)
+
+    _hindi = field_validator("history_points_hi")(devanagari_lines)
+
     pertinent_positives: List[str] = Field(default_factory=list)
     pertinent_negatives: List[str] = Field(default_factory=list)
     relevant_background: List[str] = Field(default_factory=list)
@@ -155,6 +188,10 @@ class PatientEducation(StageModel):
     #: printed in one language rather than a mixture. Written in the same call.
     general_self_care_hi: List[str] = Field(default_factory=list)
     warning_signs_return_immediately_hi: List[str] = Field(default_factory=list)
+
+    _hindi = field_validator(
+        "general_self_care_hi", "warning_signs_return_immediately_hi"
+    )(devanagari_lines)
     questions_to_ask_your_doctor: List[str] = Field(default_factory=list)
     disclaimer: str = (
         "General information only — your doctor's advice after examining you "

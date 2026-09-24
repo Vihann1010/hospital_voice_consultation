@@ -42,9 +42,11 @@ class ClinicalSummarizerService(BaseAIService[ClinicalSummary]):
             "history_of_present_illness: 3-6 sentences in chronological order. "
             "history_points: the same history as 3-6 short bullets, one fact each, "
             "in chronological order. "
-            "history_points_hi: exactly those bullets in Hindi, in Devanagari, in the "
+            "history_points_hi: exactly those bullets in Hindi, in the "
             "same order and the same number, worded as a patient would understand them. "
             "Translate only what the English bullet says; add nothing. "
+            "Write them in the Devanagari script even when the patient spoke Hinglish: "
+            "दांत में तेज़ दर्द है — never 'daant mein tez dard hai'. "
             "pertinent_negatives: only genuinely informative denials. "
             "summary_for_doctor: the single paragraph you'd say aloud handing over the patient."
         )

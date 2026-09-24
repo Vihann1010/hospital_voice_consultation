@@ -42,7 +42,9 @@ class PatientEducationService(BaseAIService[PatientEducation]):
             "English, and general_self_care_hi and warning_signs_return_immediately_hi as the "
             "same advice wholly in Hindi, in Devanagari, line for line and in the same order. "
             "The Hindi must contain no English words beyond a drug or test name that has no "
-            "Hindi equivalent: the patient's copy is printed in one language."
+            "Hindi equivalent: the patient's copy is printed in one language. Write it in "
+            "the Devanagari script even when the patient spoke Hinglish: "
+            "गर्म पानी पिएं — never 'garm paani piyen'."
         )
         user = (
             f"Department: {memory.department.value}\n"
