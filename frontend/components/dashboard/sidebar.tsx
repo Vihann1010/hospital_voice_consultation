@@ -62,7 +62,7 @@ const NAV: {
   { href: "/lab", label: "Laboratory", icon: FlaskConical, group: "ward",
     roles: ["admin", "doctor"], module: "laboratory" },
   // Hospital-wide takings: finance:read is held by admin and manager only.
-  { href: "/finance/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
+  { href: "/accounts", label: "Accounts", icon: Landmark, group: "desk", roles: ["admin", "manager"] },
   { href: "/insurance", label: "Insurance claims", icon: ShieldCheck, group: "desk",
     roles: ["admin", "manager", "doctor", "supervisor", "reception"], module: "insurance" },
   { href: "/reports", label: "Reports", icon: BarChart3, group: "desk" },
