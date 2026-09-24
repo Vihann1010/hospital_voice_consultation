@@ -10,6 +10,7 @@ when it was signed — never by today's layout. Empty sections print nothing at
 all rather than a heading over a blank space.
 """
 import io
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from xml.sax.saxutils import escape
@@ -31,6 +32,7 @@ from reportlab.platypus import (
 from app.core.config import settings
 from app.core.clock import to_local
 from app.pads import sections as rules
+from app.printing.fonts import SHAPING, devanagari_fonts
 from app.printing.layout import (
     DEFAULT_LAYOUT,
     PAGE_WIDTH,
@@ -45,6 +47,16 @@ INK = HexColor("#17212B")
 MUTED = HexColor("#5B6875")
 RULE = HexColor("#D6E0EA")
 LIGHT = HexColor("#EEF3F9")
+
+
+#: Any Devanagari at all means the line must be drawn with a font that has
+#: the script and shaped by HarfBuzz. The configured print font is a Latin one
+#: — Helvetica by default — which draws Hindi as empty boxes.
+_DEVANAGARI = re.compile(r"[\u0900-\u097F]")
+
+
+def _has_devanagari(text: Any) -> bool:
+    return bool(_DEVANAGARI.search(str(text or "")))
 
 
 def _styles(font: str, bold: str, base: int) -> Dict[str, ParagraphStyle]:
@@ -64,6 +76,37 @@ def _styles(font: str, bold: str, base: int) -> Dict[str, ParagraphStyle]:
         "sign": ParagraphStyle("sign", fontName=bold, fontSize=base, leading=base + 4,
                                textColor=INK, alignment=2),
     }
+
+
+
+
+
+def _with_hindi(styles: Dict[str, ParagraphStyle]) -> Dict[str, ParagraphStyle]:
+    """Add a "<name>_hi" for each style, in a font that can draw Devanagari.
+
+    The pad prints both languages — the patient's history in Hindi beside the
+    English, and the instructions in both — so the choice is per line, not per
+    document: a bilingual pad has no single right font.
+    """
+    hindi_font, hindi_bold = devanagari_fonts()
+    if hindi_font == "Helvetica":   # no Devanagari font installed on this server
+        return styles
+    shaping = 1 if SHAPING else 0
+    out = dict(styles)
+    for name, style in list(styles.items()):
+        made = ParagraphStyle(f"{name}_hi", parent=style)
+        made.fontName = hindi_bold if style.fontName.endswith("-Bold") else hindi_font
+        if "shaping" in ParagraphStyle.defaults:
+            made.shaping = shaping
+        out[f"{name}_hi"] = made
+    return out
+
+
+def _style(styles: Dict[str, ParagraphStyle], name: str, *text: Any) -> ParagraphStyle:
+    """The style for this line: its Hindi twin when the line carries Hindi."""
+    if any(_has_devanagari(part) for part in text):
+        return styles.get(f"{name}_hi", styles[name])
+    return styles[name]
 
 
 def _text(value: Any) -> str:
@@ -118,7 +161,8 @@ def _section_flowables(
     origin: Optional[Dict[str, Any]],
     styles: Dict[str, ParagraphStyle],
 ) -> List[Any]:
-    body: List[Any] = [Paragraph(_text(section["title"]), styles["heading"])]
+    title = section["title"]
+    body: List[Any] = [Paragraph(_text(title), _style(styles, "heading", title))]
     kind = section["kind"]
 
     if kind == "fields":
@@ -135,29 +179,32 @@ def _section_flowables(
                     f"<font color='#5B6875'>{_text(label)}</font> {_text(shown)}"
                     for label, shown in pairs
                 ),
-                styles["body"],
+                _style(styles, "body", *(f"{label} {shown}" for label, shown in pairs)),
             )
         )
     elif kind == "medicines":
         # Written the way a prescription is read aloud at the counter: the
         # drug first, then how much, how often and for how long.
         for row in value.get("medicines") or []:
+            line = _medicine_line(row)
             body.append(
-                Paragraph(_text(_medicine_line(row)), styles["bullet"], bulletText="•")
+                Paragraph(_text(line), _style(styles, "bullet", line), bulletText="•")
             )
             if row.get("instructions"):
-                body.append(Paragraph(_text(row["instructions"]), styles["note"]))
+                body.append(Paragraph(_text(row["instructions"]),
+                                      _style(styles, "note", row["instructions"])))
     elif kind == "investigations":
         for row in value.get("investigations") or []:
             line = row["name"]
             if row.get("note"):
                 line += f" — {row['note']}"
-            body.append(Paragraph(_text(line), styles["bullet"], bulletText="•"))
+            body.append(Paragraph(_text(line), _style(styles, "bullet", line), bulletText="•"))
     else:
         if value.get("text"):
-            body.append(Paragraph(_text(value["text"]), styles["body"]))
+            body.append(Paragraph(_text(value["text"]),
+                                  _style(styles, "body", value["text"])))
         for item in value.get("items") or []:
-            body.append(Paragraph(_text(item), styles["bullet"], bulletText="•"))
+            body.append(Paragraph(_text(item), _style(styles, "bullet", item), bulletText="•"))
 
     # Provenance travels onto paper. A reader of the signed copy is entitled
     # to know a section was first drafted by the intake model, even though a
@@ -185,7 +232,7 @@ def render_pad_pdf(
     layout = layout or DEFAULT_LAYOUT
     font, bold = resolve_fonts(layout.font_family)
     base = max(8, min(int(layout.font_size or 9), 13))
-    styles = _styles(font, bold, base)
+    styles = _with_hindi(_styles(font, bold, base))
 
     output = io.BytesIO()
     frame = Frame(
