@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { Button } from "@/components/ui/button";
 
 /** Grouped so the front desk's work and the clinician's work are visually
@@ -117,6 +118,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           keeps the brand colours exact and the contrast unambiguous. */}
       <div className="shrink-0 bg-white px-5 py-4">
         <Logo width={150} priority />
+        <PlatformMark variant="inline" width={84} />
       </div>
       <p className="shrink-0 px-5 pb-1 pt-4 text-[10px] uppercase tracking-[0.18em] text-mint/45">
         Clinical console
