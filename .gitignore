@@ -1,5 +1,3 @@
-.env
-.env.local
 node_modules/
 .next/
 __pycache__/
@@ -12,3 +10,4 @@ satya_pgdata/
 *.tsbuildinfo
 .pytest_cache/
 .ruff_cache/
+config.bat

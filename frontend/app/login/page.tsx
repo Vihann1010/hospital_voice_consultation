@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Loader2, Lock } from "lucide-react";
 import { fetchCurrentUser, login } from "@/lib/auth";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,6 +96,7 @@ export default function LoginPage() {
               white rather than being recoloured to survive a navy panel. */}
           <div className="inline-block rounded-xl bg-white px-6 py-5 shadow-lift">
             <Logo width={200} priority />
+            <PlatformMark variant="credit" width={96} className="mt-3" />
           </div>
           <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-mint/45">Kanpur</p>
         </div>

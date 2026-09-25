@@ -1,6 +1,9 @@
 /** Shared contracts mirroring the backend Pydantic schemas. */
 
-export type Department = "orthopedics" | "gynecology";
+/** The departments this hospital runs. One list, so a screen that offers a
+ *  choice and a screen that labels one cannot fall out of step. */
+export const DEPARTMENTS = ["orthopedics", "gynecology"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
 export type Gender = "male" | "female" | "other";
 export type ConsultationStatus = "in_progress" | "completed" | "abandoned";
 export type RiskLevel = "low" | "moderate" | "high" | "critical";

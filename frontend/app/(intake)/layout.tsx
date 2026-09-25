@@ -6,11 +6,12 @@ import { ToastProvider } from "@/components/ui/toast";
 /**
  * The voice intake terminal — its own screen, usually a tablet on a stand
  * near the waiting area. Reception staff use the reception terminal instead;
- * this panel is reserved for clinical users.
+ * this panel is reserved for clinical users. Nurses are among them: running
+ * the intake and taking the vitals that go with it is their work.
  */
 export default function IntakeLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider allow={["admin", "doctor"]} fallbackPath="/reception">
+    <AuthProvider allow={["admin", "doctor", "nurse"]} fallbackPath="/reception">
       <ToastProvider>
         <TooltipProvider delayDuration={200}>
           <IntakeShell>{children}</IntakeShell>

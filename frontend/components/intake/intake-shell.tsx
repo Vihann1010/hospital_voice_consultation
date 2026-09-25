@@ -10,6 +10,7 @@
 import { LogOut, Mic } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 
 export function IntakeShell({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
@@ -18,8 +19,9 @@ export function IntakeShell({ children }: { children: React.ReactNode }) {
     <div className="h-dvh overflow-hidden bg-mint">
       <header className="sticky top-0 z-30 border-b border-pine/10 bg-white">
         <div className="mx-auto flex max-w-[1680px] items-center gap-3 px-4 py-3 sm:px-6">
-          <div className="rounded bg-white">
+          <div className="flex items-center gap-3 rounded bg-white">
             <Logo className="h-8 w-auto" />
+            <PlatformMark variant="inline" width={92} />
           </div>
           <div className="hidden border-l border-pine/10 pl-3 sm:block">
             <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-pine">

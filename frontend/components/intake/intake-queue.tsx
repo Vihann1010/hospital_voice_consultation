@@ -18,7 +18,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Clock, Loader2, Mic, RefreshCw, Users } from "lucide-react";
 import { staffApi } from "@/lib/staffApi";
 import type { ConsultationDetail, ConsultationListItem, Department } from "@/lib/types/core";
-import { formatDate } from "@/lib/format";
+import { DEPARTMENTS } from "@/lib/types/core";
+import { DEPARTMENT_LABEL, formatDate } from "@/lib/format";
 import type { QueuedPatient } from "@/lib/types/emr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,12 +41,37 @@ function waitedFor(registeredAt: string): string {
   return `${hours} hr ${minutes % 60} min`;
 }
 
+/** Which queue this tablet shows, kept on the tablet itself.
+ *
+ * Tablets stand in different places — one by the orthopedic waiting area, one
+ * outside the maternity rooms — and each should stay on its own queue through
+ * a reload or a sign-out rather than falling back to everyone's. */
+const TABLET_QUEUE_KEY = "intake_tablet_department";
+
+function readTabletQueue(): Department | "all" {
+  try {
+    return (window.localStorage.getItem(TABLET_QUEUE_KEY) as Department | "all" | null) ?? "all";
+  } catch {
+    return "all";
+  }
+}
+
 export function IntakeQueue() {
   const toast = useToast();
 
   const [queue, setQueue] = useState<QueuedPatient[] | null>(null);
   const [completed, setCompleted] = useState<ConsultationListItem[] | null>(null);
-  const [department, setDepartment] = useState<Department | "all">("all");
+  const [department, setDepartmentState] = useState<Department | "all">(
+    () => (typeof window === "undefined" ? "all" : readTabletQueue())
+  );
+  const setDepartment = (value: Department | "all") => {
+    setDepartmentState(value);
+    try {
+      window.localStorage.setItem(TABLET_QUEUE_KEY, value);
+    } catch {
+      // A private window: the choice lasts until the page is closed.
+    }
+  };
   const [confirming, setConfirming] = useState<QueuedPatient | null>(null);
   const [starting, setStarting] = useState(false);
   const [activeSession, setActiveSession] = useState<{
@@ -174,11 +200,10 @@ export function IntakeQueue() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {([
-          { value: "all", label: "Everyone" },
-          { value: "orthopedics", label: "Orthopedics" },
-          { value: "gynecology", label: "Gynecology" },
-        ] as const).map((option) => (
+        {[
+          { value: "all" as const, label: "Everyone" },
+          ...DEPARTMENTS.map((d) => ({ value: d, label: DEPARTMENT_LABEL[d] ?? d })),
+        ].map((option) => (
           <button
             key={option.value}
             onClick={() => setDepartment(option.value)}
@@ -241,7 +266,7 @@ export function IntakeQueue() {
                       {entry.patient.uhid}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-ink-faint">
-                      {entry.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+                      {DEPARTMENT_LABEL[entry.department] ?? entry.department}
                       {entry.doctor_name ? ` · ${entry.doctor_name}` : ""}
                     </p>
                   </div>
