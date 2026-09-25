@@ -16,6 +16,7 @@ import { usePathname } from "next/navigation";
 import { BedDouble, FlaskConical, LogOut, RefreshCw, Scissors, UtensilsCrossed } from "lucide-react";
 import { useAuth } from "@/components/dashboard/auth-provider";
 import { Logo } from "@/components/brand/logo";
+import { PlatformMark } from "@/components/brand/platform-mark";
 import { staffApi } from "@/lib/staffApi";
 import type { Census } from "@/lib/types/ipd";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,7 @@ export function WardShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <div className="rounded bg-white">
             <Logo className="h-8 w-auto" />
+            <PlatformMark variant="inline" width={92} />
           </div>
           <div className="hidden border-l border-pine/10 pl-4 sm:block">
             <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-pine">

@@ -305,7 +305,11 @@ class ReceptionService:
                 service = await self.session.get(
                     ServiceItem, uuid.UUID(str(entry["service_item_id"]))
                 )
-            elif entry.get("code"):
+            # A screen opened before the price list was rebuilt holds ids that
+            # no longer exist. The code still identifies the same charge, so
+            # the live service is found that way and the tariff and the
+            # pricing rules apply exactly as they would have.
+            if service is None and entry.get("code"):
                 result = await self.session.execute(
                     select(ServiceItem).where(ServiceItem.code == entry["code"])
                 )
@@ -313,6 +317,14 @@ class ReceptionService:
 
             description = entry.get("description") or (service.name if service else "")
             if not description:
+                # Almost always a screen opened before the price list changed,
+                # holding an id that no longer exists. Saying so is the
+                # difference between a clerk reloading and a clerk stuck.
+                if entry.get("service_item_id") and service is None:
+                    raise ReceptionError(
+                        "That charge is no longer in the price list. Reload the "
+                        "counter and add it again."
+                    )
                 raise ReceptionError("Every billed item needs a description.")
 
             if entry.get("unit_rate_paise") is None and service is None:

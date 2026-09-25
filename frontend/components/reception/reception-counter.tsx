@@ -203,6 +203,12 @@ export function ReceptionCounter() {
     () =>
       lines.map((line) => ({
         service_item_id: line.service.id,
+        // The name and code travel with the id. A price list reloaded since
+        // this tab was opened leaves the id pointing at nothing, and the bill
+        // would be refused for having no description — for a charge whose
+        // name is on the screen in front of the clerk.
+        description: line.service.name,
+        ...(line.service.code ? { code: line.service.code } : {}),
         quantity: line.quantity,
         ...(line.rateEdited ? { unit_rate_paise: lineRate(line) } : {}),
         ...(lineDiscount(line) > 0 ? { discount_paise: lineDiscount(line) } : {}),

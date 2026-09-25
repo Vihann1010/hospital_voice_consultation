@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Clock, Loader2, Mic, Save } from "lucide-react";
 import { useConsultation } from "@/lib/hooks/useConsultation";
 import type { QueuedPatient } from "@/lib/types/emr";
 import type { ConsultationDetail, MedicalRecord } from "@/lib/types/core";
+import { DEPARTMENT_LABEL } from "@/lib/format";
 import { staffApi } from "@/lib/staffApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -140,10 +142,13 @@ export function LiveIntakeWorkspace({
         <Button variant="ghost" size="sm" onClick={onBack} disabled={phase !== "ended" && phase !== "error"}>
           <ArrowLeft /> Queue
         </Button>
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-lg font-semibold text-pine">{patient.patient.name}</h1>
-          <p className="text-xs text-ink-muted">
-            {patient.patient.age} yrs · {patient.patient.gender} · {patient.department === "orthopedics" ? "Orthopedics" : "Gynecology"}
+        {/* One line: who the patient is, then straight into the conversation.
+            Two stacked lines cost the photograph an inch of its height. */}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h1 className="truncate font-display text-base font-semibold text-pine">{patient.patient.name}</h1>
+          <p className="truncate text-xs text-ink-muted">
+            {patient.patient.age} yrs · {patient.patient.gender} ·{" "}
+            {DEPARTMENT_LABEL[patient.department] ?? patient.department}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -209,10 +214,34 @@ export function LiveIntakeWorkspace({
         </div>
 
         <Card className="flex min-h-0 flex-col overflow-hidden">
-          <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border py-3">
+          <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border py-2">
             <CardTitle className="flex items-center gap-2"><Mic className="h-4 w-4 text-pine" /> Conversation</CardTitle>
             <span className="text-xs text-ink-muted">{entries.length} turns · verbatim record</span>
           </CardHeader>
+          {/* The assistant, at the head of the conversation and staying
+              there: the tablet faces the patient, and a face to speak to
+              carries a voice call that is otherwise a wall of text. It sits
+              outside the scrolling area on purpose — only the conversation
+              moves, as it always has. */}
+          <div className="relative shrink-0 overflow-hidden border-b border-border">
+            <Image
+              src="/brand/intake-assistant.webp"
+              alt=""
+              width={1600}
+              height={600}
+              // The banner is the width of the conversation panel, a little
+              // over two thirds of a tablet's screen; without this the
+              // browser picks a 700px copy and upscales it.
+              sizes="(max-width: 1024px) 100vw, 70vw"
+              priority
+              className="h-52 w-full object-cover object-[center_30%] sm:h-64"
+            />
+            {/* Said plainly, because the picture does not say it: the voice
+                is an assistant preparing the visit, not a doctor. */}
+            <span className="absolute bottom-2 left-3 rounded-full bg-pine-deep/80 px-2.5 py-1 text-[11px] font-medium text-mint">
+              AI intake assistant — not a doctor
+            </span>
+          </div>
           <CardContent ref={transcriptRef} className="thin-scroll min-h-0 flex-1 space-y-4 overflow-y-auto p-4" role="log" aria-live="polite">
             {entries.length === 0 && <p className="py-12 text-center text-sm text-ink-faint">The conversation will appear here as the patient speaks.</p>}
             {entries.map((entry) => (
