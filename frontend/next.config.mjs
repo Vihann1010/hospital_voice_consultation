@@ -22,4 +22,3 @@ const nextConfig = {
   reactStrictMode: true,
 };
 export default nextConfig;
->>>>>>> 6727b112c8de5cc5eeb838298c25b57edf006ee5
