@@ -1,0 +1,24 @@
+# Local HTTPS for the Evanta HMS app shell. Caddy issues its OWN local certificate authority on first run
+# (the "tls internal" directive below) and signs a leaf certificate for 127.0.0.1 from it — no internet
+# needed, nothing sent to a public CA, nothing baked into the install bundle (each PC gets its own CA the
+# first time it runs). `caddy trust` (run once by setup.ps1, needs administrator) installs that CA's
+# certificate into Windows' own trust store, so the padlock is real rather than a clickthrough warning, and
+# the WebView2 component the desktop app uses (it reads the same Windows store) accepts it too.
+#
+# Everything still runs on the SAME ports as today (api :8000, web :3000) — this only adds a front door that
+# speaks HTTPS and sends each request to the right one. Nothing in api/web/bridge/guard changes.
+{
+	auto_https disable_redirects
+	local_certs
+}
+https://127.0.0.1:3443 {
+	tls internal
+	# /api/* already exists as a path the frontend itself calls (see frontend/next.config.mjs); keep that
+	# routing identical here so nothing downstream has to know HTTPS exists.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

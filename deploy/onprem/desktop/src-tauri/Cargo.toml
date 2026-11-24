@@ -1,0 +1,24 @@
+[package]
+name = "evanta-hms"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+# window shell only: no app logic lives here, so there is nothing clinical to reverse-engineer out of this binary
+tauri = { version = "1", features = ["shell-open", "window-close", "window-minimize", "window-maximize"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["blocking"] }
+
+[profile.release]
+# strips symbol names and debug info so the binary itself gives away as little as a release build can
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

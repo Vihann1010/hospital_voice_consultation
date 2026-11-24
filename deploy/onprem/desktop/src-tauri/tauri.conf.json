@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/1",
+  "build": {
+    "beforeBuildCommand": "",
+    "devPath": "https://127.0.0.1:3443",
+    "distDir": "../dist-placeholder",
+    "withGlobalTauri": false
+  },
+  "package": { "productName": "Evanta HMS", "version": "0.1.0" },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": { "open": false },
+      "window": { "all": false, "close": true, "minimize": true, "maximize": true }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "health.evanta.hms",
+      "icon": ["icons/icon.ico"],
+      "targets": ["nsis"],
+      "windows": { "webviewInstallMode": { "type": "embedBootstrapper" } }
+    },
+    "security": {
+      "csp": "default-src 'self' https://127.0.0.1:3443; img-src 'self' data: https://127.0.0.1:3443; connect-src 'self' https://127.0.0.1:3443; style-src 'self' 'unsafe-inline'"
+    },
+    "windows": [
+      {
+        "title": "Evanta HMS — Satya Hospital",
+        "url": "https://127.0.0.1:3443",
+        "width": 1366,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 650,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "updater": { "active": false }
+  }
+}
