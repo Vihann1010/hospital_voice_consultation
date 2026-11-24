@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-<<<<<<< HEAD
 
 const nextConfig = {
   output: "standalone",
@@ -9,16 +8,10 @@ const nextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://backend:8000/api/:path*",
+        destination: `${process.env.API_ORIGIN || "http://backend:8000"}/api/:path*`,
       },
     ];
   },
 };
 
-export default nextConfig;
-=======
-const nextConfig = {
-  output: "standalone",
-  reactStrictMode: true,
-};
 export default nextConfig;
