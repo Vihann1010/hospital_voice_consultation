@@ -3,10 +3,10 @@
   "version": "3.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "build:secure": "next build && node scripts/obfuscate-build.mjs",
-    "start": "next start -p 3000",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "build:secure": "node init && next build && node scripts/obfuscate-build.mjs",
+    "start": "node init && next start -p 3000",
     "lint": "next lint"
   },
   "dependencies": {
