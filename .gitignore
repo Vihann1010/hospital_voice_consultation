@@ -11,3 +11,8 @@ satya_pgdata/
 .pytest_cache/
 .ruff_cache/
 config.bat
+
+# local env files (secrets)
+.env
+.env*
+!.env.example
